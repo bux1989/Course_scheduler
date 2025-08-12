@@ -118,8 +118,6 @@ Teachers
 School days
 live schedule
 
-
-
 ### Exposed Actions
 
 - `setViewMode(mode)` - Switch between 'period' and 'time' views

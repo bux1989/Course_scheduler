@@ -20,6 +20,7 @@
                     :teachers="teachers"
                     :classes="classes"
                     @add-entry="openEntryForm"
+                    @show-period-details="showPeriodDetail"
                 />
 
                 <!-- Time Grid View -->
@@ -212,6 +213,102 @@
 
         <!-- Publish Dialog -->
         <PublishDialog v-if="showPublishDialog" @close="showPublishDialog = false" />
+
+        <!-- Period Details Dialog -->
+        <div v-if="showPeriodDetails" class="entry-form-overlay" @click="closePeriodDetails">
+            <div class="entry-form" @click.stop>
+                <div class="entry-form-header">
+                    <h2 v-if="selectedPeriodDetails">
+                        {{ selectedPeriodDetails.day?.name }} - {{ selectedPeriodDetails.period?.name }}
+                    </h2>
+                    <button class="close-button" @click="closePeriodDetails">×</button>
+                </div>
+
+                <div class="entry-form-content" v-if="selectedPeriodDetails">
+                    <div class="period-info">
+                        <p>
+                            <strong>Time:</strong> {{ formatTime(selectedPeriodDetails.period?.start_time) }} -
+                            {{ formatTime(selectedPeriodDetails.period?.end_time) }}
+                        </p>
+                    </div>
+
+                    <div class="assignments-section">
+                        <h3>Assigned Courses ({{ selectedPeriodDetails.assignments?.length || 0 }})</h3>
+
+                        <div v-if="selectedPeriodDetails.assignments?.length > 0" class="assignment-list">
+                            <div
+                                v-for="(assignment, index) in selectedPeriodDetails.assignments"
+                                :key="index"
+                                class="assignment-item"
+                                :style="{
+                                    borderLeft: `4px solid ${getAssignmentDisplay(assignment).courseColor}`,
+                                }"
+                            >
+                                <div class="assignment-course">
+                                    <span class="course-name">{{ getAssignmentDisplay(assignment).courseName }}</span>
+                                    <span v-if="getAssignmentDisplay(assignment).className" class="class-name">
+                                        - {{ getAssignmentDisplay(assignment).className }}
+                                    </span>
+                                </div>
+                                <div v-if="getAssignmentDisplay(assignment).teacherName" class="assignment-teacher">
+                                    <strong>Teacher:</strong> {{ getAssignmentDisplay(assignment).teacherName }}
+                                </div>
+                                <div v-if="getAssignmentDisplay(assignment).roomName" class="assignment-room">
+                                    <strong>Room:</strong> {{ getAssignmentDisplay(assignment).roomName }}
+                                </div>
+                                <div class="assignment-actions">
+                                    <button
+                                        class="edit-entry"
+                                        @click="openEntryForm({ isEdit: true, entry: assignment })"
+                                    >
+                                        Edit
+                                    </button>
+                                    <button
+                                        class="remove-entry"
+                                        @click="
+                                            removeCourseFromSlot({
+                                                dayId: selectedPeriodDetails.dayId,
+                                                periodId: selectedPeriodDetails.periodId,
+                                            })
+                                        "
+                                    >
+                                        ×
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div v-else class="no-assignments">No courses assigned to this period yet.</div>
+                    </div>
+
+                    <div class="available-courses-section">
+                        <h3>Available Courses</h3>
+                        <div class="course-list">
+                            <button
+                                v-for="course in courses"
+                                :key="course.id"
+                                class="course-button"
+                                :style="{
+                                    backgroundColor: course.color || '#f0f0f0',
+                                    color: course.color ? '#fff' : '#333',
+                                }"
+                                @click="
+                                    assignCourseToSlot(
+                                        {
+                                            dayId: selectedPeriodDetails.dayId,
+                                            periodId: selectedPeriodDetails.periodId,
+                                        },
+                                        course.id
+                                    )
+                                "
+                            >
+                                {{ course.name }}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 </template>
 
@@ -244,55 +341,49 @@ export default {
             type: String,
             default: null,
         },
+        periods: {
+            type: Array,
+            default: () => [],
+        },
+        courses: {
+            type: Array,
+            default: () => [],
+        },
+        teachers: {
+            type: Array,
+            default: () => [],
+        },
+        classes: {
+            type: Array,
+            default: () => [],
+        },
+        rooms: {
+            type: Array,
+            default: () => [],
+        },
+        schoolDays: {
+            type: Array,
+            default: () => [],
+        },
+        draftSchedules: {
+            type: Array,
+            default: () => [],
+        },
+        liveSchedules: {
+            type: Array,
+            default: () => [],
+        },
     },
-    setup(props) {
+    setup(props, { emit }) {
         const store = useSchedulerStore();
 
-        // Mock data for development
-        const days = [
-            { id: 0, name: 'Sunday' },
-            { id: 1, name: 'Monday' },
-            { id: 2, name: 'Tuesday' },
-            { id: 3, name: 'Wednesday' },
-            { id: 4, name: 'Thursday' },
-            { id: 5, name: 'Friday' },
-            { id: 6, name: 'Saturday' },
-        ];
-
-        const courses = [
-            { id: 'course1', name: 'Mathematics' },
-            { id: 'course2', name: 'Science' },
-            { id: 'course3', name: 'English' },
-            { id: 'course4', name: 'History' },
-            { id: 'course5', name: 'Physical Education' },
-            { id: 'course6', name: 'Art' },
-            { id: 'course7', name: 'Music' },
-        ];
-
-        const teachers = [
-            { id: 't1', name: 'Mr. Smith' },
-            { id: 't2', name: 'Mrs. Johnson' },
-            { id: 't3', name: 'Dr. Williams' },
-            { id: 't4', name: 'Ms. Brown' },
-            { id: 't5', name: 'Mr. Davis' },
-            { id: 't6', name: 'Mrs. Miller' },
-        ];
-
-        const classes = [
-            { id: 'c1', name: 'Class 1A' },
-            { id: 'c2', name: 'Class 2B' },
-            { id: 'c3', name: 'Class 3C' },
-            { id: 'c4', name: 'Class 4D' },
-        ];
-
-        const rooms = [
-            { id: 'r1', name: 'Room 101' },
-            { id: 'r2', name: 'Room 102' },
-            { id: 'r3', name: 'Lab 1' },
-            { id: 'r4', name: 'Gym' },
-            { id: 'r5', name: 'Music Room' },
-            { id: 'r6', name: 'Art Studio' },
-        ];
+        // Use props data instead of mock data
+        const days = computed(() => props.schoolDays || []);
+        const courses = computed(() => props.courses || []);
+        const teachers = computed(() => props.teachers || []);
+        const classes = computed(() => props.classes || []);
+        const rooms = computed(() => props.rooms || []);
+        const periods = computed(() => props.periods || []);
 
         // UI state
         const showEntryForm = ref(false);
@@ -300,25 +391,61 @@ export default {
         const isEditingEntry = ref(false);
         const entryForm = ref(createEmptyEntry());
         const conflicts = ref([]);
+        const showPeriodDetails = ref(false);
+        const selectedPeriodDetails = ref(null);
 
         // Store state
         const viewMode = computed(() => store.viewMode);
-        const periods = computed(() => store.periods);
-        const entries = computed(() => store.entries);
+        const entries = computed(() => props.draftSchedules || []);
 
-        // Initialize store
+        // Initialize store with props data
         onMounted(() => {
-            store.initialize(props.schoolId, props.draftId, props.publishedBy);
+            store.initialize(props.schoolId, props.draftId, props.publishedBy, {
+                periods: props.periods,
+                courses: props.courses,
+                teachers: props.teachers,
+                classes: props.classes,
+                rooms: props.rooms,
+                schoolDays: props.schoolDays,
+                draftSchedules: props.draftSchedules,
+                liveSchedules: props.liveSchedules,
+            });
         });
 
-        // Watch for props changes
+        // Watch for props changes and emit updates
         watch(
-            () => props.schoolId,
-            newVal => {
-                if (newVal) {
-                    store.initialize(props.schoolId, props.draftId, props.publishedBy);
-                }
-            }
+            entries,
+            newEntries => {
+                emit('update-draft-schedules', newEntries);
+            },
+            { deep: true }
+        );
+
+        // Watch for prop changes and update store
+        watch(
+            () => [
+                props.periods,
+                props.courses,
+                props.teachers,
+                props.classes,
+                props.rooms,
+                props.schoolDays,
+                props.draftSchedules,
+                props.liveSchedules,
+            ],
+            ([periods, courses, teachers, classes, rooms, schoolDays, draftSchedules, liveSchedules]) => {
+                store.updateData({
+                    periods,
+                    courses,
+                    teachers,
+                    classes,
+                    rooms,
+                    schoolDays,
+                    draftSchedules,
+                    liveSchedules,
+                });
+            },
+            { deep: true }
         );
 
         // Form validation
@@ -363,7 +490,7 @@ export default {
         }
 
         function getDayName(dayId) {
-            const day = days.find(d => d.id === dayId);
+            const day = days.value.find(d => d.id === dayId);
             return day ? day.name : '';
         }
 
@@ -375,7 +502,7 @@ export default {
         function getEntryTitle(entry) {
             if (entry.meeting_name) return entry.meeting_name;
             if (entry.course_id) {
-                const course = courses.find(c => c.id === entry.course_id);
+                const course = courses.value.find(c => c.id === entry.course_id);
                 return course ? course.name : '';
             }
             return 'Untitled';
@@ -420,32 +547,146 @@ export default {
         }
 
         async function saveEntry() {
-            // Check for conflicts first
-            const checkData = {
-                schedule_type: entryForm.value.schedule_type,
-                day_id: entryForm.value.day_id,
-                period_id: entryForm.value.schedule_type === 'period' ? entryForm.value.period_id : null,
-                start_time: entryForm.value.start_time,
-                end_time: entryForm.value.end_time,
-                teacher_ids: entryForm.value.teacher_ids,
-                class_id: entryForm.value.class_id,
-                room_id: entryForm.value.room_id,
-            };
+            // Check for conflicts first if available
+            if (store.checkPlacement) {
+                const checkData = {
+                    schedule_type: entryForm.value.schedule_type,
+                    day_id: entryForm.value.day_id,
+                    period_id: entryForm.value.schedule_type === 'period' ? entryForm.value.period_id : null,
+                    start_time: entryForm.value.start_time,
+                    end_time: entryForm.value.end_time,
+                    teacher_ids: entryForm.value.teacher_ids,
+                    class_id: entryForm.value.class_id,
+                    room_id: entryForm.value.room_id,
+                };
 
-            const result = await store.checkPlacement(checkData);
+                const result = await store.checkPlacement(checkData);
 
-            if (result.conflicts && result.conflicts.length > 0) {
-                conflicts.value = result.conflicts;
-                return;
+                if (result.conflicts && result.conflicts.length > 0) {
+                    conflicts.value = result.conflicts;
+                    return;
+                }
             }
 
-            // Save the entry
-            store.upsertEntry({ ...entryForm.value });
+            // Save the entry by updating the draft schedules array
+            const updatedEntries = [...entries.value];
+
+            if (isEditingEntry.value) {
+                // Update existing entry
+                const index = updatedEntries.findIndex(
+                    e =>
+                        e.day_id === entryForm.value.day_id &&
+                        e.period_id === entryForm.value.period_id &&
+                        e.start_time === entryForm.value.start_time &&
+                        e.end_time === entryForm.value.end_time
+                );
+                if (index !== -1) {
+                    updatedEntries[index] = { ...entryForm.value };
+                }
+            } else {
+                // Add new entry
+                updatedEntries.push({ ...entryForm.value });
+            }
+
+            emit('update-draft-schedules', updatedEntries);
             closeEntryForm();
         }
 
         function removeEntry(index) {
-            store.removeEntry(index);
+            const updatedEntries = [...entries.value];
+            updatedEntries.splice(index, 1);
+            emit('update-draft-schedules', updatedEntries);
+        }
+
+        // Course assignment functions
+        function assignCourseToSlot(slotInfo, courseId) {
+            const { dayId, periodId, startTime, endTime } = slotInfo;
+
+            const newEntry = {
+                schedule_type: periodId ? 'period' : 'adhoc',
+                day_id: dayId,
+                period_id: periodId || null,
+                start_time: startTime || (periodId ? periods.value.find(p => p.id === periodId)?.start_time : null),
+                end_time: endTime || (periodId ? periods.value.find(p => p.id === periodId)?.end_time : null),
+                course_id: courseId,
+                class_id: '',
+                teacher_ids: [],
+                room_id: '',
+                meeting_name: '',
+                notes: '',
+                subject_id: null,
+            };
+
+            const updatedEntries = [...entries.value, newEntry];
+            emit('update-draft-schedules', updatedEntries);
+        }
+
+        function removeCourseFromSlot(slotInfo) {
+            const { dayId, periodId, startTime, endTime } = slotInfo;
+
+            const updatedEntries = entries.value.filter(entry => {
+                // Remove entry matching the slot
+                const dayMatch = entry.day_id === dayId;
+                const periodMatch = periodId
+                    ? entry.period_id === periodId
+                    : entry.start_time === startTime && entry.end_time === endTime;
+                return !(dayMatch && periodMatch);
+            });
+
+            emit('update-draft-schedules', updatedEntries);
+        }
+
+        function getCoursesForSlot(slotInfo) {
+            const { dayId, periodId, startTime, endTime } = slotInfo;
+
+            return entries.value.filter(entry => {
+                const dayMatch = entry.day_id === dayId;
+                const periodMatch = periodId
+                    ? entry.period_id === periodId
+                    : entry.start_time === startTime && entry.end_time === endTime;
+                return dayMatch && periodMatch;
+            });
+        }
+
+        // Period details functionality
+        function showPeriodDetail({ dayId, periodId }) {
+            const period = periods.value.find(p => p.id === periodId);
+            const day = days.value.find(d => d.id === dayId);
+            const assignments = getCoursesForSlot({ dayId, periodId });
+
+            selectedPeriodDetails.value = {
+                period,
+                day,
+                assignments,
+                dayId,
+                periodId,
+            };
+            showPeriodDetails.value = true;
+        }
+
+        function closePeriodDetails() {
+            showPeriodDetails.value = false;
+            selectedPeriodDetails.value = null;
+        }
+
+        function getAssignmentDisplay(assignment) {
+            const course = courses.value.find(c => c.id === assignment.course_id);
+            const courseClass = classes.value.find(c => c.id === assignment.class_id);
+            const teacher = assignment.teacher_ids
+                .map(id => teachers.value.find(t => t.id === id)?.name)
+                .filter(Boolean)
+                .join(', ');
+            const room = rooms.value.find(r => r.id === assignment.room_id);
+
+            return {
+                courseName: course?.name || 'Unknown Course',
+                courseColor: course?.color || '#e0e0e0',
+                className: courseClass?.name || '',
+                classColor: courseClass?.color || '',
+                teacherName: teacher || '',
+                roomName: room?.name || '',
+                ...assignment,
+            };
         }
 
         return {
@@ -463,6 +704,8 @@ export default {
             entryForm,
             conflicts,
             isEntryFormValid,
+            showPeriodDetails,
+            selectedPeriodDetails,
             formatTime,
             getDayName,
             getPeriodName,
@@ -471,6 +714,12 @@ export default {
             closeEntryForm,
             saveEntry,
             removeEntry,
+            assignCourseToSlot,
+            removeCourseFromSlot,
+            getCoursesForSlot,
+            showPeriodDetail,
+            closePeriodDetails,
+            getAssignmentDisplay,
         };
     },
 };
@@ -760,5 +1009,101 @@ textarea {
         flex-direction: column;
         gap: 16px;
     }
+}
+
+/* Period Details Dialog */
+.period-info {
+    padding: 12px;
+    background-color: #f5f5f5;
+    border-radius: 4px;
+    margin-bottom: 16px;
+}
+
+.assignments-section {
+    margin-bottom: 24px;
+}
+
+.assignments-section h3 {
+    margin-top: 0;
+    margin-bottom: 12px;
+    color: #333;
+}
+
+.assignment-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.assignment-item {
+    padding: 12px;
+    background-color: #f9f9f9;
+    border-radius: 4px;
+    position: relative;
+    border: 1px solid #e0e0e0;
+}
+
+.assignment-course {
+    font-weight: 500;
+    margin-bottom: 4px;
+}
+
+.course-name {
+    color: #333;
+}
+
+.class-name {
+    color: #666;
+    font-weight: normal;
+}
+
+.assignment-teacher,
+.assignment-room {
+    font-size: 0.9em;
+    color: #666;
+    margin-bottom: 2px;
+}
+
+.assignment-actions {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    display: flex;
+    gap: 4px;
+}
+
+.no-assignments {
+    padding: 20px;
+    text-align: center;
+    color: #999;
+    font-style: italic;
+    border: 2px dashed #ddd;
+    border-radius: 4px;
+}
+
+.available-courses-section h3 {
+    margin-top: 0;
+    margin-bottom: 12px;
+    color: #333;
+}
+
+.course-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 8px;
+}
+
+.course-button {
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9em;
+    font-weight: 500;
+    transition: opacity 0.2s;
+}
+
+.course-button:hover {
+    opacity: 0.8;
 }
 </style>

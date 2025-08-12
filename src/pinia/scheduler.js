@@ -52,16 +52,24 @@ export const useSchedulerStore = defineStore('scheduler', () => {
     });
 
     // Actions
-    function initialize(school, draft, publisher = null) {
+    function initialize(school, draft, publisher = null, data = {}) {
         schoolId.value = school;
         draftId.value = draft;
         publishedBy.value = publisher;
 
-        // Set mock mode for API
-        schedulerApi.setMockMode(useMockMode.value);
+        // Load data from props instead of API
+        if (data.periods) periods.value = data.periods;
+        if (data.draftSchedules) entries.value = data.draftSchedules;
 
-        // Load periods
-        loadPeriods();
+        // Disable mock mode since we're using prop data
+        useMockMode.value = false;
+        schedulerApi.setMockMode(false);
+    }
+
+    function updateData(data) {
+        // Update store with new prop data
+        if (data.periods) periods.value = data.periods;
+        if (data.draftSchedules) entries.value = data.draftSchedules;
     }
 
     async function loadPeriods() {
@@ -218,6 +226,7 @@ export const useSchedulerStore = defineStore('scheduler', () => {
 
         // Actions
         initialize,
+        updateData,
         loadPeriods,
         checkPlacement,
         upsertEntry,

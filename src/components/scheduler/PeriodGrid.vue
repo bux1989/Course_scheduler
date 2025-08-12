@@ -38,9 +38,10 @@
                 tabindex="0"
                 @click="handleCellClick(day.id, period.id, period)"
                 @keydown.enter="handleCellClick(day.id, period.id, period)"
+                @dblclick="showPeriodDetails(day.id, period.id)"
             >
                 <template v-if="getEntry(day.id, period.id)">
-                    <div class="entry-content">
+                    <div class="entry-content" :style="{ borderLeft: `4px solid ${getEntryColor(day.id, period.id)}` }">
                         <div class="entry-course">{{ getEntryCourseName(day.id, period.id) }}</div>
                         <div class="entry-details">
                             <span class="entry-room">{{ getEntryRoomName(day.id, period.id) }}</span>
@@ -53,10 +54,19 @@
                         >
                             ×
                         </button>
+                        <button
+                            class="detail-entry"
+                            @click.stop="showPeriodDetails(day.id, period.id)"
+                            aria-label="View period details"
+                            title="Double-click for details"
+                        >
+                            📋
+                        </button>
                     </div>
                 </template>
                 <div v-else class="empty-cell">
                     <span class="add-icon">+</span>
+                    <span class="add-text">Click to add course</span>
                 </div>
             </div>
         </div>
@@ -72,53 +82,26 @@ export default {
     props: {
         days: {
             type: Array,
-            default: () => [
-                { id: 0, name: 'Sunday' },
-                { id: 1, name: 'Monday' },
-                { id: 2, name: 'Tuesday' },
-                { id: 3, name: 'Wednesday' },
-                { id: 4, name: 'Thursday' },
-                { id: 5, name: 'Friday' },
-                { id: 6, name: 'Saturday' },
-            ],
+            default: () => [],
         },
         courses: {
             type: Array,
-            default: () => [
-                { id: 'course1', name: 'Mathematics' },
-                { id: 'course2', name: 'Science' },
-                { id: 'course3', name: 'English' },
-                { id: 'course4', name: 'History' },
-            ],
+            default: () => [],
         },
         rooms: {
             type: Array,
-            default: () => [
-                { id: 'r1', name: 'Room 101' },
-                { id: 'r2', name: 'Room 102' },
-                { id: 'r3', name: 'Lab 1' },
-                { id: 'r4', name: 'Gym' },
-            ],
+            default: () => [],
         },
         teachers: {
             type: Array,
-            default: () => [
-                { id: 't1', name: 'Mr. Smith' },
-                { id: 't2', name: 'Mrs. Johnson' },
-                { id: 't3', name: 'Dr. Williams' },
-                { id: 't4', name: 'Ms. Brown' },
-            ],
+            default: () => [],
         },
         classes: {
             type: Array,
-            default: () => [
-                { id: 'c1', name: 'Class 1A' },
-                { id: 'c2', name: 'Class 2B' },
-                { id: 'c3', name: 'Class 3C' },
-            ],
+            default: () => [],
         },
     },
-    emits: ['add-entry'],
+    emits: ['add-entry', 'show-period-details'],
     setup(props, { emit }) {
         const store = useSchedulerStore();
 
@@ -221,6 +204,18 @@ export default {
             }
         }
 
+        function getEntryColor(dayId, periodId) {
+            const entry = getEntry(dayId, periodId);
+            if (!entry || !entry.course_id) return '#e0e0e0';
+
+            const course = props.courses.find(c => c.id === entry.course_id);
+            return course?.color || '#1890ff';
+        }
+
+        function showPeriodDetails(dayId, periodId) {
+            emit('show-period-details', { dayId, periodId });
+        }
+
         return {
             periods,
             formatTime,
@@ -229,8 +224,10 @@ export default {
             getEntryCourseName,
             getEntryRoomName,
             getEntryTeacherNames,
+            getEntryColor,
             handleCellClick,
             removeEntry,
+            showPeriodDetails,
         };
     },
 };
@@ -311,15 +308,22 @@ export default {
 
 .empty-cell {
     display: flex;
+    flex-direction: column;
     justify-content: center;
     align-items: center;
     height: 100%;
     color: #ccc;
+    gap: 4px;
 }
 
 .add-icon {
     font-size: 24px;
     opacity: 0.5;
+}
+
+.add-text {
+    font-size: 0.75em;
+    opacity: 0.7;
 }
 
 .has-entry {
@@ -364,7 +368,27 @@ export default {
     transition: opacity 0.2s;
 }
 
-.entry-content:hover .remove-entry {
+.detail-entry {
+    position: absolute;
+    top: 4px;
+    right: 28px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background-color: #1890ff;
+    color: white;
+    border: none;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 12px;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.entry-content:hover .remove-entry,
+.entry-content:hover .detail-entry {
     opacity: 1;
 }
 </style>

@@ -4,6 +4,17 @@
             :school-id="content.schoolId || 'default-school'"
             :draft-id="content.draftId || null"
             :published-by="content.publishedBy || null"
+            :periods="content.periods || []"
+            :courses="content.courses || []"
+            :teachers="content.teachers || []"
+            :classes="content.classes || []"
+            :rooms="content.rooms || []"
+            :school-days="content.schoolDays || []"
+            :draft-schedules="content.draftSchedules || []"
+            :live-schedules="content.liveSchedules || []"
+            @update-draft-schedules="handleDraftUpdate"
+            @publish-schedule="handlePublish"
+            @save-draft="handleSaveDraft"
         />
     </div>
 </template>
@@ -25,6 +36,14 @@ export default {
                 schoolId: null,
                 draftId: null,
                 publishedBy: null,
+                periods: [],
+                courses: [],
+                teachers: [],
+                classes: [],
+                rooms: [],
+                schoolDays: [],
+                draftSchedules: [],
+                liveSchedules: [],
             }),
         },
         wwElementState: { type: Object, required: true },
@@ -32,10 +51,47 @@ export default {
         wwEditorState: { type: Object, required: true },
         /* wwEditor:end */
     },
-    setup() {
+    setup(props, { emit }) {
         // Create a Pinia instance for the component
         const pinia = createPinia();
-        return { pinia };
+
+        // Event handlers for WeWeb integration
+        const handleDraftUpdate = draftSchedules => {
+            // Emit event to WeWeb to update the draft schedules
+            emit('trigger-event', {
+                name: 'updateDraftSchedules',
+                event: {
+                    draftSchedules,
+                },
+            });
+        };
+
+        const handlePublish = publishData => {
+            // Emit event to WeWeb when schedule is published
+            emit('trigger-event', {
+                name: 'publishSchedule',
+                event: {
+                    ...publishData,
+                },
+            });
+        };
+
+        const handleSaveDraft = draftData => {
+            // Emit event to WeWeb to save draft
+            emit('trigger-event', {
+                name: 'saveDraft',
+                event: {
+                    ...draftData,
+                },
+            });
+        };
+
+        return {
+            pinia,
+            handleDraftUpdate,
+            handlePublish,
+            handleSaveDraft,
+        };
     },
     mounted() {
         // Set up the Pinia store with the global app
