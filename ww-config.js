@@ -1,57 +1,50 @@
 export default {
     options: {
         lazyHydrate: true,
-        displayAllowedValues: (content, wwProps) => wwProps?.overrideDisplayValues ?? [
-            'flex',
-            'block',
-            'grid',
-            'table-cell',
-            'table-row',
-            'table-header-group',
-            'inline-flex',
-            'inline-block',
-            'inline-grid',
-        ],
-        linkable: true,
     },
-    inherit: [{ type: 'ww-layout' }, { type: 'ww-background-video' }],
     editor: {
         label: {
-            en: 'Flexbox',
+            en: 'Course Scheduler',
         },
-        icon: 'border',
+        icon: 'calendar',
         bubble: {
-            icon: 'border',
+            icon: 'calendar',
         },
-        customStylePropertiesOrder: ['children'],
+        customStylePropertiesOrder: ['schoolId', 'draftId', 'publishedBy'],
     },
     properties: {
-        children: {
+        schoolId: {
             label: {
-                en: 'Items',
-                fr: 'Items',
+                en: 'School ID',
+                fr: 'ID de l\'école',
             },
-            type: 'Repeat',
+            type: 'Text',
             options: {
-                text: { en: 'Elements to repeat' },
+                placeholder: 'Enter school UUID',
             },
-            hidden: (content, sidePanelContent, boundProps, wwProps) => !!(wwProps && wwProps.isFixed) || wwProps.noDropzone,
-            bindable: 'repeatable',
-            defaultValue: [],
-            /* wwEditor:start */
-            bindingValidation: {
-                validations: [
-                    {
-                        type: 'array',
-                    },
-                    {
-                        type: 'object',
-                    },
-                ],
-                tooltip:
-                    'A collection or an array of data: \n\n`myCollection` or `[{}, {}, ...] || ["string1", "string2", ...] || [1, 2, ...]`',
+            defaultValue: '',
+        },
+        draftId: {
+            label: {
+                en: 'Draft ID',
+                fr: 'ID du brouillon',
             },
-            /* wwEditor:end */
+            type: 'Text',
+            options: {
+                placeholder: 'Enter draft UUID',
+            },
+            defaultValue: '',
+        },
+        publishedBy: {
+            label: {
+                en: 'Published By',
+                fr: 'Publié par',
+            },
+            type: 'Text',
+            options: {
+                placeholder: 'Enter publisher UUID (optional)',
+            },
+            defaultValue: null,
         },
     },
 };

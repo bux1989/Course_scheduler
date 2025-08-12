@@ -1,44 +1,21 @@
 <template>
-    <wwSimpleLayout
-        :tag="tag"
-        v-if="noDropzone"
-        class="ww-flexbox"
-        ww-responsive="wwLayoutSlot"
-        v-bind="properties"
-        :class="{ '-link': hasLink && !isEditing }"
-    >
-        <slot></slot>
-    </wwSimpleLayout>
-    <wwLayout
-        v-else
-        class="ww-flexbox"
-        path="children"
-        :direction="content.direction"
-        :disable-edit="isFixed"
-        ww-responsive="wwLayout"
-        :tag="tag"
-        v-bind="properties"
-        :class="{ '-link': hasLink && !isEditing }"
-    >
-        <template #header>
-            <wwBackgroundVideo v-if="backgroundVideo" :video="backgroundVideo"></wwBackgroundVideo>
-            <slot v-if="!noDropzone"></slot>
-        </template>
-        <template #default="{ item, index, itemStyle }">
-            <wwElement
-                v-bind="item"
-                :extra-style="itemStyle"
-                class="ww-flexbox__object"
-                :ww-responsive="`wwobject-${index}`"
-                :data-ww-flexbox-index="index"
-                @click="onElementClick"
-            ></wwElement>
-        </template>
-    </wwLayout>
+    <div class="course-scheduler-element">
+        <SchedulerPage 
+            :school-id="schoolId"
+            :draft-id="draftId" 
+            :published-by="publishedBy"
+        />
+    </div>
 </template>
 
 <script>
+import SchedulerPage from './views/scheduler/SchedulerPage.vue';
+
 export default {
+    name: 'CourseScheduler',
+    components: {
+        SchedulerPage
+    },
     props: {
         content: { type: Object, required: true },
         wwElementState: { type: Object, required: true },
@@ -47,52 +24,38 @@ export default {
         /* wwEditor:end */
     },
     emits: ['update:content:effect', 'update:content', 'element-event'],
-    setup() {
-        const { hasLink, tag, properties } = wwLib.wwElement.useLink();
-        const backgroundVideo = wwLib.wwElement.useBackgroundVideo();
-
-        return {
-            hasLink,
-            properties,
-            backgroundVideo,
-            tag,
-        };
-    },
     computed: {
-        children() {
-            if (!this.content.children || !Array.isArray(this.content.children)) {
-                return [];
-            }
-            return this.content.children;
+        schoolId() {
+            return this.content.schoolId || 'demo-school-' + Math.random().toString(36).substr(2, 9);
         },
-        isFixed() {
-            return this.wwElementState.props.isFixed;
+        draftId() {
+            return this.content.draftId || 'demo-draft-' + Math.random().toString(36).substr(2, 9);
         },
-        noDropzone() {
-            return this.wwElementState.props.noDropzone;
+        publishedBy() {
+            return this.content.publishedBy || null;
         },
         isEditing() {
             /* wwEditor:start */
-            return this.wwEditorState.editMode === wwLib.wwEditorHelper.EDIT_MODES.EDITION;
+            if (typeof wwLib !== 'undefined' && this.wwEditorState) {
+                return this.wwEditorState.editMode === wwLib.wwEditorHelper.EDIT_MODES.EDITION;
+            }
             /* wwEditor:end */
-            // eslint-disable-next-line no-unreachable
             return false;
         },
-    },
-    methods: {
-        onElementClick(event) {
-            // We would prefer having the index inside the callback in the template, but due to a strange way Vue is handling anynmous functions with scope slot, we need to pass the index as a data attribute or each time the parent rerender, all the children will also rerender
-            let rawIndex = event.currentTarget.dataset.wwFlexboxIndex;
-
-            let index = parseInt(rawIndex);
-            if (isNaN(index)) {
-                index = 0;
-            }
-            this.$emit('element-event', { type: 'click', index });
-        },
-    },
+    }
 };
 </script>
+
+<style lang="scss" scoped>
+.course-scheduler-element {
+    width: 100%;
+    min-height: 600px;
+    background: #fff;
+    border-radius: 4px;
+    overflow: hidden;
+    border: 1px solid #ddd;
+}
+</style>
 
 <style lang="scss" scoped>
 .-link {
