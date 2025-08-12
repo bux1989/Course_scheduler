@@ -1,101 +1,57 @@
 <template>
-    <wwSimpleLayout
-        :tag="tag"
-        v-if="noDropzone"
-        class="ww-flexbox"
-        ww-responsive="wwLayoutSlot"
-        v-bind="properties"
-        :class="{ '-link': hasLink && !isEditing }"
-    >
-        <slot></slot>
-    </wwSimpleLayout>
-    <wwLayout
-        v-else
-        class="ww-flexbox"
-        path="children"
-        :direction="content.direction"
-        :disable-edit="isFixed"
-        ww-responsive="wwLayout"
-        :tag="tag"
-        v-bind="properties"
-        :class="{ '-link': hasLink && !isEditing }"
-    >
-        <template #header>
-            <wwBackgroundVideo v-if="backgroundVideo" :video="backgroundVideo"></wwBackgroundVideo>
-            <slot v-if="!noDropzone"></slot>
-        </template>
-        <template #default="{ item, index, itemStyle }">
-            <wwElement
-                v-bind="item"
-                :extra-style="itemStyle"
-                class="ww-flexbox__object"
-                :ww-responsive="`wwobject-${index}`"
-                :data-ww-flexbox-index="index"
-                @click="onElementClick"
-            ></wwElement>
-        </template>
-    </wwLayout>
+    <div class="course-scheduler-wrapper">
+        <SchedulerPage
+            :school-id="content.schoolId || 'default-school'"
+            :draft-id="content.draftId || null"
+            :published-by="content.publishedBy || null"
+        />
+    </div>
 </template>
 
 <script>
+import { createPinia } from 'pinia';
+import SchedulerPage from './views/scheduler/SchedulerPage.vue';
+
 export default {
+    name: 'CourseScheduler',
+    components: {
+        SchedulerPage,
+    },
     props: {
-        content: { type: Object, required: true },
+        content: {
+            type: Object,
+            required: true,
+            default: () => ({
+                schoolId: null,
+                draftId: null,
+                publishedBy: null,
+            }),
+        },
         wwElementState: { type: Object, required: true },
         /* wwEditor:start */
         wwEditorState: { type: Object, required: true },
         /* wwEditor:end */
     },
-    emits: ['update:content:effect', 'update:content', 'element-event'],
     setup() {
-        const { hasLink, tag, properties } = wwLib.wwElement.useLink();
-        const backgroundVideo = wwLib.wwElement.useBackgroundVideo();
-
-        return {
-            hasLink,
-            properties,
-            backgroundVideo,
-            tag,
-        };
+        // Create a Pinia instance for the component
+        const pinia = createPinia();
+        return { pinia };
     },
-    computed: {
-        children() {
-            if (!this.content.children || !Array.isArray(this.content.children)) {
-                return [];
+    mounted() {
+        // Set up the Pinia store with the global app
+        if (this.$app && this.$app.config && this.$app.config.globalProperties) {
+            if (!this.$app.config.globalProperties.$pinia) {
+                this.$app.use(this.pinia);
             }
-            return this.content.children;
-        },
-        isFixed() {
-            return this.wwElementState.props.isFixed;
-        },
-        noDropzone() {
-            return this.wwElementState.props.noDropzone;
-        },
-        isEditing() {
-            /* wwEditor:start */
-            return this.wwEditorState.editMode === wwLib.wwEditorHelper.EDIT_MODES.EDITION;
-            /* wwEditor:end */
-            // eslint-disable-next-line no-unreachable
-            return false;
-        },
-    },
-    methods: {
-        onElementClick(event) {
-            // We would prefer having the index inside the callback in the template, but due to a strange way Vue is handling anynmous functions with scope slot, we need to pass the index as a data attribute or each time the parent rerender, all the children will also rerender
-            let rawIndex = event.currentTarget.dataset.wwFlexboxIndex;
-
-            let index = parseInt(rawIndex);
-            if (isNaN(index)) {
-                index = 0;
-            }
-            this.$emit('element-event', { type: 'click', index });
-        },
+        }
     },
 };
 </script>
 
 <style lang="scss" scoped>
-.-link {
-    cursor: pointer;
+.course-scheduler-wrapper {
+    width: 100%;
+    height: 100vh;
+    min-height: 600px;
 }
 </style>

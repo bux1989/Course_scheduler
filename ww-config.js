@@ -1,55 +1,80 @@
 export default {
     options: {
         lazyHydrate: true,
-        displayAllowedValues: (content, wwProps) => wwProps?.overrideDisplayValues ?? [
-            'flex',
-            'block',
-            'grid',
-            'table-cell',
-            'table-row',
-            'table-header-group',
-            'inline-flex',
-            'inline-block',
-            'inline-grid',
-        ],
-        linkable: true,
     },
-    inherit: [{ type: 'ww-layout' }, { type: 'ww-background-video' }],
     editor: {
         label: {
-            en: 'Flexbox',
+            en: 'Course Scheduler',
         },
-        icon: 'border',
+        icon: 'calendar',
         bubble: {
-            icon: 'border',
+            icon: 'calendar',
         },
-        customStylePropertiesOrder: ['children'],
     },
     properties: {
-        children: {
+        schoolId: {
             label: {
-                en: 'Items',
-                fr: 'Items',
+                en: 'School ID',
+                fr: 'ID École',
             },
-            type: 'Repeat',
+            type: 'Text',
             options: {
-                text: { en: 'Elements to repeat' },
+                placeholder: 'Enter school UUID',
             },
-            hidden: (content, sidePanelContent, boundProps, wwProps) => !!(wwProps && wwProps.isFixed) || wwProps.noDropzone,
-            bindable: 'repeatable',
-            defaultValue: [],
+            bindable: true,
+            defaultValue: null,
             /* wwEditor:start */
             bindingValidation: {
                 validations: [
                     {
-                        type: 'array',
-                    },
-                    {
-                        type: 'object',
+                        type: 'string',
                     },
                 ],
-                tooltip:
-                    'A collection or an array of data: \n\n`myCollection` or `[{}, {}, ...] || ["string1", "string2", ...] || [1, 2, ...]`',
+                tooltip: 'UUID of the school for which the schedule is being created',
+            },
+            /* wwEditor:end */
+        },
+        draftId: {
+            label: {
+                en: 'Draft ID',
+                fr: 'ID Brouillon',
+            },
+            type: 'Text',
+            options: {
+                placeholder: 'Enter draft UUID',
+            },
+            bindable: true,
+            defaultValue: null,
+            /* wwEditor:start */
+            bindingValidation: {
+                validations: [
+                    {
+                        type: 'string',
+                    },
+                ],
+                tooltip: 'UUID of the current draft being edited',
+            },
+            /* wwEditor:end */
+        },
+        publishedBy: {
+            label: {
+                en: 'Published By',
+                fr: 'Publié par',
+            },
+            type: 'Text',
+            options: {
+                placeholder: 'Enter user UUID',
+            },
+            bindable: true,
+            defaultValue: null,
+            /* wwEditor:start */
+            bindingValidation: {
+                validations: [
+                    {
+                        type: 'string',
+                    },
+                ],
+                tooltip: 'UUID of the user publishing the schedule, or null if not published',
             },
             /* wwEditor:end */
         },

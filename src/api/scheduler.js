@@ -33,7 +33,7 @@ export default {
         if (this.useMockData) {
             return { data: mockPeriods };
         }
-        
+
         try {
             return await api.get(`/schedule-periods?school_id=${schoolId}`);
         } catch (error) {
@@ -47,11 +47,11 @@ export default {
         if (this.useMockData) {
             return { data: { success: true, message: 'Draft saved successfully' } };
         }
-        
+
         try {
             return await api.post(`/schedule-drafts/${schoolId}/entries`, {
                 draft_id: draftId,
-                entries
+                entries,
             });
         } catch (error) {
             console.error('Error saving draft entries:', error);
@@ -65,11 +65,11 @@ export default {
             // Mock response with no conflicts
             return { data: { conflicts: [] } };
         }
-        
+
         try {
             return await api.post(`/schedule-drafts/${schoolId}/check-slot`, {
                 draft_id: draftId,
-                ...slotData
+                ...slotData,
             });
         } catch (error) {
             console.error('Error checking slot availability:', error);
@@ -82,15 +82,15 @@ export default {
         if (this.useMockData) {
             return { data: { success: true, message: 'Schedule published successfully' } };
         }
-        
+
         try {
             return await api.post(`/schedule-drafts/${schoolId}/publish`, {
                 draft_id: draftId,
-                published_by: publishedBy
+                published_by: publishedBy,
             });
         } catch (error) {
             console.error('Error publishing draft:', error);
             throw error;
         }
-    }
+    },
 };

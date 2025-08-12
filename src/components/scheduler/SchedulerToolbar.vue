@@ -1,28 +1,20 @@
 <template>
     <div class="scheduler-toolbar">
         <div class="view-toggle">
-            <button 
-                :class="{ active: viewMode === 'period' }" 
-                @click="setViewMode('period')"
-                aria-label="Period view"
-            >
+            <button :class="{ active: viewMode === 'period' }" @click="setViewMode('period')" aria-label="Period view">
                 Period View
             </button>
-            <button 
-                :class="{ active: viewMode === 'time' }" 
-                @click="setViewMode('time')"
-                aria-label="Time view"
-            >
+            <button :class="{ active: viewMode === 'time' }" @click="setViewMode('time')" aria-label="Time view">
                 Time View
             </button>
         </div>
-        
+
         <div class="filters">
             <div class="filter-group">
                 <label>Teachers:</label>
                 <div class="teacher-chips">
-                    <div 
-                        v-for="teacher in teachers" 
+                    <div
+                        v-for="teacher in teachers"
                         :key="teacher.id"
                         :class="['teacher-chip', { selected: isTeacherSelected(teacher.id) }]"
                         @click="toggleTeacher(teacher.id)"
@@ -31,78 +23,51 @@
                     </div>
                 </div>
             </div>
-            
+
             <div class="filter-group">
                 <label for="class-select">Class:</label>
-                <select 
-                    id="class-select" 
-                    v-model="selectedClass"
-                    @change="onClassChange"
-                >
+                <select id="class-select" v-model="selectedClass" @change="onClassChange">
                     <option value="">All Classes</option>
-                    <option 
-                        v-for="cls in classes" 
-                        :key="cls.id" 
-                        :value="cls.id"
-                    >
+                    <option v-for="cls in classes" :key="cls.id" :value="cls.id">
                         {{ cls.name }}
                     </option>
                 </select>
             </div>
-            
+
             <div class="filter-group">
                 <label for="room-select">Room:</label>
-                <select 
-                    id="room-select" 
-                    v-model="selectedRoom"
-                    @change="onRoomChange"
-                >
+                <select id="room-select" v-model="selectedRoom" @change="onRoomChange">
                     <option value="">All Rooms</option>
-                    <option 
-                        v-for="room in rooms" 
-                        :key="room.id" 
-                        :value="room.id"
-                    >
+                    <option v-for="room in rooms" :key="room.id" :value="room.id">
                         {{ room.name }}
                     </option>
                 </select>
             </div>
-            
-            <button 
-                class="clear-filters" 
-                @click="clearFilters"
-                aria-label="Clear all filters"
-            >
-                Clear Filters
-            </button>
+
+            <button class="clear-filters" @click="clearFilters" aria-label="Clear all filters">Clear Filters</button>
         </div>
-        
+
         <div class="actions">
-            <button 
-                class="save-button" 
+            <button
+                class="save-button"
                 @click="saveDraft"
                 :disabled="isDraftSaved || isLoading"
                 aria-label="Save draft"
             >
                 {{ isLoading ? 'Saving...' : 'Save Draft' }}
             </button>
-            
-            <button 
-                class="publish-button" 
+
+            <button
+                class="publish-button"
                 @click="openPublishDialog"
                 :disabled="!isDraftSaved || isLoading"
                 aria-label="Publish schedule"
             >
                 Publish
             </button>
-            
+
             <div class="mock-toggle">
-                <input 
-                    type="checkbox" 
-                    id="mock-mode" 
-                    v-model="mockMode"
-                    @change="toggleMockMode"
-                />
+                <input type="checkbox" id="mock-mode" v-model="mockMode" @change="toggleMockMode" />
                 <label for="mock-mode">Mock Mode</label>
             </div>
         </div>
@@ -122,16 +87,16 @@ export default {
                 { id: 't1', name: 'Mr. Smith' },
                 { id: 't2', name: 'Mrs. Johnson' },
                 { id: 't3', name: 'Dr. Williams' },
-                { id: 't4', name: 'Ms. Brown' }
-            ]
+                { id: 't4', name: 'Ms. Brown' },
+            ],
         },
         classes: {
             type: Array,
             default: () => [
                 { id: 'c1', name: 'Class 1A' },
                 { id: 'c2', name: 'Class 2B' },
-                { id: 'c3', name: 'Class 3C' }
-            ]
+                { id: 'c3', name: 'Class 3C' },
+            ],
         },
         rooms: {
             type: Array,
@@ -139,60 +104,60 @@ export default {
                 { id: 'r1', name: 'Room 101' },
                 { id: 'r2', name: 'Room 102' },
                 { id: 'r3', name: 'Lab 1' },
-                { id: 'r4', name: 'Gym' }
-            ]
-        }
+                { id: 'r4', name: 'Gym' },
+            ],
+        },
     },
     emits: ['open-publish-dialog'],
     setup(props, { emit }) {
         const store = useSchedulerStore();
-        
+
         const selectedClass = ref('');
         const selectedRoom = ref('');
         const mockMode = ref(store.useMockMode);
-        
+
         const viewMode = computed(() => store.viewMode);
         const isDraftSaved = computed(() => store.isDraftSaved);
         const isLoading = computed(() => store.isLoading);
-        
+
         function setViewMode(mode) {
             store.setViewMode(mode);
         }
-        
+
         function isTeacherSelected(teacherId) {
             return store.selectedTeacherIds.includes(teacherId);
         }
-        
+
         function toggleTeacher(teacherId) {
             store.toggleTeacher(teacherId);
         }
-        
+
         function onClassChange() {
             store.setSelectedClass(selectedClass.value || null);
         }
-        
+
         function onRoomChange() {
             store.setSelectedRoom(selectedRoom.value || null);
         }
-        
+
         function clearFilters() {
             store.clearFilters();
             selectedClass.value = '';
             selectedRoom.value = '';
         }
-        
+
         function saveDraft() {
             store.persistDraft();
         }
-        
+
         function openPublishDialog() {
             emit('open-publish-dialog');
         }
-        
+
         function toggleMockMode() {
             store.toggleMockMode();
         }
-        
+
         return {
             viewMode,
             selectedClass,
@@ -208,9 +173,9 @@ export default {
             clearFilters,
             saveDraft,
             openPublishDialog,
-            toggleMockMode
+            toggleMockMode,
         };
-    }
+    },
 };
 </script>
 
@@ -298,7 +263,8 @@ select {
     align-items: center;
 }
 
-.save-button, .publish-button {
+.save-button,
+.publish-button {
     padding: 8px 16px;
     border-radius: 4px;
     cursor: pointer;
@@ -342,8 +308,10 @@ select {
         flex-direction: column;
         align-items: stretch;
     }
-    
-    .view-toggle, .filters, .actions {
+
+    .view-toggle,
+    .filters,
+    .actions {
         width: 100%;
     }
 }

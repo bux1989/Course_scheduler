@@ -22,24 +22,24 @@ export const useSchedulerStore = defineStore('scheduler', () => {
     // Getters
     const filteredEntries = computed(() => {
         let filtered = [...entries.value];
-        
+
         // Apply teacher filter
         if (selectedTeacherIds.value.length > 0) {
             filtered = filtered.filter(entry => {
                 return entry.teacher_ids.some(id => selectedTeacherIds.value.includes(id));
             });
         }
-        
+
         // Apply class filter
         if (selectedClassId.value) {
             filtered = filtered.filter(entry => entry.class_id === selectedClassId.value);
         }
-        
+
         // Apply room filter
         if (selectedRoomId.value) {
             filtered = filtered.filter(entry => entry.room_id === selectedRoomId.value);
         }
-        
+
         return filtered;
     });
 
@@ -56,10 +56,10 @@ export const useSchedulerStore = defineStore('scheduler', () => {
         schoolId.value = school;
         draftId.value = draft;
         publishedBy.value = publisher;
-        
+
         // Set mock mode for API
         schedulerApi.setMockMode(useMockMode.value);
-        
+
         // Load periods
         loadPeriods();
     }
@@ -67,7 +67,7 @@ export const useSchedulerStore = defineStore('scheduler', () => {
     async function loadPeriods() {
         isLoading.value = true;
         error.value = null;
-        
+
         try {
             const response = await schedulerApi.getSchedulePeriods(schoolId.value);
             periods.value = response.data;
@@ -82,7 +82,7 @@ export const useSchedulerStore = defineStore('scheduler', () => {
     async function checkPlacement(payload) {
         isLoading.value = true;
         error.value = null;
-        
+
         try {
             const response = await schedulerApi.checkSlot(schoolId.value, draftId.value, payload);
             lastCheckResult.value = response.data;
@@ -97,13 +97,14 @@ export const useSchedulerStore = defineStore('scheduler', () => {
     }
 
     function upsertEntry(entry) {
-        const index = entries.value.findIndex(e => 
-            e.day_id === entry.day_id && 
-            e.period_id === entry.period_id &&
-            e.start_time === entry.start_time &&
-            e.end_time === entry.end_time
+        const index = entries.value.findIndex(
+            e =>
+                e.day_id === entry.day_id &&
+                e.period_id === entry.period_id &&
+                e.start_time === entry.start_time &&
+                e.end_time === entry.end_time
         );
-        
+
         if (index !== -1) {
             // Update existing entry
             entries.value[index] = { ...entry };
@@ -111,7 +112,7 @@ export const useSchedulerStore = defineStore('scheduler', () => {
             // Add new entry
             entries.value.push({ ...entry });
         }
-        
+
         isDraftSaved.value = false;
     }
 
@@ -125,7 +126,7 @@ export const useSchedulerStore = defineStore('scheduler', () => {
     async function persistDraft() {
         isLoading.value = true;
         error.value = null;
-        
+
         try {
             await schedulerApi.saveDraftEntries(schoolId.value, draftId.value, entries.value);
             isDraftSaved.value = true;
@@ -143,16 +144,12 @@ export const useSchedulerStore = defineStore('scheduler', () => {
         if (!isDraftSaved.value) {
             await persistDraft();
         }
-        
+
         isLoading.value = true;
         error.value = null;
-        
+
         try {
-            const response = await schedulerApi.publishDraft(
-                schoolId.value, 
-                draftId.value, 
-                publishedBy.value
-            );
+            const response = await schedulerApi.publishDraft(schoolId.value, draftId.value, publishedBy.value);
             return response.data;
         } catch (err) {
             error.value = 'Failed to publish schedule';
@@ -213,12 +210,12 @@ export const useSchedulerStore = defineStore('scheduler', () => {
         useMockMode,
         lastCheckResult,
         isDraftSaved,
-        
+
         // Getters
         filteredEntries,
         periodEntries,
         adhocEntries,
-        
+
         // Actions
         initialize,
         loadPeriods,
@@ -232,6 +229,6 @@ export const useSchedulerStore = defineStore('scheduler', () => {
         setSelectedClass,
         setSelectedRoom,
         clearFilters,
-        toggleMockMode
+        toggleMockMode,
     };
 });

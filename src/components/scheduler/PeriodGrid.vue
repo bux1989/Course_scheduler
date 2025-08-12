@@ -3,22 +3,22 @@
         <!-- Header row with days -->
         <div class="period-grid-header" role="row">
             <div class="period-header-cell period-label-cell" role="columnheader">Period</div>
-            <div 
-                v-for="(day, index) in days" 
+            <div
+                v-for="(day, index) in days"
                 :key="day.id"
-                class="period-header-cell" 
+                class="period-header-cell"
                 role="columnheader"
                 :aria-colindex="index + 1"
             >
                 {{ day.name }}
             </div>
         </div>
-        
+
         <!-- Grid rows for each period -->
-        <div 
-            v-for="(period, periodIndex) in periods" 
+        <div
+            v-for="(period, periodIndex) in periods"
             :key="period.id"
-            class="period-grid-row" 
+            class="period-grid-row"
             role="row"
             :aria-rowindex="periodIndex + 1"
         >
@@ -27,10 +27,10 @@
                 <div class="period-name">{{ period.name }}</div>
                 <div class="period-time">{{ formatTime(period.start_time) }} - {{ formatTime(period.end_time) }}</div>
             </div>
-            
+
             <!-- Cells for each day -->
-            <div 
-                v-for="day in days" 
+            <div
+                v-for="day in days"
                 :key="`${period.id}-${day.id}`"
                 class="period-cell"
                 :class="{ 'has-entry': hasEntry(day.id, period.id) }"
@@ -46,8 +46,8 @@
                             <span class="entry-room">{{ getEntryRoomName(day.id, period.id) }}</span>
                             <span class="entry-teachers">{{ getEntryTeacherNames(day.id, period.id) }}</span>
                         </div>
-                        <button 
-                            class="remove-entry" 
+                        <button
+                            class="remove-entry"
                             @click.stop="removeEntry(day.id, period.id)"
                             aria-label="Remove entry"
                         >
@@ -79,8 +79,8 @@ export default {
                 { id: 3, name: 'Wednesday' },
                 { id: 4, name: 'Thursday' },
                 { id: 5, name: 'Friday' },
-                { id: 6, name: 'Saturday' }
-            ]
+                { id: 6, name: 'Saturday' },
+            ],
         },
         courses: {
             type: Array,
@@ -88,8 +88,8 @@ export default {
                 { id: 'course1', name: 'Mathematics' },
                 { id: 'course2', name: 'Science' },
                 { id: 'course3', name: 'English' },
-                { id: 'course4', name: 'History' }
-            ]
+                { id: 'course4', name: 'History' },
+            ],
         },
         rooms: {
             type: Array,
@@ -97,8 +97,8 @@ export default {
                 { id: 'r1', name: 'Room 101' },
                 { id: 'r2', name: 'Room 102' },
                 { id: 'r3', name: 'Lab 1' },
-                { id: 'r4', name: 'Gym' }
-            ]
+                { id: 'r4', name: 'Gym' },
+            ],
         },
         teachers: {
             type: Array,
@@ -106,28 +106,28 @@ export default {
                 { id: 't1', name: 'Mr. Smith' },
                 { id: 't2', name: 'Mrs. Johnson' },
                 { id: 't3', name: 'Dr. Williams' },
-                { id: 't4', name: 'Ms. Brown' }
-            ]
+                { id: 't4', name: 'Ms. Brown' },
+            ],
         },
         classes: {
             type: Array,
             default: () => [
                 { id: 'c1', name: 'Class 1A' },
                 { id: 'c2', name: 'Class 2B' },
-                { id: 'c3', name: 'Class 3C' }
-            ]
-        }
+                { id: 'c3', name: 'Class 3C' },
+            ],
+        },
     },
     emits: ['add-entry'],
     setup(props, { emit }) {
         const store = useSchedulerStore();
-        
+
         const periods = computed(() => store.periods);
         const entries = computed(() => store.filteredEntries);
-        
+
         function formatTime(timeString) {
             if (!timeString) return '';
-            
+
             // Simple time formatting (HH:MM)
             const parts = timeString.split(':');
             if (parts.length >= 2) {
@@ -135,62 +135,58 @@ export default {
             }
             return timeString;
         }
-        
+
         function hasEntry(dayId, periodId) {
-            return entries.value.some(entry => 
-                entry.day_id === dayId && 
-                entry.period_id === periodId &&
-                entry.schedule_type === 'period'
+            return entries.value.some(
+                entry => entry.day_id === dayId && entry.period_id === periodId && entry.schedule_type === 'period'
             );
         }
-        
+
         function getEntry(dayId, periodId) {
-            return entries.value.find(entry => 
-                entry.day_id === dayId && 
-                entry.period_id === periodId &&
-                entry.schedule_type === 'period'
+            return entries.value.find(
+                entry => entry.day_id === dayId && entry.period_id === periodId && entry.schedule_type === 'period'
             );
         }
-        
+
         function getEntryCourseName(dayId, periodId) {
             const entry = getEntry(dayId, periodId);
             if (!entry || !entry.course_id) return '';
-            
+
             const course = props.courses.find(c => c.id === entry.course_id);
             return course ? course.name : '';
         }
-        
+
         function getEntryRoomName(dayId, periodId) {
             const entry = getEntry(dayId, periodId);
             if (!entry || !entry.room_id) return '';
-            
+
             const room = props.rooms.find(r => r.id === entry.room_id);
             return room ? room.name : '';
         }
-        
+
         function getEntryTeacherNames(dayId, periodId) {
             const entry = getEntry(dayId, periodId);
             if (!entry || !entry.teacher_ids || !entry.teacher_ids.length) return '';
-            
+
             const teacherNames = entry.teacher_ids
                 .map(id => {
                     const teacher = props.teachers.find(t => t.id === id);
                     return teacher ? teacher.name : '';
                 })
                 .filter(name => name);
-                
+
             return teacherNames.join(', ');
         }
-        
+
         async function handleCellClick(dayId, periodId, period) {
             const existingEntry = getEntry(dayId, periodId);
-            
+
             if (existingEntry) {
                 // If entry exists, emit event to edit it
-                emit('add-entry', { 
-                    isEdit: true, 
+                emit('add-entry', {
+                    isEdit: true,
                     entry: existingEntry,
-                    period
+                    period,
                 });
             } else {
                 // Check if slot is available
@@ -199,22 +195,22 @@ export default {
                     day_id: dayId,
                     period_id: periodId,
                     start_time: period.start_time,
-                    end_time: period.end_time
+                    end_time: period.end_time,
                 };
-                
+
                 const result = await store.checkPlacement(checkData);
-                
+
                 // Emit event to add new entry
-                emit('add-entry', { 
-                    isEdit: false, 
+                emit('add-entry', {
+                    isEdit: false,
                     conflicts: result.conflicts || [],
                     period,
                     dayId,
-                    periodId
+                    periodId,
                 });
             }
         }
-        
+
         function removeEntry(dayId, periodId) {
             const entry = getEntry(dayId, periodId);
             if (entry) {
@@ -224,7 +220,7 @@ export default {
                 }
             }
         }
-        
+
         return {
             periods,
             formatTime,
@@ -234,9 +230,9 @@ export default {
             getEntryRoomName,
             getEntryTeacherNames,
             handleCellClick,
-            removeEntry
+            removeEntry,
         };
-    }
+    },
 };
 </script>
 
@@ -301,74 +297,74 @@ export default {
     min-height: 80px;
     border-right: 1px solid #ddd;
     position: relative;
-cursor: pointer;
-transition: background-color 0.2s;
+    cursor: pointer;
+    transition: background-color 0.2s;
 }
 
 .period-cell:last-child {
-border-right: none;
+    border-right: none;
 }
 
 .period-cell:hover {
-background-color: #f0f7ff;
+    background-color: #f0f7ff;
 }
 
 .empty-cell {
-display: flex;
-justify-content: center;
-align-items: center;
-height: 100%;
-color: #ccc;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100%;
+    color: #ccc;
 }
 
 .add-icon {
-font-size: 24px;
-opacity: 0.5;
+    font-size: 24px;
+    opacity: 0.5;
 }
 
 .has-entry {
-background-color: #e6f7ff;
+    background-color: #e6f7ff;
 }
 
 .entry-content {
-padding: 8px;
-height: 100%;
-position: relative;
+    padding: 8px;
+    height: 100%;
+    position: relative;
 }
 
 .entry-course {
-font-weight: 500;
-margin-bottom: 4px;
+    font-weight: 500;
+    margin-bottom: 4px;
 }
 
 .entry-details {
-font-size: 0.85em;
-color: #666;
-display: flex;
-flex-direction: column;
-gap: 2px;
+    font-size: 0.85em;
+    color: #666;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
 }
 
 .remove-entry {
-position: absolute;
-top: 4px;
-right: 4px;
-width: 20px;
-height: 20px;
-border-radius: 50%;
-background-color: #ff4d4f;
-color: white;
-border: none;
-display: flex;
-justify-content: center;
-align-items: center;
-font-size: 14px;
-cursor: pointer;
-opacity: 0;
-transition: opacity 0.2s;
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background-color: #ff4d4f;
+    color: white;
+    border: none;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 14px;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.2s;
 }
 
 .entry-content:hover .remove-entry {
-opacity: 1;
+    opacity: 1;
 }
 </style>
