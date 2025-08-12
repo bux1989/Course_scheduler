@@ -22,7 +22,7 @@ export default {
             options: {
                 placeholder: 'Enter school UUID',
             },
-            defaultValue: '',
+            defaultValue: 'demo-school',
         },
         draftId: {
             label: {
@@ -33,7 +33,7 @@ export default {
             options: {
                 placeholder: 'Enter draft UUID',
             },
-            defaultValue: '',
+            defaultValue: 'demo-draft',
         },
         publishedBy: {
             label: {
