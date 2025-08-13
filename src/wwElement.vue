@@ -174,26 +174,16 @@ export default {
 
         // Computed properties for data access
         const schoolId = computed(() => {
-            console.log('🏫 [wwElement] schoolId computed:', props.content.schoolId);
             return props.content.schoolId || 'No School ID';
         });
         const draftId = computed(() => {
-            console.log('📝 [wwElement] draftId computed:', props.content.draftId);
             return props.content.draftId || 'No Draft ID';
         });
         const publishedBy = computed(() => {
-            console.log('✅ [wwElement] publishedBy computed:', props.content.publishedBy);
             return props.content.publishedBy || null;
         });
         const periods = computed(() => {
             const rawPeriodsData = props.content.periods || [];
-            console.log('📅 [wwElement] periods computed:', rawPeriodsData.length, 'periods:', rawPeriodsData);
-            
-            // Debug: Check available field names
-            if (rawPeriodsData.length > 0) {
-                console.log('📅 Available period field names:', Object.keys(rawPeriodsData[0]));
-                console.log('📅 Sample period data:', rawPeriodsData[0]);
-            }
             
             const processedPeriods = rawPeriodsData.map((period, index) => {
                 // Generate fallback period name from times, label, or index
@@ -223,77 +213,30 @@ export default {
                     isInstructional = false;
                 }
                 
-                const processedPeriod = {
+                return {
                     ...period,
                     name: periodName,
                     is_instructional: period.is_instructional !== undefined ? period.is_instructional : isInstructional,
                     type: period.block_type || period.type || (isInstructional ? 'lesson' : 'break')
                 };
-                
-                console.log(`  Period ${index}:`, {
-                    original: {
-                        id: period.id,
-                        name: period.name,
-                        label: period.label,
-                        block_type: period.block_type,
-                        attendance_requirement: period.attendance_requirement,
-                        is_instructional: period.is_instructional,
-                        start_time: period.start_time,
-                        end_time: period.end_time,
-                        type: period.type
-                    },
-                    processed: {
-                        id: processedPeriod.id,
-                        name: processedPeriod.name,
-                        is_instructional: processedPeriod.is_instructional,
-                        start_time: processedPeriod.start_time,
-                        end_time: processedPeriod.end_time,
-                        type: processedPeriod.type
-                    }
-                });
-                
-                return processedPeriod;
             });
             
-            console.log('📅 [wwElement] Final processed periods:', processedPeriods);
             return processedPeriods;
         });
         const courses = computed(() => {
-            const coursesData = props.content.courses || [];
-            console.log('📚 [wwElement] courses computed:', coursesData.length, 'courses:', coursesData);
-            
-            // Debug: Sample course data structure
-            if (coursesData.length > 0) {
-                console.log('📚 Sample course:', coursesData[0]);
-                console.log('📚 Course fields:', Object.keys(coursesData[0]));
-            }
-            
-            return coursesData;
+            return props.content.courses || [];
         });
         const teachers = computed(() => {
-            const teachersData = props.content.teachers || [];
-            console.log('👨‍🏫 [wwElement] teachers computed:', teachersData.length, 'teachers:', teachersData);
-            return teachersData;
+            return props.content.teachers || [];
         });
         const classes = computed(() => {
-            const classesData = props.content.classes || [];
-            console.log('🎓 [wwElement] classes computed:', classesData.length, 'classes:', classesData);
-            return classesData;
+            return props.content.classes || [];
         });
         const rooms = computed(() => {
-            const roomsData = props.content.rooms || [];
-            console.log('🏛️ [wwElement] rooms computed:', roomsData.length, 'rooms:', roomsData);
-            return roomsData;
+            return props.content.rooms || [];
         });
         const schoolDays = computed(() => {
             const rawDaysData = props.content.schoolDays || [];
-            console.log('🗓️ [wwElement] schoolDays computed:', rawDaysData.length, 'days:', rawDaysData);
-            
-            // Debug: Check available field names  
-            if (rawDaysData.length > 0) {
-                console.log('🗓️ Available school day field names:', Object.keys(rawDaysData[0]));
-                console.log('🗓️ Sample school day data:', rawDaysData[0]);
-            }
             
             // Create fallback day names if missing
             const defaultDayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -302,7 +245,7 @@ export default {
                 // Use the correct field names from the actual data structure
                 const dayName = day.name || day.name_en || day.day_name || defaultDayNames[index] || `Day ${index + 1}`;
                 
-                const processedDay = {
+                return {
                     ...day,
                     // Use day_id as the main identifier if available, otherwise use id
                     id: day.day_id || day.id,
@@ -313,61 +256,18 @@ export default {
                     // Keep both for compatibility
                     day_id: day.day_id || day.id
                 };
-                
-                console.log(`  Day ${index}:`, {
-                    original: { 
-                        id: day.id, 
-                        day_id: day.day_id,
-                        name: day.name, 
-                        name_en: day.name_en,
-                        name_de: day.name_de,
-                        date: day.date, 
-                        is_active: day.is_active,
-                        day_number: day.day_number 
-                    },
-                    processed: { 
-                        id: processedDay.id, 
-                        name: processedDay.name, 
-                        date: processedDay.date, 
-                        is_active: processedDay.is_active,
-                        day_number: processedDay.day_number
-                    }
-                });
-                
-                return processedDay;
             });
             
-            console.log('🗓️ [wwElement] Final processed schoolDays:', processedDays);
             return processedDays;
         });
         const draftSchedules = computed(() => {
-            const draftData = props.content.draftSchedules || [];
-            console.log('📊 [wwElement] draftSchedules computed:', draftData.length, 'schedules:', draftData);
-            
-            // Debug: Sample assignment data structure
-            if (draftData.length > 0) {
-                console.log('📊 Sample draft assignment:', draftData[0]);
-                console.log('📊 Draft assignment fields:', Object.keys(draftData[0]));
-            }
-            
-            return draftData;
+            return props.content.draftSchedules || [];
         });
         const liveSchedules = computed(() => {
-            const liveData = props.content.liveSchedules || [];
-            console.log('🔴 [wwElement] liveSchedules computed:', liveData.length, 'schedules:', liveData);
-            
-            // Debug: Sample live assignment data structure
-            if (liveData.length > 0) {
-                console.log('🔴 Sample live assignment:', liveData[0]);
-                console.log('🔴 Live assignment fields:', Object.keys(liveData[0]));
-            }
-            
-            return liveData;
+            return props.content.liveSchedules || [];
         });
         const subjects = computed(() => {
-            const subjectsData = props.content.subjects || [];
-            console.log('📖 [wwElement] subjects computed:', subjectsData.length, 'subjects:', subjectsData);
-            return subjectsData;
+            return props.content.subjects || [];
         });
 
         // Computed state
@@ -382,7 +282,6 @@ export default {
         // Available courses for selected slot
         const availableCoursesForSlot = computed(() => {
             if (!selectedCell.value.dayId || !selectedCell.value.periodId) {
-                console.log('🎯 [wwElement] availableCoursesForSlot: No slot selected, returning all courses');
                 return courses.value;
             }
 
@@ -391,21 +290,13 @@ export default {
             );
             const currentDayNumber = currentDay?.day_number;
 
-            console.log('🎯 [wwElement] availableCoursesForSlot filtering:', {
-                dayId: selectedCell.value.dayId,
-                periodId: selectedCell.value.periodId,
-                currentDay: currentDay,
-                currentDayNumber: currentDayNumber,
-                totalCourses: courses.value.length
-            });
-
             // Filter courses based on possible_time_slots
             const filteredCourses = courses.value.filter(course => {
                 // If no restrictions, course is available
                 if (!course.possible_time_slots?.length) return true;
 
                 // Check if current slot is in possible slots
-                const isAvailable = course.possible_time_slots.some(slot => {
+                return course.possible_time_slots.some(slot => {
                     // Handle string format "day_number|period_id"
                     if (typeof slot === 'string' && slot.includes('|')) {
                         const [dayNumber, periodId] = slot.split('|');
@@ -418,23 +309,6 @@ export default {
                     }
                     return false;
                 });
-
-                if (course.possible_time_slots?.length && !isAvailable) {
-                    console.log('  Course filtered out:', {
-                        courseId: course.id,
-                        courseName: course.name,
-                        possible_time_slots: course.possible_time_slots,
-                        reason: 'Not available in this time slot'
-                    });
-                }
-
-                return isAvailable;
-            });
-
-            console.log('🎯 [wwElement] availableCoursesForSlot result:', {
-                totalCourses: courses.value.length,
-                filteredCourses: filteredCourses.length,
-                courseNames: filteredCourses.map(c => c.name).slice(0, 5)
             });
 
             return filteredCourses;
@@ -558,19 +432,6 @@ export default {
         function handleCellClick({ dayId, periodId, period, mode, preSelectedCourse }) {
             if (isReadOnly.value) return;
 
-            console.log('🎯 [wwElement] handleCellClick called:', {
-                dayId, 
-                periodId, 
-                periodData: period,
-                mode,
-                preSelectedCourse: preSelectedCourse ? {
-                    id: preSelectedCourse.id,
-                    name: preSelectedCourse.name || preSelectedCourse.course_name
-                } : null,
-                schoolDaysCount: schoolDays.value.length,
-                draftSchedulesCount: draftSchedules.value.length
-            });
-
             // Get existing assignments for this cell
             const assignments = draftSchedules.value.filter(
                 assignment => assignment.day_id === dayId && assignment.period_id === periodId
@@ -580,13 +441,6 @@ export default {
             const conflicts = allConflicts.value.filter(
                 conflict => conflict.day_id === dayId && conflict.period_id === periodId
             );
-
-            console.log('🎯 [wwElement] Cell click - found data:', {
-                assignmentsCount: assignments.length,
-                assignments: assignments,
-                conflictsCount: conflicts.length,
-                conflicts: conflicts
-            });
 
             selectedCell.value = {
                 dayId,
@@ -681,11 +535,8 @@ export default {
                 // Simulate save delay
                 await new Promise(resolve => setTimeout(resolve, 1000));
                 
-                console.log('💾 [wwElement] Draft saved successfully:', {
-                    draftId: draftId.value,
-                    schedulesCount: draftSchedules.value.length,
-                    timestamp: new Date().toISOString()
-                });
+                // Only log success once, not repeatedly
+                console.log('💾 [wwElement] Draft saved successfully');
             } catch (error) {
                 console.error('❌ [wwElement] Error saving draft:', error);
             } finally {
@@ -861,40 +712,21 @@ export default {
 
         // Debug logging on mount
         onMounted(() => {
-            console.log('🚀 [wwElement] Component mounted with content:', {
-                fullContent: props.content,
-                periods: periods.value,
-                schoolDays: schoolDays.value,
-                courses: courses.value,
-                teachers: teachers.value,
-                classes: classes.value,
-                rooms: rooms.value,
-                draftSchedules: draftSchedules.value,
-                liveSchedules: liveSchedules.value
-            });
+            console.log('🚀 [wwElement] Component mounted - Course Scheduler loaded successfully');
         });
 
-        // Watch for changes in props.content
+        // Watch for changes in props.content (only log significant changes)
         watch(() => props.content, (newContent, oldContent) => {
-            console.log('🔄 [wwElement] Content prop changed:', {
-                newContent,
-                oldContent,
-                periodsChanged: newContent?.periods !== oldContent?.periods,
-                schoolDaysChanged: newContent?.schoolDays !== oldContent?.schoolDays
-            });
-            
-            // Log available field names for periods
-            if (newContent?.periods?.length > 0) {
-                const firstPeriod = newContent.periods[0];
-                console.log('📅 Available period field names:', Object.keys(firstPeriod));
-                console.log('📅 Sample period data:', firstPeriod);
-            }
-            
-            // Log available field names for school days  
-            if (newContent?.schoolDays?.length > 0) {
-                const firstDay = newContent.schoolDays[0];
-                console.log('🗓️ Available school day field names:', Object.keys(firstDay));
-                console.log('🗓️ Sample school day data:', firstDay);
+            // Only log when there are actual structural changes, not on every reactive update
+            if (newContent && oldContent && 
+                (newContent?.periods?.length !== oldContent?.periods?.length ||
+                 newContent?.schoolDays?.length !== oldContent?.schoolDays?.length ||
+                 newContent?.courses?.length !== oldContent?.courses?.length)) {
+                console.log('🔄 [wwElement] Content structure changed:', {
+                    periods: newContent?.periods?.length || 0,
+                    schoolDays: newContent?.schoolDays?.length || 0,
+                    courses: newContent?.courses?.length || 0
+                });
             }
         }, { deep: true });
 

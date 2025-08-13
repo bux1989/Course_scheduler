@@ -401,40 +401,15 @@ export default {
         const selectedClassFilter = ref('');
         const focusedPeriodId = ref(null);
         
-        // Debug logging for props and state
-        console.log('🚀 [SchedulerGrid] Component setup initialized with props:', {
-            periodsCount: props.periods?.length || 0,
-            schoolDaysCount: props.schoolDays?.length || 0,
-            coursesCount: props.courses?.length || 0,
-            teachersCount: props.teachers?.length || 0,
-            classesCount: props.classes?.length || 0,
-            roomsCount: props.rooms?.length || 0,
-            draftSchedulesCount: props.draftSchedules?.length || 0,
-            maxDays: props.maxDays,
-            isReadOnly: props.isReadOnly,
-            showStatistics: props.showStatistics
-        });
+        // Component initialized
         
-        // Check for empty data and warn
+        // Watch for critical data structure changes
         watch([() => props.schoolDays, () => props.periods], ([newDays, newPeriods]) => {
             if (!newDays || newDays.length === 0) {
-                console.warn('⚠️ [SchedulerGrid] No school days found!', {
-                    schoolDays: newDays,
-                    schoolDaysType: typeof newDays,
-                    allProps: {
-                        periods: props.periods,
-                        schoolDays: props.schoolDays,
-                        courses: props.courses,
-                        teachers: props.teachers
-                    }
-                });
+                console.warn('⚠️ [SchedulerGrid] No school days found!');
             }
-            
             if (!newPeriods || newPeriods.length === 0) {
-                console.warn('⚠️ [SchedulerGrid] No periods found!', {
-                    periods: newPeriods,
-                    periodsType: typeof newPeriods
-                });
+                console.warn('⚠️ [SchedulerGrid] No periods found!');
             }
         }, { immediate: true });
 
@@ -444,21 +419,14 @@ export default {
         
         // Computed properties with robust fallback mechanisms
         const visibleDays = computed(() => {
-            console.log('🗓️ [SchedulerGrid] visibleDays computation START:', {
-                schoolDaysCount: props.schoolDays?.length || 0,
-                maxDays: props.maxDays,
-                lastValidDaysCount: lastValidDays.value.length
-            });
-            
             // Emergency fallback: if props are temporarily undefined during reactive updates
             if (!props.schoolDays) {
-                console.warn('⚠️ [SchedulerGrid] schoolDays prop is undefined during reactive update, using last valid state');
+                console.warn('⚠️ [SchedulerGrid] schoolDays prop is undefined, using last valid state');
                 return lastValidDays.value;
             }
             
             // No school days available
             if (props.schoolDays.length === 0) {
-                console.warn('⚠️ [SchedulerGrid] No school days available');
                 // If we previously had valid days, keep showing them briefly to prevent flicker
                 if (lastValidDays.value.length > 0) {
                     console.warn('⚠️ [SchedulerGrid] Using last valid days to prevent component disappearing');
@@ -468,18 +436,10 @@ export default {
             }
             
             const days = props.schoolDays.slice(0, props.maxDays);
-            console.log('🗓️ [SchedulerGrid] visibleDays computed:', {
-                totalSchoolDays: props.schoolDays.length,
-                maxDays: props.maxDays,
-                visibleDaysCount: days.length,
-                visibleDaysIds: days.map(d => ({ id: d.id, name: d.name })),
-                draftSchedulesCount: props.draftSchedules?.length || 0,
-                sampleDayIds: props.draftSchedules?.slice(0, 3).map(a => ({ day_id: a.day_id, period_id: a.period_id })) || []
-            });
             
             // CRITICAL: Ensure we never return an empty array unless there truly are no school days
             if (days.length === 0 && props.schoolDays.length > 0) {
-                console.warn('⚠️ [SchedulerGrid] visibleDays resulted in 0 days! Falling back to showing at least first day');
+                console.warn('⚠️ [SchedulerGrid] visibleDays resulted in 0 days! Using fallback');
                 const fallbackDays = props.schoolDays.slice(0, 1);
                 lastValidDays.value = fallbackDays; // Cache for future use
                 return fallbackDays;
@@ -494,22 +454,14 @@ export default {
         });
 
         const visiblePeriods = computed(() => {
-            console.log('📅 [SchedulerGrid] visiblePeriods computation START:', {
-                showNonInstructional: showNonInstructional.value,
-                focusedPeriodId: focusedPeriodId.value,
-                totalPeriodsCount: props.periods?.length || 0,
-                lastValidPeriodsCount: lastValidPeriods.value.length
-            });
-            
             // Emergency fallback: if props are temporarily undefined during reactive updates
             if (!props.periods) {
-                console.warn('⚠️ [SchedulerGrid] periods prop is undefined during reactive update, using last valid state');
+                console.warn('⚠️ [SchedulerGrid] periods prop is undefined, using last valid state');
                 return lastValidPeriods.value;
             }
             
             // No periods available
             if (props.periods.length === 0) {
-                console.warn('⚠️ [SchedulerGrid] No periods available');
                 // If we previously had valid periods, keep showing them briefly to prevent flicker
                 if (lastValidPeriods.value.length > 0) {
                     console.warn('⚠️ [SchedulerGrid] Using last valid periods to prevent component disappearing');
@@ -522,15 +474,12 @@ export default {
             
             // First filter by focused period if set
             if (focusedPeriodId.value) {
-                console.log('📅 [SchedulerGrid] Filtering to focused period:', focusedPeriodId.value);
                 filteredPeriods = props.periods.filter(period => period.id === focusedPeriodId.value);
             }
             // Then filter by instructional status
             else if (!showNonInstructional.value) {
-                console.log('📅 [SchedulerGrid] Filtering to show periods with flexible or required attendance');
                 filteredPeriods = props.periods.filter(period => {
                     // Show periods where attendance_requirement is 'flexible' or 'required'
-                    // This is the correct interpretation based on user feedback
                     let shouldShow = period.attendance_requirement === 'flexible' || period.attendance_requirement === 'required';
                     
                     // Alternative checks if attendance_requirement is not available or doesn't match expected values
@@ -562,19 +511,8 @@ export default {
                         shouldShow = true;
                     }
                     
-                    console.log(`  Period "${period.name || period.label}" (id: ${period.id}):`, {
-                        attendance_requirement: period.attendance_requirement,
-                        block_type: period.block_type,
-                        is_instructional: period.is_instructional,
-                        label: period.label,
-                        name: period.name,
-                        shouldShow: shouldShow,
-                        type: period.type
-                    });
                     return shouldShow;
                 });
-            } else {
-                console.log('📅 [SchedulerGrid] Showing ALL periods (including non-instructional)');
             }
             
             // CRITICAL: Robust fallback to prevent component disappearing
@@ -594,7 +532,6 @@ export default {
                 // Update showNonInstructional to true to prevent infinite filtering loops
                 nextTick(() => {
                     showNonInstructional.value = true;
-                    console.log('🚨 [SchedulerGrid] Updated showNonInstructional to true to prevent future filtering issues');
                 });
             }
             
@@ -602,19 +539,6 @@ export default {
             if (filteredPeriods.length > 0) {
                 lastValidPeriods.value = filteredPeriods;
             }
-            
-            console.log('📅 [SchedulerGrid] visiblePeriods computed RESULT:', {
-                filteredPeriodsCount: filteredPeriods.length,
-                originalPeriodsCount: props.periods.length,
-                periods: filteredPeriods.map(p => ({
-                    id: p.id,
-                    name: p.name || p.label,
-                    block_type: p.block_type,
-                    attendance_requirement: p.attendance_requirement,
-                    is_instructional: p.is_instructional,
-                    type: p.type
-                }))
-            });
             
             return filteredPeriods;
         });
@@ -672,16 +596,6 @@ export default {
             // Get the appropriate schedule data based on mode
             const scheduleData = isLiveMode.value ? props.liveSchedules : props.draftSchedules;
             
-            console.log('🎯 [SchedulerGrid] getCellAssignments data source:', {
-                dayId, 
-                periodId,
-                isLiveMode: isLiveMode.value,
-                dataSource: isLiveMode.value ? 'liveSchedules' : 'draftSchedules',
-                scheduleDataCount: scheduleData.length,
-                draftSchedulesCount: props.draftSchedules.length,
-                liveSchedulesCount: props.liveSchedules.length
-            });
-            
             let assignments = scheduleData.filter(
                 assignment => {
                     // Enhanced day ID matching - check both day_id and id fields
@@ -693,20 +607,6 @@ export default {
                         assignment.day_number === currentDay?.day_number; // Also try day_number matching
                     
                     const periodMatch = assignment.period_id === periodId;
-                    
-                    if (assignments.length === 0) {
-                        console.log('🔍 [SchedulerGrid] Assignment matching debug:', {
-                            assignmentDayId: assignment.day_id,
-                            assignmentDayNumber: assignment.day_number,
-                            assignmentPeriodId: assignment.period_id,
-                            lookingForDayId: dayId,
-                            lookingForPeriodId: periodId,
-                            currentDay: currentDay,
-                            assignmentDayMatch,
-                            periodMatch,
-                            assignment: assignment
-                        });
-                    }
                     
                     return assignmentDayMatch && periodMatch;
                 }
@@ -741,16 +641,6 @@ export default {
                 const courseB = getCourseName(b.course_id) || getSubjectName(b.subject_id);
                 return courseA.localeCompare(courseB);
             });
-            
-            if (sortedAssignments.length > 0) {
-                console.log(`🎯 [SchedulerGrid] getCellAssignments(${dayId}, ${periodId}):`, {
-                    assignmentsFound: sortedAssignments.length,
-                    assignments: sortedAssignments,
-                    sampleAssignment: sortedAssignments[0],
-                    isLiveMode: isLiveMode.value,
-                    showLessonSchedules: showLessonSchedules.value
-                });
-            }
             
             return sortedAssignments;
         }

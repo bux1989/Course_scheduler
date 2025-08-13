@@ -261,16 +261,6 @@ export default {
             const dayName = dayData?.name || 'Unknown Day';
             const periodName = props.period?.name || props.period?.label || 'Unknown Period';
             
-            console.log('🎯 [AssignmentModal] modalTitle computation:', {
-                dayId: props.dayId,
-                periodId: props.periodId,
-                dayData: dayData,
-                dayName: dayName,
-                periodName: periodName,
-                schoolDays: props.schoolDays.map(d => ({ id: d.id, day_id: d.day_id, name: d.name })),
-                period: props.period
-            });
-            
             return `${dayName} - ${periodName}`;
         });
 
@@ -282,14 +272,6 @@ export default {
             const dayName = dayData?.name || 'Unknown Day';
             const periodName = props.period?.name || props.period?.label || 'Unknown Period';
             const timeRange = `${formatTime(props.period.start_time)} - ${formatTime(props.period.end_time)}`;
-
-            console.log('🎯 [AssignmentModal] periodInfo computation:', {
-                dayId: props.dayId,
-                dayData: dayData,
-                dayName: dayName,
-                periodName: periodName,
-                timeRange: timeRange
-            });
 
             return {
                 dayName,
