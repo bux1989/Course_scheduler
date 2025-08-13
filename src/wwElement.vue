@@ -65,6 +65,7 @@
             :existing-assignments="selectedCell.assignments"
             :conflicts="selectedCell.conflicts"
             :is-read-only="isReadOnly"
+            :pre-selected-course="selectedCell.preSelectedCourse"
             @close="closeAssignmentModal"
             @add-assignment="addAssignment"
             @edit-assignment="editAssignment"
@@ -554,7 +555,7 @@ export default {
             }
         }
 
-        function handleCellClick({ dayId, periodId, period, mode }) {
+        function handleCellClick({ dayId, periodId, period, mode, preSelectedCourse }) {
             if (isReadOnly.value) return;
 
             console.log('🎯 [wwElement] handleCellClick called:', {
@@ -562,6 +563,10 @@ export default {
                 periodId, 
                 periodData: period,
                 mode,
+                preSelectedCourse: preSelectedCourse ? {
+                    id: preSelectedCourse.id,
+                    name: preSelectedCourse.name || preSelectedCourse.course_name
+                } : null,
                 schoolDaysCount: schoolDays.value.length,
                 draftSchedulesCount: draftSchedules.value.length
             });
@@ -589,6 +594,7 @@ export default {
                 period,
                 assignments,
                 conflicts,
+                preSelectedCourse, // Pass the pre-selected course
             };
 
             showAssignmentModal.value = true;
@@ -602,6 +608,7 @@ export default {
                 period: null,
                 assignments: [],
                 conflicts: [],
+                preSelectedCourse: null,
             };
         }
 

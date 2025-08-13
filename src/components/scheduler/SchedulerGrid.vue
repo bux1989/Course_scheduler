@@ -51,7 +51,7 @@
                 >
                     Show All Periods (Currently: {{ getFocusedPeriodName() }})
                 </button>
-                <span v-else class="focus-hint">Click a period name to focus on that period only</span>
+                <span v-else class="focus-hint">Click a period name to focus on that period and see available courses</span>
             </div>
 
             <div class="toolbar-actions">
@@ -206,6 +206,39 @@
                         <div v-else class="empty-cell" @click="openAssignmentModal(day.id, period.id, period)">
                             <span class="add-icon">+</span>
                             <span class="add-text">Add Course</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Available Courses for Focused Period -->
+        <div v-if="focusedPeriodId" class="available-courses-panel">
+            <h3>Available Courses for {{ getFocusedPeriodName() }}</h3>
+            <div class="focused-period-info">
+                <em>Courses that can be scheduled during this period on each day</em>
+            </div>
+            <div class="day-courses-grid">
+                <div v-for="day in visibleDays" :key="day.id" class="day-courses-column">
+                    <h4>{{ day.name }}</h4>
+                    <div class="available-courses-list">
+                        <div 
+                            v-for="course in getAvailableCoursesForSlot(day.id, focusedPeriodId)" 
+                            :key="course.id" 
+                            class="course-card"
+                            :style="getCourseCardStyle(course)"
+                            @click="assignCourseToSlot(course, day.id, focusedPeriodId)"
+                            :title="`Click to assign ${course.name || course.course_name} to ${day.name} ${getFocusedPeriodName()}`"
+                        >
+                            <div class="course-name">{{ course.name || course.course_name || course.title }}</div>
+                            <div class="course-details">
+                                <small v-if="course.course_code">Code: {{ course.course_code }}</small>
+                                <small v-if="course.max_students">Max: {{ course.max_students }}</small>
+                                <small v-if="course.subject_name">{{ course.subject_name }}</small>
+                            </div>
+                        </div>
+                        <div v-if="getAvailableCoursesForSlot(day.id, focusedPeriodId).length === 0" class="no-courses">
+                            No courses available for this day/period
                         </div>
                     </div>
                 </div>
@@ -454,6 +487,16 @@ export default {
             // Get the appropriate schedule data based on mode
             const scheduleData = isLiveMode.value ? props.liveSchedules : props.draftSchedules;
             
+            console.log('🎯 [SchedulerGrid] getCellAssignments data source:', {
+                dayId, 
+                periodId,
+                isLiveMode: isLiveMode.value,
+                dataSource: isLiveMode.value ? 'liveSchedules' : 'draftSchedules',
+                scheduleDataCount: scheduleData.length,
+                draftSchedulesCount: props.draftSchedules.length,
+                liveSchedulesCount: props.liveSchedules.length
+            });
+            
             let assignments = scheduleData.filter(
                 assignment => {
                     const dayMatch = assignment.day_id === dayId;
@@ -686,7 +729,79 @@ export default {
 
         function getFocusedPeriodName() {
             const period = props.periods.find(p => p.id === focusedPeriodId.value);
-            return period?.name || 'Unknown Period';
+            return period?.name || period?.label || 'Unknown Period';
+        }
+
+        function getAvailableCoursesForSlot(dayId, periodId) {
+            // Get the day information
+            const currentDay = props.schoolDays.find(d => 
+                d.id === dayId || d.day_id === dayId
+            );
+            
+            // Get day number from multiple possible sources
+            let currentDayNumber = currentDay?.day_number;
+            if (!currentDayNumber) {
+                // Fall back to finding by index if day_number not available
+                const dayIndex = props.schoolDays.findIndex(d => d.id === dayId || d.day_id === dayId);
+                currentDayNumber = dayIndex >= 0 ? dayIndex + 1 : null; // 1-based numbering
+            }
+
+            console.log('🎯 [SchedulerGrid] getAvailableCoursesForSlot:', {
+                dayId, periodId, currentDay, currentDayNumber, coursesTotal: props.courses.length
+            });
+
+            // Filter courses that are available for this specific day/period
+            const availableCourses = props.courses.filter(course => {
+                // If course has no time slot restrictions, it's available anywhere
+                if (!course.possible_time_slots?.length) {
+                    return true;
+                }
+
+                // Check if this day/period combination is in the course's possible slots
+                return course.possible_time_slots.some(slot => {
+                    // Handle string format "day_number|period_id"
+                    if (typeof slot === 'string' && slot.includes('|')) {
+                        const [dayNumber, slotPeriodId] = slot.split('|');
+                        const slotDayNumber = parseInt(dayNumber);
+                        return slotDayNumber === currentDayNumber && slotPeriodId === periodId;
+                    }
+                    // Handle object format {day_id, period_id}
+                    else if (typeof slot === 'object') {
+                        return slot.day_id === dayId && slot.period_id === periodId;
+                    }
+                    return false;
+                });
+            });
+
+            console.log('🎯 [SchedulerGrid] Available courses for slot:', {
+                dayId, periodId, availableCount: availableCourses.length,
+                courses: availableCourses.map(c => ({ id: c.id, name: c.name || c.course_name }))
+            });
+
+            return availableCourses;
+        }
+
+        function getCourseCardStyle(course) {
+            return {
+                borderLeft: `4px solid ${course.color || '#007cba'}`,
+                backgroundColor: course.color ? `${course.color}15` : '#f0f8ff',
+            };
+        }
+
+        function assignCourseToSlot(course, dayId, periodId) {
+            if (props.isReadOnly) return;
+            
+            console.log('🎯 [SchedulerGrid] Assigning course to slot:', {
+                courseId: course.id, courseName: course.name || course.course_name, dayId, periodId
+            });
+            
+            // Emit cell click to open assignment modal with this course pre-selected
+            emit('cell-click', {
+                dayId,
+                periodId,
+                period: props.periods.find(p => p.id === periodId),
+                preSelectedCourse: course
+            });
         }
 
         return {
@@ -727,6 +842,9 @@ export default {
             togglePeriodFocus,
             clearPeriodFocus,
             getFocusedPeriodName,
+            getAvailableCoursesForSlot,
+            getCourseCardStyle,
+            assignCourseToSlot,
         };
     },
 };
@@ -1057,6 +1175,94 @@ export default {
 .stat-value {
     font-weight: 500;
     color: #333;
+}
+
+/* Available Courses Panel */
+.available-courses-panel {
+    padding: 16px;
+    background: #f0f8ff;
+    border-top: 1px solid #007cba;
+    border-bottom: 1px solid #ddd;
+}
+
+.available-courses-panel h3 {
+    margin: 0 0 8px 0;
+    color: #007cba;
+    font-size: 1.1em;
+}
+
+.focused-period-info {
+    margin: 0 0 16px 0;
+    color: #666;
+    font-size: 0.9em;
+}
+
+.day-courses-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+}
+
+.day-courses-column h4 {
+    margin: 0 0 12px 0;
+    padding: 8px 12px;
+    background: #007cba;
+    color: white;
+    border-radius: 4px;
+    text-align: center;
+    font-size: 0.9em;
+}
+
+.available-courses-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.course-card {
+    padding: 10px;
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 0.85em;
+}
+
+.course-card:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0, 124, 186, 0.15);
+    border-color: #007cba;
+}
+
+.course-card .course-name {
+    font-weight: 500;
+    color: #333;
+    margin-bottom: 4px;
+    display: block;
+}
+
+.course-card .course-details {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.course-card .course-details small {
+    color: #666;
+    font-size: 0.8em;
+}
+
+.no-courses {
+    padding: 16px;
+    text-align: center;
+    color: #999;
+    font-style: italic;
+    background: #f9f9f9;
+    border: 1px dashed #ddd;
+    border-radius: 4px;
 }
 
 /* Responsive Design */

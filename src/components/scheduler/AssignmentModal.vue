@@ -211,6 +211,7 @@ export default {
 
         // Mode
         isReadOnly: { type: Boolean, default: false },
+        preSelectedCourse: { type: Object, default: null },
     },
 
     emits: ['close', 'add-assignment', 'edit-assignment', 'remove-assignment'],
@@ -225,6 +226,30 @@ export default {
             teacher_ids: [],
             room_id: '',
             meeting_name: '',
+        });
+
+        // Watch for pre-selected course
+        watch(() => props.preSelectedCourse, (newPreSelectedCourse) => {
+            if (newPreSelectedCourse && props.visible) {
+                console.log('🎯 [AssignmentModal] Pre-selecting course:', {
+                    courseId: newPreSelectedCourse.id,
+                    courseName: newPreSelectedCourse.name || newPreSelectedCourse.course_name
+                });
+                selectCourse(newPreSelectedCourse);
+            }
+        }, { immediate: true });
+
+        // Reset when modal closes
+        watch(() => props.visible, (isVisible) => {
+            if (!isVisible) {
+                selectedCourse.value = null;
+                assignmentForm.value = {
+                    class_id: '',
+                    teacher_ids: [],
+                    room_id: '',
+                    meeting_name: '',
+                };
+            }
         });
 
         // Computed
@@ -440,22 +465,34 @@ export default {
             if (!course.possible_time_slots?.length) {
                 console.log('📚 [AssignmentModal] Course has no time slot restrictions:', {
                     courseId: course.id,
-                    courseName: course.name
+                    courseName: course.name || course.course_name
                 });
-                return true; // No restrictions
+                return true; // No restrictions - course can be scheduled anywhere
             }
 
-            // Handle the format "day_number|period_id"
-            const currentDay = props.schoolDays.find(d => d.id === props.dayId || d.day_id === props.dayId);
-            const currentDayNumber = currentDay?.day_number;
+            // Find current day info - try multiple approaches
+            const currentDay = props.schoolDays.find(d => 
+                d.id === props.dayId || 
+                d.day_id === props.dayId
+            );
+            
+            // Get day number from multiple possible sources
+            let currentDayNumber = currentDay?.day_number;
+            if (!currentDayNumber) {
+                // Fall back to finding by index if day_number not available
+                const dayIndex = props.schoolDays.findIndex(d => d.id === props.dayId || d.day_id === props.dayId);
+                currentDayNumber = dayIndex >= 0 ? dayIndex + 1 : null; // 1-based numbering
+            }
             
             console.log('📚 [AssignmentModal] Checking course availability:', {
                 courseId: course.id,
-                courseName: course.name,
+                courseName: course.name || course.course_name,
                 possible_time_slots: course.possible_time_slots,
                 currentDayId: props.dayId,
                 currentPeriodId: props.periodId,
-                currentDayNumber: currentDayNumber
+                currentDay: currentDay,
+                currentDayNumber: currentDayNumber,
+                schoolDaysCount: props.schoolDays.length
             });
 
             const isAvailable = course.possible_time_slots.some(slot => {
@@ -494,7 +531,7 @@ export default {
             
             console.log('📚 [AssignmentModal] Course availability result:', {
                 courseId: course.id,
-                courseName: course.name,
+                courseName: course.name || course.course_name,
                 isAvailable: isAvailable
             });
 
