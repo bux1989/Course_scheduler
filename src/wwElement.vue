@@ -29,6 +29,7 @@
                 :teachers="teachers"
                 :classes="classes"
                 :rooms="rooms"
+                :subjects="subjects"
                 :draft-schedules="draftSchedules"
                 :live-schedules="liveSchedules"
                 :conflicts="allConflicts"
@@ -56,6 +57,7 @@
             :teachers="teachers"
             :classes="classes"
             :rooms="rooms"
+            :subjects="subjects"
             :school-days="schoolDays"
             :existing-assignments="selectedCell.assignments"
             :conflicts="selectedCell.conflicts"
@@ -138,6 +140,7 @@ export default {
                 schoolDays: [],
                 draftSchedules: [],
                 liveSchedules: [],
+                subjects: [],
             }),
         },
         wwElementState: { type: Object, required: true },
@@ -357,6 +360,11 @@ export default {
             
             return liveData;
         });
+        const subjects = computed(() => {
+            const subjectsData = props.content.subjects || [];
+            console.log('📖 [wwElement] subjects computed:', subjectsData.length, 'subjects:', subjectsData);
+            return subjectsData;
+        });
 
         // Computed state
         const isReadOnly = computed(() => !!publishedBy.value);
@@ -370,19 +378,62 @@ export default {
         // Available courses for selected slot
         const availableCoursesForSlot = computed(() => {
             if (!selectedCell.value.dayId || !selectedCell.value.periodId) {
+                console.log('🎯 [wwElement] availableCoursesForSlot: No slot selected, returning all courses');
                 return courses.value;
             }
 
+            const currentDay = schoolDays.value.find(d => 
+                d.id === selectedCell.value.dayId || d.day_id === selectedCell.value.dayId
+            );
+            const currentDayNumber = currentDay?.day_number;
+
+            console.log('🎯 [wwElement] availableCoursesForSlot filtering:', {
+                dayId: selectedCell.value.dayId,
+                periodId: selectedCell.value.periodId,
+                currentDay: currentDay,
+                currentDayNumber: currentDayNumber,
+                totalCourses: courses.value.length
+            });
+
             // Filter courses based on possible_time_slots
-            return courses.value.filter(course => {
+            const filteredCourses = courses.value.filter(course => {
                 // If no restrictions, course is available
                 if (!course.possible_time_slots?.length) return true;
 
                 // Check if current slot is in possible slots
-                return course.possible_time_slots.some(
-                    slot => slot.day_id === selectedCell.value.dayId && slot.period_id === selectedCell.value.periodId
-                );
+                const isAvailable = course.possible_time_slots.some(slot => {
+                    // Handle string format "day_number|period_id"
+                    if (typeof slot === 'string' && slot.includes('|')) {
+                        const [dayNumber, periodId] = slot.split('|');
+                        const slotDayNumber = parseInt(dayNumber);
+                        return slotDayNumber === currentDayNumber && periodId === selectedCell.value.periodId;
+                    }
+                    // Handle object format {day_id, period_id}
+                    else if (typeof slot === 'object') {
+                        return slot.day_id === selectedCell.value.dayId && slot.period_id === selectedCell.value.periodId;
+                    }
+                    return false;
+                });
+
+                if (course.possible_time_slots?.length && !isAvailable) {
+                    console.log('  Course filtered out:', {
+                        courseId: course.id,
+                        courseName: course.name,
+                        possible_time_slots: course.possible_time_slots,
+                        reason: 'Not available in this time slot'
+                    });
+                }
+
+                return isAvailable;
             });
+
+            console.log('🎯 [wwElement] availableCoursesForSlot result:', {
+                totalCourses: courses.value.length,
+                filteredCourses: filteredCourses.length,
+                courseNames: filteredCourses.map(c => c.name).slice(0, 5)
+            });
+
+            return filteredCourses;
         });
 
         // Methods
@@ -811,6 +862,7 @@ export default {
             schoolDays,
             draftSchedules,
             liveSchedules,
+            subjects,
 
             // State
             showAssignmentModal,

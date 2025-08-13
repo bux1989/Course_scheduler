@@ -202,6 +202,7 @@ export default {
         teachers: { type: Array, default: () => [] },
         classes: { type: Array, default: () => [] },
         rooms: { type: Array, default: () => [] },
+        subjects: { type: Array, default: () => [] },
         schoolDays: { type: Array, default: () => [] },
 
         // Assignments
@@ -241,7 +242,8 @@ export default {
                 dayData: dayData,
                 dayName: dayName,
                 periodName: periodName,
-                schoolDays: props.schoolDays.map(d => ({ id: d.id, day_id: d.day_id, name: d.name }))
+                schoolDays: props.schoolDays.map(d => ({ id: d.id, day_id: d.day_id, name: d.name })),
+                period: props.period
             });
             
             return `${dayName} - ${periodName}`;
@@ -355,7 +357,13 @@ export default {
         function getCourseName(courseId) {
             if (!courseId) return 'No Course';
             const course = props.courses.find(c => c.id === courseId);
-            return course?.name || 'Unknown Course';
+            return course?.name || course?.course_name || course?.title || 'Unknown Course';
+        }
+
+        function getSubjectName(subjectId) {
+            if (!subjectId) return '';
+            const subject = props.subjects.find(s => s.id === subjectId);
+            return subject?.name || subject?.title || subject?.subject_name || `Subject ${subjectId}`;
         }
 
         function getClassName(classId) {
@@ -416,12 +424,67 @@ export default {
         function isCourseAvailable(course) {
             // Check if course is available for this time slot
             if (!course.possible_time_slots?.length) {
+                console.log('📚 [AssignmentModal] Course has no time slot restrictions:', {
+                    courseId: course.id,
+                    courseName: course.name
+                });
                 return true; // No restrictions
             }
 
-            return course.possible_time_slots.some(
-                slot => slot.day_id === props.dayId && slot.period_id === props.periodId
-            );
+            // Handle the format "day_number|period_id"
+            const currentDay = props.schoolDays.find(d => d.id === props.dayId || d.day_id === props.dayId);
+            const currentDayNumber = currentDay?.day_number;
+            
+            console.log('📚 [AssignmentModal] Checking course availability:', {
+                courseId: course.id,
+                courseName: course.name,
+                possible_time_slots: course.possible_time_slots,
+                currentDayId: props.dayId,
+                currentPeriodId: props.periodId,
+                currentDayNumber: currentDayNumber
+            });
+
+            const isAvailable = course.possible_time_slots.some(slot => {
+                // Handle string format "day_number|period_id"
+                if (typeof slot === 'string' && slot.includes('|')) {
+                    const [dayNumber, periodId] = slot.split('|');
+                    const slotDayNumber = parseInt(dayNumber);
+                    const match = slotDayNumber === currentDayNumber && periodId === props.periodId;
+                    
+                    console.log('  Checking string slot:', {
+                        slot,
+                        slotDayNumber,
+                        periodId,
+                        currentDayNumber,
+                        currentPeriodId: props.periodId,
+                        matches: match
+                    });
+                    
+                    return match;
+                }
+                // Handle object format {day_id, period_id}
+                else if (typeof slot === 'object') {
+                    const match = slot.day_id === props.dayId && slot.period_id === props.periodId;
+                    
+                    console.log('  Checking object slot:', {
+                        slot,
+                        currentDayId: props.dayId,
+                        currentPeriodId: props.periodId,
+                        matches: match
+                    });
+                    
+                    return match;
+                }
+                return false;
+            });
+            
+            console.log('📚 [AssignmentModal] Course availability result:', {
+                courseId: course.id,
+                courseName: course.name,
+                isAvailable: isAvailable
+            });
+
+            return isAvailable;
         }
 
         function wouldCauseConflict(course) {

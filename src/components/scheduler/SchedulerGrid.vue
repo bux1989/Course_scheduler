@@ -129,7 +129,7 @@
                                 @click.stop="openAssignmentDetails(assignment)"
                             >
                                 <div class="assignment-content">
-                                    <span class="course-name">{{ getCourseName(assignment.course_id) }}</span>
+                                    <span class="course-name">{{ getDisplayName(assignment) }}</span>
                                     <span class="class-name" v-if="assignment.class_id">{{
                                         getClassName(assignment.class_id)
                                     }}</span>
@@ -209,6 +209,7 @@ export default {
         teachers: { type: Array, default: () => [] },
         classes: { type: Array, default: () => [] },
         rooms: { type: Array, default: () => [] },
+        subjects: { type: Array, default: () => [] },
 
         // Schedule data
         draftSchedules: { type: Array, default: () => [] },
@@ -405,15 +406,30 @@ export default {
                 }
             );
             
-            if (assignments.length > 0) {
+            // Sort assignments by class name, then by course/subject name
+            const sortedAssignments = assignments.sort((a, b) => {
+                const classA = getClassName(a.class_id);
+                const classB = getClassName(b.class_id);
+                
+                if (classA !== classB) {
+                    return classA.localeCompare(classB);
+                }
+                
+                // If same class, sort by course/subject name
+                const courseA = getCourseName(a.course_id) || getSubjectName(a.subject_id);
+                const courseB = getCourseName(b.course_id) || getSubjectName(b.subject_id);
+                return courseA.localeCompare(courseB);
+            });
+            
+            if (sortedAssignments.length > 0) {
                 console.log(`🎯 [SchedulerGrid] getCellAssignments(${dayId}, ${periodId}):`, {
-                    assignmentsFound: assignments.length,
-                    assignments: assignments,
-                    sampleAssignment: assignments[0]
+                    assignmentsFound: sortedAssignments.length,
+                    assignments: sortedAssignments,
+                    sampleAssignment: sortedAssignments[0]
                 });
             }
             
-            return assignments;
+            return sortedAssignments;
         }
 
         function getCellClasses(dayId, periodId) {
@@ -439,7 +455,7 @@ export default {
             if (assignments.length === 0) {
                 return `${day.name} ${period.name}: Empty, click to add assignment`;
             }
-            const courseNames = assignments.map(a => getCourseName(a.course_id)).join(', ');
+            const courseNames = assignments.map(a => getDisplayName(a)).join(', ');
             return `${day.name} ${period.name}: ${courseNames}, ${assignments.length} assignment${assignments.length > 1 ? 's' : ''}`;
         }
 
@@ -447,6 +463,13 @@ export default {
             const classes = [];
             if (hasConflicts(assignment)) classes.push('has-conflict');
             if (hasDeletedEntities(assignment)) classes.push('has-deleted-entities');
+            
+            // Add class for lesson schedules (no course, only class and subject)
+            const courseName = getCourseName(assignment.course_id);
+            if (!courseName && assignment.subject_id) {
+                classes.push('lesson-schedule');
+            }
+            
             return classes;
         }
 
@@ -463,16 +486,17 @@ export default {
         function getCourseName(courseId) {
             if (!courseId) {
                 console.log('⚠️ [SchedulerGrid] getCourseName: No courseId provided');
-                return 'No Course';
+                return null; // Return null instead of "No Course" to allow fallback to subject
             }
             const course = props.courses.find(c => c.id === courseId);
-            const courseName = course?.name || course?.course_name || course?.title || 'Unknown Course';
+            const courseName = course?.name || course?.course_name || course?.title;
             
             if (!course) {
                 console.log('⚠️ [SchedulerGrid] getCourseName: Course not found for ID:', courseId, {
                     availableCourses: props.courses.length,
                     sampleCourseIds: props.courses.slice(0, 3).map(c => c.id)
                 });
+                return null; // Return null to allow fallback to subject
             } else {
                 console.log('✅ [SchedulerGrid] getCourseName found course:', {
                     courseId: courseId,
@@ -481,7 +505,24 @@ export default {
                 });
             }
             
-            return courseName;
+            return courseName || null;
+        }
+
+        function getSubjectName(subjectId) {
+            if (!subjectId) return null;
+            const subject = props.subjects.find(s => s.id === subjectId);
+            return subject?.name || subject?.title || subject?.subject_name || `Subject ${subjectId}`;
+        }
+
+        function getDisplayName(assignment) {
+            // Prioritize course name, then subject name, then fallback
+            const courseName = getCourseName(assignment.course_id);
+            if (courseName) return courseName;
+            
+            const subjectName = getSubjectName(assignment.subject_id);
+            if (subjectName) return subjectName;
+            
+            return 'No Course';
         }
 
         function getClassName(classId) {
@@ -570,6 +611,8 @@ export default {
             getAssignmentClasses,
             getAssignmentStyles,
             getCourseName,
+            getSubjectName,
+            getDisplayName,
             getClassName,
             getTeacherNames,
             getRoomName,
@@ -791,6 +834,13 @@ export default {
 .assignment-item.has-deleted-entities {
     border-color: #faad14;
     background: #fff7e6;
+}
+
+.assignment-item.lesson-schedule {
+    opacity: 0.7;
+    border-style: dashed;
+    background: #f5f5f5 !important;
+    font-style: italic;
 }
 
 .assignment-content {

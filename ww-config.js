@@ -173,6 +173,25 @@ export default {
             },
             /* wwEditor:end */
         },
+        subjects: {
+            label: {
+                en: 'Subjects',
+                fr: 'Matières',
+            },
+            type: 'Array',
+            bindable: true,
+            defaultValue: [],
+            /* wwEditor:start */
+            bindingValidation: {
+                validations: [
+                    {
+                        type: 'array',
+                    },
+                ],
+                tooltip: 'Array of subject objects with id, name properties',
+            },
+            /* wwEditor:end */
+        },
         schoolDays: {
             label: {
                 en: 'School Days',
