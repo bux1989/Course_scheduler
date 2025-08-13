@@ -696,10 +696,11 @@ export default {
                 // SIMPLIFIED PERIOD MATCHING: Since we now use canonical UUID IDs,
                 // assignment.period_id should directly match periodId
                 const currentPeriod = props.periods.find(p => p.id === periodId);
-                const periodMatch = 
+                const periodMatch =
                     assignment.period_id === periodId || // Primary: Direct UUID match
-                    (assignment.block_number && currentPeriod?.blockNumber && 
-                     assignment.block_number === currentPeriod.blockNumber); // Fallback: block number match
+                    (assignment.block_number &&
+                        currentPeriod?.blockNumber &&
+                        assignment.block_number === currentPeriod.blockNumber); // Fallback: block number match
 
                 // Enhanced debug logging for assignment matching issues
                 if (assignment && (assignment.period_id === periodId || Math.random() < 0.02)) {
@@ -710,13 +711,13 @@ export default {
                         currentPeriod: {
                             id: currentPeriod?.id,
                             blockNumber: currentPeriod?.blockNumber,
-                            label: currentPeriod?.label
+                            label: currentPeriod?.label,
                         },
                         periodMatch: periodMatch,
                         assignmentDayMatch: assignmentDayMatch,
                         finalMatch: assignmentDayMatch && periodMatch,
                         displayCell: assignment.display_cell,
-                        className: assignment.class_name
+                        className: assignment.class_name,
                     });
                 }
 

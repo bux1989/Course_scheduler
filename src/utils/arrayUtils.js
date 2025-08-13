@@ -8,7 +8,7 @@
 export function toArray(input) {
     // Handle null/undefined early
     if (!input) return [];
-    
+
     // Already an array - return as-is
     if (Array.isArray(input)) return input;
 
@@ -23,7 +23,7 @@ export function toArray(input) {
     if (typeof input === 'object') {
         // Get all object keys
         const keys = Object.keys(input);
-        
+
         // Check for numeric-key objects like {"0": {...}, "1": {...}}
         const numericKeys = keys.filter(k => /^\d+$/.test(k));
         if (numericKeys.length > 0) {
@@ -32,7 +32,7 @@ export function toArray(input) {
                 .map(k => input[k])
                 .filter(item => item !== null && item !== undefined);
         }
-        
+
         // Check for Map-like objects with values() method
         if (typeof input.values === 'function') {
             try {
@@ -41,7 +41,7 @@ export function toArray(input) {
                 // Silent fallback if values() fails
             }
         }
-        
+
         // Check for objects that might have array data in common properties
         const arrayPropNames = ['data', 'items', 'list', 'array', 'results', 'collection'];
         for (const prop of arrayPropNames) {
@@ -49,7 +49,7 @@ export function toArray(input) {
                 return input[prop];
             }
         }
-        
+
         // As last resort, if object has enumerable properties, convert to array of values
         // Only if the object looks like a collection (has multiple similar properties)
         const values = Object.values(input).filter(v => v !== null && v !== undefined);
@@ -57,9 +57,8 @@ export function toArray(input) {
             // Check if values look uniform (all objects with similar structure)
             const firstVal = values[0];
             if (typeof firstVal === 'object' && firstVal !== null) {
-                const hasUniformStructure = values.every(v => 
-                    typeof v === 'object' && v !== null &&
-                    Object.keys(v).length > 0
+                const hasUniformStructure = values.every(
+                    v => typeof v === 'object' && v !== null && Object.keys(v).length > 0
                 );
                 if (hasUniformStructure) {
                     return values;
@@ -93,7 +92,7 @@ export function nonEmpty(a) {
  * Normalize period data to unified shape, handling various WeWeb collection formats
  *
  * CRITICAL FIX: Preserves original database UUIDs as primary IDs to prevent assignment matching failures.
- * The root cause of "no schedules showing" was period ID mismatch between normalized periods (period-N) 
+ * The root cause of "no schedules showing" was period ID mismatch between normalized periods (period-N)
  * and schedule assignments (database UUIDs).
  *
  * @param {*} periodsData - Raw periods data from WeWeb (array or numeric-key object)
