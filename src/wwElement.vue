@@ -37,6 +37,9 @@
                 :is-saving="isSaving"
                 :is-read-only="isReadOnly"
                 :show-statistics="true"
+                :emit-drop-events="content.emitDropEvents"
+                :school-id="content.schoolId"
+                :draft-id="content.draftId"
                 @cell-click="handleCellClick"
                 @assignment-details="handleAssignmentDetails"
                 @toggle-non-instructional="handleToggleNonInstructional"
@@ -116,7 +119,7 @@
 </template>
 
 <script>
-import { ref, computed, watch, onMounted } from 'vue';
+import { ref, computed, watch, onMounted, getCurrentInstance } from 'vue';
 import SchedulerGrid from './components/scheduler/SchedulerGrid.vue';
 import AssignmentModal from './components/scheduler/AssignmentModal.vue';
 import ConflictPanel from './components/scheduler/ConflictPanel.vue';
@@ -131,6 +134,7 @@ import {
     normalizeCourse,
     normalizePossibleSlots,
 } from './utils/arrayUtils.js';
+import { emitSchedulerRemoveEvent } from './utils/events.js';
 
 export default {
     name: 'CourseScheduler',
@@ -156,6 +160,7 @@ export default {
                 draftSchedules: [],
                 liveSchedules: [],
                 subjects: [],
+                emitDropEvents: false,
             }),
         },
         wwElementState: { type: Object, required: true },
@@ -164,6 +169,9 @@ export default {
         /* wwEditor:end */
     },
     setup(props, { emit }) {
+        // Get Vue instance for event emission
+        const instance = getCurrentInstance();
+
         // Local state
         const showAssignmentModal = ref(false);
         const showConflicts = ref(false);
@@ -582,6 +590,19 @@ export default {
 
         function removeAssignment(assignmentToRemove) {
             saveToUndoStack();
+
+            // Emit scheduler:remove event if configured
+            if (props.content.emitDropEvents) {
+                emitSchedulerRemoveEvent(instance, {
+                    schoolId: props.content.schoolId,
+                    draftId: props.content.draftId,
+                    dayId: assignmentToRemove.day_id,
+                    periodId: assignmentToRemove.period_id,
+                    assignmentId: assignmentToRemove.id,
+                    courseId: assignmentToRemove.course_id,
+                    courseName: assignmentToRemove.course_name || assignmentToRemove.display_cell || '',
+                });
+            }
 
             const updatedSchedules = draftSchedules.value.filter(
                 assignment =>

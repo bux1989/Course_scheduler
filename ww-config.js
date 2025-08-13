@@ -255,5 +255,25 @@ export default {
             },
             /* wwEditor:end */
         },
+        emitDropEvents: {
+            label: {
+                en: 'Emit Drop Events',
+                fr: 'Émettre événements de dépôt',
+            },
+            type: 'OnOff',
+            bindable: true,
+            defaultValue: false,
+            /* wwEditor:start */
+            bindingValidation: {
+                validations: [
+                    {
+                        type: 'boolean',
+                    },
+                ],
+                tooltip:
+                    'When enabled, emits scheduler:drop events instead of opening assignment modal. Allows WeWeb workflows to handle persistence.',
+            },
+            /* wwEditor:end */
+        },
     },
 };

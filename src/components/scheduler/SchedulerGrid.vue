@@ -382,7 +382,7 @@
 </template>
 
 <script>
-import { computed, ref, watch, nextTick } from 'vue';
+import { computed, ref, watch, nextTick, getCurrentInstance } from 'vue';
 import InlineAssignmentEditor from './InlineAssignmentEditor.vue';
 import {
     validateAndUnwrapArray,
@@ -394,6 +394,12 @@ import {
     normalizeCourse,
     normalizePossibleSlots,
 } from '../../utils/arrayUtils.js';
+import {
+    emitSchedulerDropEvent,
+    emitSchedulerDragStartEvent,
+    emitSchedulerDragEndEvent,
+    emitSchedulerRemoveEvent,
+} from '../../utils/events.js';
 
 export default {
     name: 'SchedulerGrid',
@@ -418,6 +424,9 @@ export default {
         isReadOnly: { type: Boolean, default: false },
         showStatistics: { type: Boolean, default: true },
         maxDays: { type: Number, default: 6 }, // Monday-Saturday
+        emitDropEvents: { type: Boolean, default: false },
+        schoolId: { type: String, default: null },
+        draftId: { type: String, default: null },
 
         // State
         conflicts: { type: Array, default: () => [] },
@@ -439,6 +448,9 @@ export default {
     ],
 
     setup(props, { emit }) {
+        // Get Vue instance for event emission
+        const instance = getCurrentInstance();
+
         // Local state
         const showNonInstructional = ref(true);
         const showLessonSchedules = ref(true);
@@ -1021,9 +1033,37 @@ export default {
                 courseName: course.name || course.course_name,
                 dayId,
                 periodId,
+                emitDropEvents: props.emitDropEvents,
             });
 
-            // Emit cell click to open assignment modal with this course pre-selected
+            // If emitDropEvents is enabled, emit the event instead of opening modal
+            if (props.emitDropEvents) {
+                const success = emitSchedulerDropEvent(instance, {
+                    schoolId: props.schoolId,
+                    draftId: props.draftId,
+                    dayId: dayId,
+                    periodId: periodId,
+                    courseId: course.id,
+                    courseName: course.name || course.course_name || '',
+                    source: 'drag-drop',
+                });
+
+                if (success) {
+                    console.log('📡 [SchedulerGrid] Drop event emitted successfully');
+
+                    // Emit successful drag-end event
+                    emitSchedulerDragEndEvent(instance, {
+                        courseId: course.id,
+                        courseName: course.name || course.course_name || '',
+                        success: true,
+                    });
+                    return;
+                } else {
+                    console.warn('📡 [SchedulerGrid] Failed to emit drop event');
+                }
+            }
+
+            // Default behavior: open assignment modal
             emit('cell-click', {
                 dayId,
                 periodId,
@@ -1104,6 +1144,12 @@ export default {
             console.log('🎯 [DragDrop] Course drag started:', course.name || course.course_name);
             draggedCourse.value = course;
 
+            // Emit drag-start event
+            emitSchedulerDragStartEvent(instance, {
+                courseId: course.id,
+                courseName: course.name || course.course_name || '',
+            });
+
             // Set drag data
             event.dataTransfer.setData(
                 'text/plain',
@@ -1122,6 +1168,15 @@ export default {
 
         function handleCourseDragEnd(event) {
             console.log('🎯 [DragDrop] Course drag ended');
+            const course = draggedCourse.value;
+
+            // Emit drag-end event
+            emitSchedulerDragEndEvent(instance, {
+                courseId: course?.id || null,
+                courseName: course?.name || course?.course_name || null,
+                success: false, // Will be updated to true in handleCellDrop if successful
+            });
+
             draggedCourse.value = null;
             event.target.style.opacity = '1';
         }
@@ -1310,6 +1365,19 @@ export default {
 
         function deleteInlineAssignment(assignment) {
             console.log('🗑️ [InlineEdit] Deleting assignment:', assignment.id);
+
+            // Emit scheduler:remove event if configured
+            if (props.emitDropEvents) {
+                emitSchedulerRemoveEvent(instance, {
+                    schoolId: props.schoolId,
+                    draftId: props.draftId,
+                    dayId: assignment.day_id,
+                    periodId: assignment.period_id,
+                    assignmentId: assignment.id,
+                    courseId: assignment.course_id,
+                    courseName: assignment.course_name || assignment.display_cell || '',
+                });
+            }
 
             // Create updated assignments array without this assignment
             const currentSchedules = isLiveMode.value ? props.liveSchedules : props.draftSchedules;
