@@ -1,21 +1,70 @@
 /**
- * Safely normalize possible Vue/WeWeb proxy/numeric-key collections into arrays
- * Handles WeWeb collection data that comes as {"0": {...}, "1": {...}} objects
+ * Robust array normalizer for WeWeb collections and Vue reactive data
+ * Handles all known WeWeb collection formats that cause "grid disappears" issues
  *
- * @param {*} v - The value that might be an array, proxy, or numeric-key object
+ * @param {*} input - The value that might be an array, proxy, or collection object
  * @returns {Array} - The normalized array or empty array as fallback
  */
-export function toArray(v) {
-    if (Array.isArray(v)) return v;
+export function toArray(input) {
+    // Handle null/undefined early
+    if (!input) return [];
+    
+    // Already an array - return as-is
+    if (Array.isArray(input)) return input;
 
-    // Vue ref/unref case
-    if (v?.value && Array.isArray(v.value)) return v.value;
+    // Vue ref/unref case - check for reactive refs with .value
+    if (input?.value !== undefined) {
+        if (Array.isArray(input.value)) return input.value;
+        // Recursive call in case .value is also a wrapped object
+        return toArray(input.value);
+    }
 
-    // Numeric-key object (e.g., {"0": {...}, "1": {...}})
-    if (v && typeof v === 'object') {
-        const keys = Object.keys(v).filter(k => /^\d+$/.test(k));
-        if (keys.length) {
-            return keys.sort((a, b) => Number(a) - Number(b)).map(k => v[k]);
+    // Handle objects (including WeWeb collections and Maps)
+    if (typeof input === 'object') {
+        // Get all object keys
+        const keys = Object.keys(input);
+        
+        // Check for numeric-key objects like {"0": {...}, "1": {...}}
+        const numericKeys = keys.filter(k => /^\d+$/.test(k));
+        if (numericKeys.length > 0) {
+            return numericKeys
+                .sort((a, b) => Number(a) - Number(b))
+                .map(k => input[k])
+                .filter(item => item !== null && item !== undefined);
+        }
+        
+        // Check for Map-like objects with values() method
+        if (typeof input.values === 'function') {
+            try {
+                return Array.from(input.values());
+            } catch (e) {
+                // Silent fallback if values() fails
+            }
+        }
+        
+        // Check for objects that might have array data in common properties
+        const arrayPropNames = ['data', 'items', 'list', 'array', 'results', 'collection'];
+        for (const prop of arrayPropNames) {
+            if (input[prop] && Array.isArray(input[prop])) {
+                return input[prop];
+            }
+        }
+        
+        // As last resort, if object has enumerable properties, convert to array of values
+        // Only if the object looks like a collection (has multiple similar properties)
+        const values = Object.values(input).filter(v => v !== null && v !== undefined);
+        if (values.length > 0 && keys.length > 2) {
+            // Check if values look uniform (all objects with similar structure)
+            const firstVal = values[0];
+            if (typeof firstVal === 'object' && firstVal !== null) {
+                const hasUniformStructure = values.every(v => 
+                    typeof v === 'object' && v !== null &&
+                    Object.keys(v).length > 0
+                );
+                if (hasUniformStructure) {
+                    return values;
+                }
+            }
         }
     }
 
@@ -43,11 +92,12 @@ export function nonEmpty(a) {
 /**
  * Normalize period data to unified shape, handling various WeWeb collection formats
  *
- * CRITICAL FIX: Ensures stable Vue :key values by always using block_number-based IDs
- * instead of database UUIDs which can cause Vue reactive DOM issues and grid disappearing.
+ * CRITICAL FIX: Preserves original database UUIDs as primary IDs to prevent assignment matching failures.
+ * The root cause of "no schedules showing" was period ID mismatch between normalized periods (period-N) 
+ * and schedule assignments (database UUIDs).
  *
  * @param {*} periodsData - Raw periods data from WeWeb (array or numeric-key object)
- * @returns {Array} - Normalized periods array with stable IDs for Vue reactivity
+ * @returns {Array} - Normalized periods array with canonical UUID IDs for proper assignment matching
  */
 export function normalizePeriods(periodsData) {
     const periodsArray = toArray(periodsData);
@@ -84,6 +134,7 @@ export function normalizePeriods(periodsData) {
                     'flexband',
                     'frühdienst',
                     'hofpause',
+                    'before_school',
                 ];
                 isInstructional = !nonInstructionalTypes.includes(period.block_type.toLowerCase());
             } else if (period.attendance_requirement === 'optional') {
@@ -94,25 +145,26 @@ export function normalizePeriods(periodsData) {
                 isInstructional = !nonInstructionalKeywords.some(keyword => labelLower.includes(keyword));
             }
 
-            // Generate a consistent, stable ID for Vue key tracking
-            // Priority: use block_number for stability, fallback to original id only if no block_number conflicts
-            const stableId = `period-${blockNumber}`;
+            // CRITICAL: Use original database UUID as primary ID for assignment matching
+            // Fallback to generated ID only if no original ID exists
+            const canonicalId = period.id || `period-${blockNumber}`;
 
             return {
                 // Preserve original data
                 ...period,
-                // Add normalized fields with stable ID for Vue reactivity
-                id: stableId, // Always use consistent block_number-based ID for Vue :key stability
-                originalId: period.id, // Preserve original UUID/ID for API operations if needed
-                block_number: Number(blockNumber),
+                // Use canonical UUID ID for proper assignment matching
+                id: canonicalId, // PRIMARY: Use database UUID so assignments can match
+                blockNumber: Number(blockNumber), // Separate display field (not part of ID)
                 label: label,
                 name: label, // Alias for compatibility
                 time: time || `${blockNumber}. Period`,
                 is_instructional: period.is_instructional !== undefined ? period.is_instructional : isInstructional,
                 type: period.block_type || period.type || (isInstructional ? 'lesson' : 'break'),
+                // Keep block_number for backward compatibility but prefer blockNumber
+                block_number: Number(blockNumber),
             };
         })
-        .sort((a, b) => a.block_number - b.block_number);
+        .sort((a, b) => a.blockNumber - b.blockNumber);
 }
 
 /**

@@ -693,33 +693,30 @@ export default {
                     (currentDay?.name && assignment.day_name_en === currentDay.name) || // Match by day name
                     (currentDay?.name_en && assignment.day_name_en === currentDay.name_en); // Match by English name
 
-                // Enhanced period matching to handle both UUID and stable IDs
+                // SIMPLIFIED PERIOD MATCHING: Since we now use canonical UUID IDs,
+                // assignment.period_id should directly match periodId
                 const currentPeriod = props.periods.find(p => p.id === periodId);
                 const periodMatch = 
-                    assignment.period_id === periodId || // Direct period_id match (for stable IDs like "period-7")
-                    assignment.period_id === currentPeriod?.originalId || // Match original UUID from normalized periods
-                    (assignment.block_number && currentPeriod?.block_number && 
-                     assignment.block_number === currentPeriod.block_number); // Match by block_number
+                    assignment.period_id === periodId || // Primary: Direct UUID match
+                    (assignment.block_number && currentPeriod?.blockNumber && 
+                     assignment.block_number === currentPeriod.blockNumber); // Fallback: block number match
 
-                // Debug: Log assignment matching details for first few attempts
-                if (Math.random() < 0.05) { // Only log randomly to avoid spam (5% chance)
-                    console.log('🔍 [SchedulerGrid] Assignment matching debug:', {
-                        requestedDay: dayId,
+                // Enhanced debug logging for assignment matching issues
+                if (assignment && (assignment.period_id === periodId || Math.random() < 0.02)) {
+                    console.log('🔍 [SchedulerGrid] Assignment matching:', {
                         requestedPeriod: periodId,
-                        currentPeriod: currentPeriod,
-                        assignmentDayId: assignment.day_id,
                         assignmentPeriodId: assignment.period_id,
                         assignmentBlockNumber: assignment.block_number,
-                        currentDay: currentDay,
-                        assignmentDayMatch: assignmentDayMatch,
-                        periodMatch: periodMatch,
-                        periodMatchReasons: {
-                            directMatch: assignment.period_id === periodId,
-                            originalIdMatch: assignment.period_id === currentPeriod?.originalId,
-                            blockNumberMatch: assignment.block_number === currentPeriod?.block_number
+                        currentPeriod: {
+                            id: currentPeriod?.id,
+                            blockNumber: currentPeriod?.blockNumber,
+                            label: currentPeriod?.label
                         },
+                        periodMatch: periodMatch,
+                        assignmentDayMatch: assignmentDayMatch,
                         finalMatch: assignmentDayMatch && periodMatch,
-                        sampleAssignment: assignment
+                        displayCell: assignment.display_cell,
+                        className: assignment.class_name
                     });
                 }
 

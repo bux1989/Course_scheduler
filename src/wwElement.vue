@@ -205,17 +205,17 @@ export default {
                 return [];
             }
 
-            console.log('📋 [Periods] Processed periods:', {
+            console.log('📋 [Periods] Processed periods with canonical IDs:', {
                 count: len(normalizedPeriods),
                 sample: normalizedPeriods[0],
                 instructionalCount: normalizedPeriods.filter(p => p.is_instructional).length,
                 nonInstructionalCount: normalizedPeriods.filter(p => !p.is_instructional).length,
-                // Show ID transformation for debugging UUID issues
-                idTransformations: normalizedPeriods.slice(0, 3).map(p => ({
-                    originalId: p.originalId,
-                    stableId: p.id,
-                    blockNumber: p.block_number,
+                // Show canonical ID structure for assignment matching
+                canonicalIds: normalizedPeriods.slice(0, 5).map(p => ({
+                    id: p.id, // This is now the original UUID for assignment matching
+                    blockNumber: p.blockNumber,
                     label: p.label,
+                    type: p.type,
                 })),
             });
 
@@ -225,50 +225,69 @@ export default {
         const courses = computed(() => {
             const rawCourses = props.content.courses;
             const coursesArray = toArray(rawCourses);
-            if (!nonEmpty(coursesArray)) {
-                // Fallback to legacy method for backward compatibility
-                return safeArray(validateAndUnwrapArray(rawCourses, 'courses'));
-            }
-            return coursesArray;
+            
+            console.log('🎯 [wwElement] Courses processing:', {
+                rawType: typeof rawCourses,
+                rawIsArray: Array.isArray(rawCourses),
+                toArrayLength: safeLength(coursesArray),
+                rawKeys: typeof rawCourses === 'object' && rawCourses ? Object.keys(rawCourses).slice(0, 5) : 'N/A'
+            });
+            
+            return coursesArray; // Enhanced toArray handles all fallback cases
         });
 
         const teachers = computed(() => {
             const rawTeachers = props.content.teachers;
             const teachersArray = toArray(rawTeachers);
-            if (!nonEmpty(teachersArray)) {
-                return safeArray(validateAndUnwrapArray(rawTeachers, 'teachers'));
-            }
+            
+            console.log('👥 [wwElement] Teachers processing:', {
+                rawType: typeof rawTeachers,
+                rawIsArray: Array.isArray(rawTeachers),
+                toArrayLength: safeLength(teachersArray),
+                rawKeys: typeof rawTeachers === 'object' && rawTeachers ? Object.keys(rawTeachers).slice(0, 5) : 'N/A'
+            });
+            
             return teachersArray;
         });
 
         const classes = computed(() => {
             const rawClasses = props.content.classes;
             const classesArray = toArray(rawClasses);
-            if (!nonEmpty(classesArray)) {
-                return safeArray(validateAndUnwrapArray(rawClasses, 'classes'));
-            }
+            
+            console.log('🏫 [wwElement] Classes processing:', {
+                rawType: typeof rawClasses,
+                rawIsArray: Array.isArray(rawClasses),
+                toArrayLength: safeLength(classesArray),
+                rawKeys: typeof rawClasses === 'object' && rawClasses ? Object.keys(rawClasses).slice(0, 5) : 'N/A'
+            });
+            
             return classesArray;
         });
 
         const rooms = computed(() => {
             const rawRooms = props.content.rooms;
             const roomsArray = toArray(rawRooms);
-            if (!nonEmpty(roomsArray)) {
-                return safeArray(validateAndUnwrapArray(rawRooms, 'rooms'));
-            }
+            
+            console.log('🏠 [wwElement] Rooms processing:', {
+                rawType: typeof rawRooms,
+                rawIsArray: Array.isArray(rawRooms),
+                toArrayLength: safeLength(roomsArray),
+                rawKeys: typeof rawRooms === 'object' && rawRooms ? Object.keys(rawRooms).slice(0, 5) : 'N/A'
+            });
+            
             return roomsArray;
         });
 
         const schoolDays = computed(() => {
             const rawDaysData = props.content.schoolDays;
-            const schoolDaysArray = toArray(rawDaysData);
-
-            let validatedDays;
-            if (nonEmpty(schoolDaysArray)) {
-                validatedDays = schoolDaysArray;
-            } else {
-                validatedDays = validateAndUnwrapArray(rawDaysData, 'schoolDays');
-            }
+            const validatedDays = toArray(rawDaysData); // Enhanced toArray handles all cases
+            
+            console.log('📅 [wwElement] SchoolDays processing:', {
+                rawType: typeof rawDaysData,
+                rawIsArray: Array.isArray(rawDaysData),
+                toArrayLength: safeLength(validatedDays),
+                rawKeys: typeof rawDaysData === 'object' && rawDaysData ? Object.keys(rawDaysData).slice(0, 5) : 'N/A'
+            });
 
             if (!nonEmpty(validatedDays)) {
                 return [];
@@ -299,24 +318,14 @@ export default {
 
         const draftSchedules = computed(() => {
             const rawDrafts = props.content.draftSchedules;
+            const finalDraftArray = toArray(rawDrafts); // Enhanced toArray handles all WeWeb formats
             
-            // Use enhanced toArray function to handle WeWeb collection formats
-            let finalDraftArray = toArray(rawDrafts);
-            
-            // Fallback to legacy method if toArray didn't find anything
-            if (!nonEmpty(finalDraftArray)) {
-                finalDraftArray = safeArray(validateAndUnwrapArray(rawDrafts, 'draftSchedules'));
-            }
-
-            // Debug: Log draft schedules data
-            console.log('📝 [wwElement] Draft Schedules computed:', {
-                rawDraftsType: typeof rawDrafts,
-                rawDraftsIsArray: Array.isArray(rawDrafts),
-                rawDraftsLength: rawDrafts?.length,
-                rawDraftsKeys: typeof rawDrafts === 'object' ? Object.keys(rawDrafts || {}).slice(0, 5) : 'N/A',
-                finalArrayLength: safeLength(finalDraftArray),
+            console.log('📝 [wwElement] Draft Schedules processing:', {
+                rawType: typeof rawDrafts,
+                rawIsArray: Array.isArray(rawDrafts),
+                toArrayLength: safeLength(finalDraftArray),
+                rawKeys: typeof rawDrafts === 'object' && rawDrafts ? Object.keys(rawDrafts).slice(0, 5) : 'N/A',
                 sampleDraft: finalDraftArray[0],
-                sampleDraftKeys: finalDraftArray[0] ? Object.keys(finalDraftArray[0]) : [],
                 firstFewDrafts: finalDraftArray.slice(0, 2),
             });
 
@@ -325,22 +334,13 @@ export default {
 
         const liveSchedules = computed(() => {
             const rawLive = props.content.liveSchedules;
+            const finalLiveArray = toArray(rawLive); // Enhanced toArray handles all WeWeb formats
             
-            // Use enhanced toArray function to handle WeWeb collection formats  
-            let finalLiveArray = toArray(rawLive);
-            
-            // Fallback to legacy method if toArray didn't find anything
-            if (!nonEmpty(finalLiveArray)) {
-                finalLiveArray = safeArray(validateAndUnwrapArray(rawLive, 'liveSchedules'));
-            }
-
-            // Debug: Log live schedules data
-            console.log('📺 [wwElement] Live Schedules computed:', {
-                rawLiveType: typeof rawLive,
-                rawLiveIsArray: Array.isArray(rawLive),
-                rawLiveLength: rawLive?.length,
-                rawLiveKeys: typeof rawLive === 'object' ? Object.keys(rawLive || {}).slice(0, 5) : 'N/A',
-                finalArrayLength: safeLength(finalLiveArray),
+            console.log('📺 [wwElement] Live Schedules processing:', {
+                rawType: typeof rawLive,
+                rawIsArray: Array.isArray(rawLive),
+                toArrayLength: safeLength(finalLiveArray),
+                rawKeys: typeof rawLive === 'object' && rawLive ? Object.keys(rawLive).slice(0, 5) : 'N/A',
                 sampleLive: finalLiveArray[0],
                 firstFewLive: finalLiveArray.slice(0, 2),
             });
@@ -351,9 +351,14 @@ export default {
         const subjects = computed(() => {
             const rawSubjects = props.content.subjects;
             const subjectsArray = toArray(rawSubjects);
-            if (!nonEmpty(subjectsArray)) {
-                return safeArray(validateAndUnwrapArray(rawSubjects, 'subjects'));
-            }
+            
+            console.log('📚 [wwElement] Subjects processing:', {
+                rawType: typeof rawSubjects,
+                rawIsArray: Array.isArray(rawSubjects),
+                toArrayLength: safeLength(subjectsArray),
+                rawKeys: typeof rawSubjects === 'object' && rawSubjects ? Object.keys(rawSubjects).slice(0, 5) : 'N/A'
+            });
+            
             return subjectsArray;
         });
 
