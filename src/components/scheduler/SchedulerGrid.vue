@@ -11,13 +11,9 @@
                     />
                     Show Non-Instructional Blocks
                 </label>
-                
+
                 <label class="filter-label">
-                    <input
-                        type="checkbox"
-                        v-model="showLessonSchedules"
-                        @change="handleLessonScheduleToggle"
-                    />
+                    <input type="checkbox" v-model="showLessonSchedules" @change="handleLessonScheduleToggle" />
                     Show Lesson Schedules (No Course)
                 </label>
             </div>
@@ -25,12 +21,7 @@
             <div class="toolbar-section">
                 <label class="mode-switcher">
                     <span>Planning Mode</span>
-                    <input
-                        type="checkbox"
-                        v-model="isLiveMode"
-                        @change="handleModeSwitch"
-                        class="mode-toggle"
-                    />
+                    <input type="checkbox" v-model="isLiveMode" @change="handleModeSwitch" class="mode-toggle" />
                     <span>Live Mode</span>
                 </label>
             </div>
@@ -50,15 +41,41 @@
             </div>
 
             <div class="toolbar-section">
-                <button 
-                    @click="clearPeriodFocus" 
+                <input
+                    v-model="searchTerm"
+                    type="text"
+                    placeholder="Search courses/classes..."
+                    class="search-input"
+                    title="Search assignments by course, class, or teacher name"
+                />
+                <button v-if="searchTerm" @click="searchTerm = ''" class="clear-search-btn" title="Clear search">
+                    ✕
+                </button>
+                <div v-if="debouncedSearchTerm || selectedClassFilter" class="filter-status">
+                    <small>
+                        Filters active:
+                        <span v-if="debouncedSearchTerm" class="filter-tag">Search: "{{ debouncedSearchTerm }}"</span>
+                        <span v-if="selectedClassFilter" class="filter-tag"
+                            >Class: {{ getClassName(selectedClassFilter) }}</span
+                        >
+                        <span v-if="!showLessonSchedules" class="filter-tag">Courses only</span>
+                        <span v-if="!showNonInstructional" class="filter-tag">Instructional periods only</span>
+                    </small>
+                </div>
+            </div>
+
+            <div class="toolbar-section">
+                <button
+                    @click="clearPeriodFocus"
                     v-if="focusedPeriodId"
                     class="focus-button active"
                     title="Show all periods"
                 >
                     Show All Periods (Currently: {{ getFocusedPeriodName() }})
                 </button>
-                <span v-else class="focus-hint">Click a period name to focus on that period and see available courses</span>
+                <span v-else class="focus-hint"
+                    >Click a period name to focus on that period and see available courses</span
+                >
             </div>
 
             <div class="toolbar-actions">
@@ -72,10 +89,16 @@
         </div>
 
         <!-- Emergency Recovery Indicator -->
-        <div v-if="(lastValidDays.length > 0 && visibleDays === lastValidDays) || (lastValidPeriods.length > 0 && visiblePeriods === lastValidPeriods)" 
-             class="emergency-recovery-notice">
+        <div
+            v-if="
+                (lastValidDays.length > 0 && visibleDays === lastValidDays) ||
+                (lastValidPeriods.length > 0 && visiblePeriods === lastValidPeriods)
+            "
+            class="emergency-recovery-notice"
+        >
             <div class="emergency-message">
-                🚨 <strong>Emergency Recovery Mode:</strong> Component temporarily using cached data to prevent disappearing. 
+                🚨 <strong>Emergency Recovery Mode:</strong> Component temporarily using cached data to prevent
+                disappearing.
                 <button @click="emergencyRecover" class="emergency-recover-btn">🚨 Emergency: Show All Data</button>
             </div>
         </div>
@@ -103,26 +126,43 @@
         </div>
 
         <!-- Main Grid (only show if we have data) -->
-        <div v-if="visibleDays.length > 0 && visiblePeriods.length > 0" class="main-grid-container"
-             :class="{ 
-                'emergency-mode': (lastValidDays.length > 0 && visibleDays === lastValidDays) || (lastValidPeriods.length > 0 && visiblePeriods === lastValidPeriods),
-                'normal-mode': !((lastValidDays.length > 0 && visibleDays === lastValidDays) || (lastValidPeriods.length > 0 && visiblePeriods === lastValidPeriods))
-             }"
+        <div
+            v-if="visibleDays.length > 0 && visiblePeriods.length > 0"
+            class="main-grid-container"
+            :class="{
+                'emergency-mode':
+                    (lastValidDays.length > 0 && visibleDays === lastValidDays) ||
+                    (lastValidPeriods.length > 0 && visiblePeriods === lastValidPeriods),
+                'normal-mode': !(
+                    (lastValidDays.length > 0 && visibleDays === lastValidDays) ||
+                    (lastValidPeriods.length > 0 && visiblePeriods === lastValidPeriods)
+                ),
+            }"
         >
             <!-- Debug info for main grid with visibility status -->
-            <div class="debug-grid-info" 
-                 :style="{ 
-                     color: ((lastValidDays.length > 0 && visibleDays === lastValidDays) || (lastValidPeriods.length > 0 && visiblePeriods === lastValidPeriods)) ? '#e74c3c' : '#27ae60'
-                 }"
+            <div
+                class="debug-grid-info"
+                :style="{
+                    color:
+                        (lastValidDays.length > 0 && visibleDays === lastValidDays) ||
+                        (lastValidPeriods.length > 0 && visiblePeriods === lastValidPeriods)
+                            ? '#e74c3c'
+                            : '#27ae60',
+                }"
             >
                 <small>
-                    {{ ((lastValidDays.length > 0 && visibleDays === lastValidDays) || (lastValidPeriods.length > 0 && visiblePeriods === lastValidPeriods)) ? '🚨 EMERGENCY MODE' : '✅ NORMAL MODE' }} - 
-                    Days: {{ visibleDays.length }}, Periods: {{ visiblePeriods.length }} | 
-                    Drafts: {{ draftSchedules.length }}, Live: {{ liveSchedules.length }} |
-                    Mode: {{ isLiveMode ? 'Live' : 'Planning' }}
+                    {{
+                        (lastValidDays.length > 0 && visibleDays === lastValidDays) ||
+                        (lastValidPeriods.length > 0 && visiblePeriods === lastValidPeriods)
+                            ? '🚨 EMERGENCY MODE'
+                            : '✅ NORMAL MODE'
+                    }}
+                    - Days: {{ visibleDays.length }}, Periods: {{ visiblePeriods.length }} | Drafts:
+                    {{ draftSchedules.length }}, Live: {{ liveSchedules.length }} | Mode:
+                    {{ isLiveMode ? 'Live' : 'Planning' }}
                 </small>
             </div>
-            
+
             <!-- Grid Header with Days -->
             <div class="grid-header" role="row">
                 <div class="period-header-cell" role="columnheader">
@@ -157,10 +197,10 @@
                     :aria-rowindex="periodIndex + 1"
                 >
                     <!-- Period Label -->
-                    <div 
-                        class="period-label-cell" 
+                    <div
+                        class="period-label-cell"
                         role="rowheader"
-                        :class="{ 'focused': focusedPeriodId === period.id }"
+                        :class="{ focused: focusedPeriodId === period.id }"
                         @click="togglePeriodFocus(period.id)"
                         title="Click to focus on this period"
                     >
@@ -173,7 +213,10 @@
                                 {{ period.type || 'Break' }}
                             </span>
                             <div class="debug-info">
-                                <small>ID: {{ period.id }}, Instructional: {{ period.is_instructional !== false ? 'Yes' : 'No' }}</small>
+                                <small
+                                    >ID: {{ period.id }}, Instructional:
+                                    {{ period.is_instructional !== false ? 'Yes' : 'No' }}</small
+                                >
                             </div>
                         </div>
                     </div>
@@ -182,7 +225,7 @@
                     <div
                         v-for="day in visibleDays"
                         :key="`${period.id}-${day.id}`"
-                        class="schedule-cell"
+                        class="schedule-cell drop-zone"
                         :class="getCellClasses(day.id, period.id)"
                         role="gridcell"
                         tabindex="0"
@@ -190,20 +233,31 @@
                         @keydown.enter="handleCellClick(day.id, period.id, period)"
                         @keydown.space.prevent="handleCellClick(day.id, period.id, period)"
                         :aria-label="getCellAriaLabel(day, period)"
-                        :draggable="false"
-                        data-drag-disabled="true"
+                        @dragover.prevent="handleCellDragOver($event, day.id, period.id)"
+                        @dragenter.prevent="handleCellDragEnter($event, day.id, period.id)"
+                        @dragleave="handleCellDragLeave($event, day.id, period.id)"
+                        @drop="handleCellDrop($event, day.id, period.id)"
+                        :data-day-id="day.id"
+                        :data-period-id="period.id"
                     >
                         <!-- Multiple Assignments Display -->
                         <div v-if="getCellAssignments(day.id, period.id).length > 0" class="assignments-container">
                             <div
                                 v-for="(assignment, index) in getCellAssignments(day.id, period.id)"
                                 :key="index"
-                                class="assignment-item"
+                                class="assignment-item draggable-assignment"
                                 :class="getAssignmentClasses(assignment)"
                                 :style="getAssignmentStyles(assignment)"
-                                @click.stop="openAssignmentDetails(assignment)"
+                                @click.stop="handleAssignmentClick(assignment, day.id, period.id)"
+                                :draggable="!props.isReadOnly && !isEditing(assignment.id)"
+                                @dragstart="handleAssignmentDragStart($event, assignment, day.id, period.id)"
+                                @dragend="handleAssignmentDragEnd($event)"
+                                :data-assignment-id="assignment.id"
+                                :data-day-id="day.id"
+                                :data-period-id="period.id"
                             >
-                                <div class="assignment-content">
+                                <!-- Normal Assignment Display -->
+                                <div v-if="!isEditing(assignment.id)" class="assignment-content">
                                     <span class="course-name">{{ getDisplayName(assignment) }}</span>
                                     <span class="class-name" v-if="assignment.class_id">{{
                                         getClassName(assignment.class_id)
@@ -214,7 +268,31 @@
                                     <span class="room-name" v-if="assignment.room_id">{{
                                         getRoomName(assignment.room_id)
                                     }}</span>
+
+                                    <!-- Quick Edit Button -->
+                                    <button
+                                        v-if="!props.isReadOnly"
+                                        @click.stop="startInlineEdit(assignment, day.id, period.id)"
+                                        class="quick-edit-btn"
+                                        title="Click to edit inline"
+                                    >
+                                        ✏️
+                                    </button>
                                 </div>
+
+                                <!-- Inline Editor -->
+                                <InlineAssignmentEditor
+                                    v-if="isEditing(assignment.id)"
+                                    :assignment="assignment"
+                                    :courses="courses"
+                                    :teachers="teachers"
+                                    :classes="classes"
+                                    :rooms="rooms"
+                                    :subjects="subjects"
+                                    @save="saveInlineEdit"
+                                    @cancel="cancelInlineEdit"
+                                    @delete="deleteInlineAssignment"
+                                />
 
                                 <!-- Conflict Indicators -->
                                 <div v-if="hasConflicts(assignment)" class="conflict-indicator" title="Has conflicts">
@@ -246,20 +324,30 @@
                 </div>
             </div>
         </div>
-        
+
         <!-- Debug info when grid is hidden -->
         <div v-else class="grid-hidden-debug">
             <div class="grid-hidden-message">
                 ❌ Grid Hidden - Debug Info:
                 <ul>
                     <li>Visible Days: {{ visibleDays.length }} ({{ visibleDays.map(d => d.name).join(', ') }})</li>
-                    <li>Visible Periods: {{ visiblePeriods.length }} ({{ visiblePeriods.map(p => p.name || p.label).join(', ') }})</li>
+                    <li>
+                        Visible Periods: {{ visiblePeriods.length }} ({{
+                            visiblePeriods.map(p => p.name || p.label).join(', ')
+                        }})
+                    </li>
                     <li>Show Non-Instructional: {{ showNonInstructional }}</li>
                     <li>Focused Period: {{ focusedPeriodId }}</li>
                     <li>Total Periods Available: {{ periods.length }}</li>
                     <li>Total School Days Available: {{ schoolDays.length }}</li>
                 </ul>
-                <button @click="showNonInstructional = true; focusedPeriodId = null" class="emergency-show-btn">
+                <button
+                    @click="
+                        showNonInstructional = true;
+                        focusedPeriodId = null;
+                    "
+                    class="emergency-show-btn"
+                >
                     🚨 Emergency: Show All Data
                 </button>
             </div>
@@ -275,16 +363,19 @@
                 <div v-for="day in visibleDays" :key="day.id" class="day-courses-column">
                     <h4>{{ day.name }}</h4>
                     <div class="available-courses-list">
-                        <div 
-                            v-for="course in getAvailableCoursesForSlot(day.id, focusedPeriodId)" 
-                            :key="course.id" 
-                            class="course-card"
+                        <div
+                            v-for="course in getAvailableCoursesForSlot(day.id, focusedPeriodId)"
+                            :key="course.id"
+                            class="course-card draggable-course"
                             :style="getCourseCardStyle(course)"
                             @click="assignCourseToSlot(course, day.id, focusedPeriodId)"
-                            :title="`Click to assign ${course.name || course.course_name} to ${day.name} ${getFocusedPeriodName()}`"
+                            :title="`Click to assign or drag ${course.name || course.course_name} to schedule`"
                             :draggable="true"
-                            data-course-id="course.id"
-                            data-drag-enabled="true"
+                            :data-course-id="course.id"
+                            :data-day-id="day.id"
+                            :data-period-id="focusedPeriodId"
+                            @dragstart="handleCourseDragStart($event, course)"
+                            @dragend="handleCourseDragEnd($event)"
                         >
                             <div class="course-name">{{ course.name || course.course_name || course.title }}</div>
                             <div class="course-details">
@@ -299,15 +390,17 @@
                     </div>
                 </div>
             </div>
-            
+
             <!-- No Preferred Days Courses Panel -->
             <div v-if="getNoPreferredDaysCourses().length > 0" class="no-preferred-days-panel">
                 <h4>📅 Courses with No Preferred Days</h4>
-                <p class="panel-description">These courses have no time slot restrictions and can be scheduled on any day:</p>
+                <p class="panel-description">
+                    These courses have no time slot restrictions and can be scheduled on any day:
+                </p>
                 <div class="no-preferred-courses-list">
-                    <div 
-                        v-for="course in getNoPreferredDaysCourses()" 
-                        :key="`no-pref-${course.id}`" 
+                    <div
+                        v-for="course in getNoPreferredDaysCourses()"
+                        :key="`no-pref-${course.id}`"
                         class="course-card"
                         :style="getCourseCardStyle(course)"
                         @click="assignCourseToFocusedSlot(course)"
@@ -351,9 +444,13 @@
 
 <script>
 import { computed, ref, watch, nextTick } from 'vue';
+import InlineAssignmentEditor from './InlineAssignmentEditor.vue';
 
 export default {
     name: 'SchedulerGrid',
+    components: {
+        InlineAssignmentEditor,
+    },
     props: {
         // Data props
         periods: { type: Array, default: () => [] },
@@ -400,23 +497,31 @@ export default {
         const selectedYearFilter = ref('');
         const selectedClassFilter = ref('');
         const focusedPeriodId = ref(null);
-        
+
+        // Inline editing state
+        const editingAssignment = ref(null);
+        const editingCell = ref(null);
+
         // Component initialized
-        
+
         // Watch for critical data structure changes
-        watch([() => props.schoolDays, () => props.periods], ([newDays, newPeriods]) => {
-            if (!newDays || newDays.length === 0) {
-                console.warn('⚠️ [SchedulerGrid] No school days found!');
-            }
-            if (!newPeriods || newPeriods.length === 0) {
-                console.warn('⚠️ [SchedulerGrid] No periods found!');
-            }
-        }, { immediate: true });
+        watch(
+            [() => props.schoolDays, () => props.periods],
+            ([newDays, newPeriods]) => {
+                if (!newDays || newDays.length === 0) {
+                    console.warn('⚠️ [SchedulerGrid] No school days found!');
+                }
+                if (!newPeriods || newPeriods.length === 0) {
+                    console.warn('⚠️ [SchedulerGrid] No periods found!');
+                }
+            },
+            { immediate: true }
+        );
 
         // Reactive state to prevent component disappearing during updates
         const lastValidDays = ref([]);
         const lastValidPeriods = ref([]);
-        
+
         // Computed properties with robust fallback mechanisms
         const visibleDays = computed(() => {
             // Emergency fallback: if props are temporarily undefined during reactive updates
@@ -424,7 +529,7 @@ export default {
                 console.warn('⚠️ [SchedulerGrid] schoolDays prop is undefined, using last valid state');
                 return lastValidDays.value;
             }
-            
+
             // No school days available
             if (props.schoolDays.length === 0) {
                 // If we previously had valid days, keep showing them briefly to prevent flicker
@@ -434,9 +539,9 @@ export default {
                 }
                 return [];
             }
-            
+
             const days = props.schoolDays.slice(0, props.maxDays);
-            
+
             // CRITICAL: Ensure we never return an empty array unless there truly are no school days
             if (days.length === 0 && props.schoolDays.length > 0) {
                 console.warn('⚠️ [SchedulerGrid] visibleDays resulted in 0 days! Using fallback');
@@ -444,12 +549,12 @@ export default {
                 lastValidDays.value = fallbackDays; // Cache for future use
                 return fallbackDays;
             }
-            
+
             // Cache valid state to prevent component disappearing during updates
             if (days.length > 0) {
                 lastValidDays.value = days;
             }
-            
+
             return days;
         });
 
@@ -459,7 +564,7 @@ export default {
                 console.warn('⚠️ [SchedulerGrid] periods prop is undefined, using last valid state');
                 return lastValidPeriods.value;
             }
-            
+
             // No periods available
             if (props.periods.length === 0) {
                 // If we previously had valid periods, keep showing them briefly to prevent flicker
@@ -469,9 +574,9 @@ export default {
                 }
                 return [];
             }
-            
+
             let filteredPeriods = props.periods;
-            
+
             // First filter by focused period if set
             if (focusedPeriodId.value) {
                 filteredPeriods = props.periods.filter(period => period.id === focusedPeriodId.value);
@@ -480,8 +585,9 @@ export default {
             else if (!showNonInstructional.value) {
                 filteredPeriods = props.periods.filter(period => {
                     // Show periods where attendance_requirement is 'flexible' or 'required'
-                    let shouldShow = period.attendance_requirement === 'flexible' || period.attendance_requirement === 'required';
-                    
+                    let shouldShow =
+                        period.attendance_requirement === 'flexible' || period.attendance_requirement === 'required';
+
                     // Alternative checks if attendance_requirement is not available or doesn't match expected values
                     if (!shouldShow && !period.attendance_requirement) {
                         // Fall back to is_instructional field
@@ -490,14 +596,27 @@ export default {
                         }
                         // Check block_type - exclude known non-instructional types
                         else if (period.block_type) {
-                            const nonInstructionalTypes = ['break', 'pause', 'lunch', 'recess', 'assembly', 'flexband', 'frühdienst'];
+                            const nonInstructionalTypes = [
+                                'break',
+                                'pause',
+                                'lunch',
+                                'recess',
+                                'assembly',
+                                'flexband',
+                                'frühdienst',
+                            ];
                             shouldShow = !nonInstructionalTypes.includes(period.block_type.toLowerCase());
                         }
                         // Fall back to label/name content analysis
                         else if (period.label || period.name) {
                             const text = (period.label || period.name).toLowerCase();
-                            const isBreakTime = text.includes('break') || text.includes('pause') || text.includes('lunch') || 
-                                              text.includes('flexband') || text.includes('frühdienst') || text.includes('benutzerdefiniert');
+                            const isBreakTime =
+                                text.includes('break') ||
+                                text.includes('pause') ||
+                                text.includes('lunch') ||
+                                text.includes('flexband') ||
+                                text.includes('frühdienst') ||
+                                text.includes('benutzerdefiniert');
                             shouldShow = !isBreakTime;
                         }
                         // Default to showing if we can't determine
@@ -506,41 +625,88 @@ export default {
                         }
                     }
                     // If we still don't have a clear answer and attendance_requirement exists but is not 'flexible' or 'required'
-                    else if (!shouldShow && period.attendance_requirement && period.attendance_requirement !== 'optional') {
+                    else if (
+                        !shouldShow &&
+                        period.attendance_requirement &&
+                        period.attendance_requirement !== 'optional'
+                    ) {
                         // Show periods that aren't explicitly optional
                         shouldShow = true;
                     }
-                    
+
                     return shouldShow;
                 });
             }
-            
+
             // CRITICAL: Robust fallback to prevent component disappearing
             if (filteredPeriods.length === 0 && props.periods.length > 0) {
                 console.warn('⚠️ [SchedulerGrid] Filtering resulted in 0 periods! Implementing emergency recovery');
-                
+
                 // First try using cached valid periods
                 if (lastValidPeriods.value.length > 0) {
                     console.warn('🚨 [SchedulerGrid] Using last valid periods to prevent component disappearing');
                     return lastValidPeriods.value;
                 }
-                
+
                 // Final fallback: show all periods and update filter state
                 console.warn('🚨 [SchedulerGrid] EMERGENCY: Showing all periods to prevent component disappearance');
                 filteredPeriods = props.periods;
-                
+
                 // Update showNonInstructional to true to prevent infinite filtering loops
                 nextTick(() => {
                     showNonInstructional.value = true;
                 });
             }
-            
+
             // Cache valid state to prevent component disappearing during future updates
             if (filteredPeriods.length > 0) {
                 lastValidPeriods.value = filteredPeriods;
             }
-            
+
             return filteredPeriods;
+        });
+
+        // Performance optimization - debounced filtering
+        const debouncedSearchTerm = ref('');
+        const searchTerm = ref('');
+        let searchDebounceTimer = null;
+
+        // Watch for search changes with debouncing
+        watch(searchTerm, newTerm => {
+            clearTimeout(searchDebounceTimer);
+            searchDebounceTimer = setTimeout(() => {
+                debouncedSearchTerm.value = newTerm;
+            }, 300); // 300ms debounce
+        });
+
+        // Optimized filtered entries computed property
+        const filteredEntries = computed(() => {
+            let entries = isLiveMode.value ? props.liveSchedules : props.draftSchedules;
+
+            // Apply debounced search filter
+            if (debouncedSearchTerm.value) {
+                const search = debouncedSearchTerm.value.toLowerCase();
+                entries = entries.filter(entry => {
+                    return (
+                        (entry.course_name && entry.course_name.toLowerCase().includes(search)) ||
+                        (entry.subject_name && entry.subject_name.toLowerCase().includes(search)) ||
+                        (entry.class_name && entry.class_name.toLowerCase().includes(search)) ||
+                        (entry.teacher_names && entry.teacher_names.some(name => name.toLowerCase().includes(search)))
+                    );
+                });
+            }
+
+            // Apply class filter
+            if (selectedClassFilter.value) {
+                entries = entries.filter(entry => entry.class_id === selectedClassFilter.value);
+            }
+
+            // Apply lesson schedule filter
+            if (!showLessonSchedules.value) {
+                entries = entries.filter(entry => entry.course_id);
+            }
+
+            return entries;
         });
 
         const yearGroups = computed(() => {
@@ -593,55 +759,41 @@ export default {
         }
 
         function getCellAssignments(dayId, periodId) {
-            // Get the appropriate schedule data based on mode
-            const scheduleData = isLiveMode.value ? props.liveSchedules : props.draftSchedules;
-            
-            let assignments = scheduleData.filter(
-                assignment => {
-                    // Enhanced day ID matching - check both day_id and id fields
-                    const currentDay = props.schoolDays.find(d => d.id === dayId || d.day_id === dayId);
-                    const assignmentDayMatch = 
-                        assignment.day_id === dayId || 
-                        assignment.day_id === currentDay?.day_id || 
-                        assignment.day_id === currentDay?.id ||
-                        assignment.day_number === currentDay?.day_number; // Also try day_number matching
-                    
-                    const periodMatch = assignment.period_id === periodId;
-                    
-                    return assignmentDayMatch && periodMatch;
-                }
-            );
-            
-            // Filter out lesson schedules if disabled
-            if (!showLessonSchedules.value) {
-                assignments = assignments.filter(assignment => {
-                    // Keep assignments that have a course_id (not lesson schedules)
-                    return assignment.course_id;
-                });
-            }
-            
-            // Filter by selected class if applied
-            if (selectedClassFilter.value) {
-                assignments = assignments.filter(assignment => {
-                    return assignment.class_id === selectedClassFilter.value;
-                });
-            }
-            
-            // Sort assignments by class name, then by course/subject name
+            // Use optimized filtered entries for better performance
+            let assignments = filteredEntries.value.filter(assignment => {
+                // Enhanced day ID matching - handle multiple day ID formats robustly
+                const currentDay = props.schoolDays.find(d => d.id === dayId || d.day_id === dayId);
+
+                // Try multiple approaches for day matching to handle different data structures
+                const assignmentDayMatch =
+                    assignment.day_id === dayId || // Direct day_id match
+                    assignment.day_id === currentDay?.day_id || // Match via current day's day_id
+                    assignment.day_id === currentDay?.id || // Match via current day's id
+                    assignment.day_number === currentDay?.day_number || // Match via day number
+                    assignment.day_number === currentDay?.id || // Sometimes day_number matches id
+                    (currentDay?.name && assignment.day_name_en === currentDay.name) || // Match by day name
+                    (currentDay?.name_en && assignment.day_name_en === currentDay.name_en); // Match by English name
+
+                const periodMatch = assignment.period_id === periodId;
+
+                return assignmentDayMatch && periodMatch;
+            });
+
+            // Sort assignments by class name, then by course/subject name (already filtered by filteredEntries)
             const sortedAssignments = assignments.sort((a, b) => {
                 const classA = getClassName(a.class_id);
                 const classB = getClassName(b.class_id);
-                
+
                 if (classA !== classB) {
                     return classA.localeCompare(classB);
                 }
-                
+
                 // If same class, sort by course/subject name
                 const courseA = getCourseName(a.course_id) || getSubjectName(a.subject_id);
                 const courseB = getCourseName(b.course_id) || getSubjectName(b.subject_id);
                 return courseA.localeCompare(courseB);
             });
-            
+
             return sortedAssignments;
         }
 
@@ -676,13 +828,13 @@ export default {
             const classes = [];
             if (hasConflicts(assignment)) classes.push('has-conflict');
             if (hasDeletedEntities(assignment)) classes.push('has-deleted-entities');
-            
+
             // Add class for lesson schedules (no course, only class and subject)
             const courseName = getCourseName(assignment.course_id);
             if (!courseName && assignment.subject_id) {
                 classes.push('lesson-schedule');
             }
-            
+
             return classes;
         }
 
@@ -703,21 +855,21 @@ export default {
             }
             const course = props.courses.find(c => c.id === courseId);
             const courseName = course?.name || course?.course_name || course?.title;
-            
+
             if (!course) {
                 console.log('⚠️ [SchedulerGrid] getCourseName: Course not found for ID:', courseId, {
                     availableCourses: props.courses.length,
-                    sampleCourseIds: props.courses.slice(0, 3).map(c => c.id)
+                    sampleCourseIds: props.courses.slice(0, 3).map(c => c.id),
                 });
                 return null; // Return null to allow fallback to subject
             } else {
                 console.log('✅ [SchedulerGrid] getCourseName found course:', {
                     courseId: courseId,
                     courseName: courseName,
-                    course: course
+                    course: course,
                 });
             }
-            
+
             return courseName || null;
         }
 
@@ -731,10 +883,10 @@ export default {
             // Prioritize course name, then subject name, then fallback
             const courseName = getCourseName(assignment.course_id);
             if (courseName) return courseName;
-            
+
             const subjectName = getSubjectName(assignment.subject_id);
             if (subjectName) return subjectName;
-            
+
             return 'No Course';
         }
 
@@ -842,10 +994,8 @@ export default {
 
         function getAvailableCoursesForSlot(dayId, periodId) {
             // Get the day information
-            const currentDay = props.schoolDays.find(d => 
-                d.id === dayId || d.day_id === dayId
-            );
-            
+            const currentDay = props.schoolDays.find(d => d.id === dayId || d.day_id === dayId);
+
             // Get day number from multiple possible sources
             let currentDayNumber = currentDay?.day_number;
             if (!currentDayNumber) {
@@ -855,11 +1005,15 @@ export default {
             }
 
             console.log('🎯 [SchedulerGrid] getAvailableCoursesForSlot:', {
-                dayId, periodId, currentDay, currentDayNumber, coursesTotal: props.courses.length
+                dayId,
+                periodId,
+                currentDay,
+                currentDayNumber,
+                coursesTotal: props.courses.length,
             });
 
             // Filter courses that are available for this specific day/period
-            const availableCourses = props.courses.filter(course => {
+            let availableCourses = props.courses.filter(course => {
                 // If course has no time slot restrictions, it's available anywhere
                 if (!course.possible_time_slots?.length) {
                     return true;
@@ -881,9 +1035,42 @@ export default {
                 });
             });
 
-            console.log('🎯 [SchedulerGrid] Available courses for slot:', {
-                dayId, periodId, availableCount: availableCourses.length,
-                courses: availableCourses.map(c => ({ id: c.id, name: c.name || c.course_name }))
+            // Apply search filter
+            if (debouncedSearchTerm.value) {
+                const search = debouncedSearchTerm.value.toLowerCase();
+                availableCourses = availableCourses.filter(course => {
+                    return (
+                        (course.name && course.name.toLowerCase().includes(search)) ||
+                        (course.course_name && course.course_name.toLowerCase().includes(search)) ||
+                        (course.title && course.title.toLowerCase().includes(search)) ||
+                        (course.course_code && course.course_code.toLowerCase().includes(search)) ||
+                        (course.subject_name && course.subject_name.toLowerCase().includes(search)) ||
+                        (course.description && course.description.toLowerCase().includes(search))
+                    );
+                });
+            }
+
+            // Apply class filter
+            if (selectedClassFilter.value) {
+                const selectedClass = props.classes.find(cls => cls.id === selectedClassFilter.value);
+                if (selectedClass) {
+                    availableCourses = availableCourses.filter(course => {
+                        // Check if course is available for the selected class's year group
+                        if (course.is_for_year_groups && course.is_for_year_groups.length > 0) {
+                            return course.is_for_year_groups.includes(selectedClass.year_group);
+                        }
+                        return true; // If no restrictions, course is available
+                    });
+                }
+            }
+
+            console.log('🎯 [SchedulerGrid] Available courses for slot (after filtering):', {
+                dayId,
+                periodId,
+                availableCount: availableCourses.length,
+                searchTerm: debouncedSearchTerm.value,
+                classFilter: selectedClassFilter.value,
+                courses: availableCourses.map(c => ({ id: c.id, name: c.name || c.course_name })),
             });
 
             return availableCourses;
@@ -898,31 +1085,72 @@ export default {
 
         function assignCourseToSlot(course, dayId, periodId) {
             if (props.isReadOnly) return;
-            
+
             console.log('🎯 [SchedulerGrid] Assigning course to slot:', {
-                courseId: course.id, courseName: course.name || course.course_name, dayId, periodId
+                courseId: course.id,
+                courseName: course.name || course.course_name,
+                dayId,
+                periodId,
             });
-            
+
             // Emit cell click to open assignment modal with this course pre-selected
             emit('cell-click', {
                 dayId,
                 periodId,
                 period: props.periods.find(p => p.id === periodId),
-                preSelectedCourse: course
+                preSelectedCourse: course,
             });
         }
 
         function getNoPreferredDaysCourses() {
             // Get courses that have no possible_time_slots restrictions for the focused period
-            return props.courses.filter(course => {
+            const coursesWithoutRestrictions = props.courses.filter(course => {
                 // Course has no time slot restrictions
                 return !course.possible_time_slots || course.possible_time_slots.length === 0;
             });
+
+            // Filter by current search term and class filter for consistency
+            let filteredCourses = coursesWithoutRestrictions;
+
+            if (debouncedSearchTerm.value) {
+                const search = debouncedSearchTerm.value.toLowerCase();
+                filteredCourses = filteredCourses.filter(course => {
+                    return (
+                        (course.name && course.name.toLowerCase().includes(search)) ||
+                        (course.course_name && course.course_name.toLowerCase().includes(search)) ||
+                        (course.title && course.title.toLowerCase().includes(search)) ||
+                        (course.course_code && course.course_code.toLowerCase().includes(search)) ||
+                        (course.subject_name && course.subject_name.toLowerCase().includes(search))
+                    );
+                });
+            }
+
+            // Filter by selected class if a class filter is applied
+            if (selectedClassFilter.value) {
+                // Check if the course is available for the selected class
+                filteredCourses = filteredCourses.filter(course => {
+                    // If course has is_for_year_groups, check if it includes the selected class's year
+                    const selectedClass = props.classes.find(cls => cls.id === selectedClassFilter.value);
+                    if (selectedClass && course.is_for_year_groups) {
+                        return course.is_for_year_groups.includes(selectedClass.year_group);
+                    }
+                    return true; // If no year restrictions, course is available
+                });
+            }
+
+            console.log('📅 [NoPreferredDays] Filtered courses:', {
+                total: coursesWithoutRestrictions.length,
+                afterSearch: filteredCourses.length,
+                searchTerm: debouncedSearchTerm.value,
+                classFilter: selectedClassFilter.value,
+            });
+
+            return filteredCourses;
         }
 
         function assignCourseToFocusedSlot(course) {
             if (props.isReadOnly || !focusedPeriodId.value) return;
-            
+
             // For no-preferred-days courses, we could assign to any day
             // Let's just show the assignment modal for the first day
             const firstDay = visibleDays.value[0];
@@ -930,66 +1158,317 @@ export default {
                 assignCourseToSlot(course, firstDay.id, focusedPeriodId.value);
             }
         }
-        
+
         // Enhanced lifecycle tracking to debug disappearing component
         console.log('🔄 [SchedulerGrid] Setting up enhanced lifecycle tracking...');
-        
+
         // Watch for critical computed properties changes
-        watch([visibleDays, visiblePeriods], ([newDays, newPeriods], [oldDays, oldPeriods]) => {
-            console.log('🔄 [SchedulerGrid] Critical computed properties changed:', {
-                visibleDays: {
-                    old: oldDays?.length || 0,
-                    new: newDays?.length || 0,
-                    names: newDays?.map(d => d.name).join(', ') || 'none'
-                },
-                visiblePeriods: {
-                    old: oldPeriods?.length || 0,
-                    new: newPeriods?.length || 0,
-                    names: newPeriods?.map(p => p.name || p.label).join(', ') || 'none'
-                },
-                gridWillBeVisible: (newDays?.length > 0) && (newPeriods?.length > 0),
-                showNonInstructional: showNonInstructional.value,
-                focusedPeriodId: focusedPeriodId.value
-            });
-            
-            // Emergency logging if grid becomes invisible
-            if ((newDays?.length === 0 || newPeriods?.length === 0) && (oldDays?.length > 0 && oldPeriods?.length > 0)) {
-                console.error('🚨 [SchedulerGrid] GRID BECAME INVISIBLE! Debug info:', {
+        watch(
+            [visibleDays, visiblePeriods],
+            ([newDays, newPeriods], [oldDays, oldPeriods]) => {
+                console.log('🔄 [SchedulerGrid] Critical computed properties changed:', {
+                    visibleDays: {
+                        old: oldDays?.length || 0,
+                        new: newDays?.length || 0,
+                        names: newDays?.map(d => d.name).join(', ') || 'none',
+                    },
+                    visiblePeriods: {
+                        old: oldPeriods?.length || 0,
+                        new: newPeriods?.length || 0,
+                        names: newPeriods?.map(p => p.name || p.label).join(', ') || 'none',
+                    },
+                    gridWillBeVisible: newDays?.length > 0 && newPeriods?.length > 0,
                     showNonInstructional: showNonInstructional.value,
                     focusedPeriodId: focusedPeriodId.value,
-                    rawPeriodsCount: props.periods?.length || 0,
-                    rawDaysCount: props.schoolDays?.length || 0,
-                    samplePeriod: props.periods?.[0] || null,
-                    sampleDay: props.schoolDays?.[0] || null
                 });
-            }
-        }, { immediate: true });
-        
+
+                // Emergency logging if grid becomes invisible
+                if (
+                    (newDays?.length === 0 || newPeriods?.length === 0) &&
+                    oldDays?.length > 0 &&
+                    oldPeriods?.length > 0
+                ) {
+                    console.error('🚨 [SchedulerGrid] GRID BECAME INVISIBLE! Debug info:', {
+                        showNonInstructional: showNonInstructional.value,
+                        focusedPeriodId: focusedPeriodId.value,
+                        rawPeriodsCount: props.periods?.length || 0,
+                        rawDaysCount: props.schoolDays?.length || 0,
+                        samplePeriod: props.periods?.[0] || null,
+                        sampleDay: props.schoolDays?.[0] || null,
+                    });
+                }
+            },
+            { immediate: true }
+        );
+
         // Watch for prop changes that might cause issues
-        watch(() => props.periods, (newPeriods, oldPeriods) => {
-            console.log('🔄 [SchedulerGrid] Periods prop changed:', {
-                old: oldPeriods?.length || 0,
-                new: newPeriods?.length || 0,
-                samplePeriod: newPeriods?.[0] || null
-            });
-        }, { immediate: true });
-        
-        watch(() => props.schoolDays, (newDays, oldDays) => {
-            console.log('🔄 [SchedulerGrid] School days prop changed:', {
-                old: oldDays?.length || 0,
-                new: newDays?.length || 0,
-                sampleDay: newDays?.[0] || null
-            });
-        }, { immediate: true });
-        
+        watch(
+            () => props.periods,
+            (newPeriods, oldPeriods) => {
+                console.log('🔄 [SchedulerGrid] Periods prop changed:', {
+                    old: oldPeriods?.length || 0,
+                    new: newPeriods?.length || 0,
+                    samplePeriod: newPeriods?.[0] || null,
+                });
+            },
+            { immediate: true }
+        );
+
+        watch(
+            () => props.schoolDays,
+            (newDays, oldDays) => {
+                console.log('🔄 [SchedulerGrid] School days prop changed:', {
+                    old: oldDays?.length || 0,
+                    new: newDays?.length || 0,
+                    sampleDay: newDays?.[0] || null,
+                });
+            },
+            { immediate: true }
+        );
+
+        // Drag and Drop State
+        const draggedCourse = ref(null);
+        const draggedAssignment = ref(null);
+        const dragOverCell = ref(null);
+
+        // Drag and Drop Methods
+        function handleCourseDragStart(event, course) {
+            if (props.isReadOnly) {
+                event.preventDefault();
+                return;
+            }
+
+            console.log('🎯 [DragDrop] Course drag started:', course.name || course.course_name);
+            draggedCourse.value = course;
+
+            // Set drag data
+            event.dataTransfer.setData(
+                'text/plain',
+                JSON.stringify({
+                    type: 'course',
+                    course: course,
+                    id: course.id,
+                })
+            );
+
+            event.dataTransfer.effectAllowed = 'copy';
+
+            // Add visual feedback
+            event.target.style.opacity = '0.5';
+        }
+
+        function handleCourseDragEnd(event) {
+            console.log('🎯 [DragDrop] Course drag ended');
+            draggedCourse.value = null;
+            event.target.style.opacity = '1';
+        }
+
+        function handleAssignmentDragStart(event, assignment, dayId, periodId) {
+            if (props.isReadOnly) {
+                event.preventDefault();
+                return;
+            }
+
+            console.log('🎯 [DragDrop] Assignment drag started:', assignment.course_name || assignment.subject_name);
+            draggedAssignment.value = {
+                assignment,
+                originalDayId: dayId,
+                originalPeriodId: periodId,
+            };
+
+            // Set drag data
+            event.dataTransfer.setData(
+                'text/plain',
+                JSON.stringify({
+                    type: 'assignment',
+                    assignment: assignment,
+                    originalDayId: dayId,
+                    originalPeriodId: periodId,
+                })
+            );
+
+            event.dataTransfer.effectAllowed = 'move';
+
+            // Add visual feedback
+            event.target.style.opacity = '0.5';
+        }
+
+        function handleAssignmentDragEnd(event) {
+            console.log('🎯 [DragDrop] Assignment drag ended');
+            draggedAssignment.value = null;
+            event.target.style.opacity = '1';
+
+            // Clear any drag over effects
+            dragOverCell.value = null;
+        }
+
+        function handleCellDragOver(event, dayId, periodId) {
+            event.preventDefault();
+
+            if (!draggedCourse.value && !draggedAssignment.value) return;
+
+            // Show drop allowed effect
+            event.dataTransfer.dropEffect = draggedAssignment.value ? 'move' : 'copy';
+
+            return false;
+        }
+
+        function handleCellDragEnter(event, dayId, periodId) {
+            event.preventDefault();
+
+            if (!draggedCourse.value && !draggedAssignment.value) return;
+
+            // Add visual feedback to cell
+            dragOverCell.value = `${dayId}-${periodId}`;
+
+            // Add CSS class for visual feedback
+            event.currentTarget.classList.add('drag-over');
+        }
+
+        function handleCellDragLeave(event, dayId, periodId) {
+            // Only remove feedback if we're actually leaving the cell
+            if (!event.currentTarget.contains(event.relatedTarget)) {
+                dragOverCell.value = null;
+                event.currentTarget.classList.remove('drag-over');
+            }
+        }
+
+        function handleCellDrop(event, dayId, periodId) {
+            event.preventDefault();
+
+            // Clear visual feedback
+            dragOverCell.value = null;
+            event.currentTarget.classList.remove('drag-over');
+
+            try {
+                const dragData = JSON.parse(event.dataTransfer.getData('text/plain'));
+
+                if (dragData.type === 'course') {
+                    // Assign new course to cell
+                    const course = dragData.course;
+                    console.log(
+                        '🎯 [DragDrop] Dropping course:',
+                        course.name || course.course_name,
+                        'to cell:',
+                        dayId,
+                        periodId
+                    );
+
+                    assignCourseToSlot(course, dayId, periodId);
+                } else if (dragData.type === 'assignment') {
+                    // Move existing assignment to new cell
+                    const assignment = dragData.assignment;
+                    const originalDayId = dragData.originalDayId;
+                    const originalPeriodId = dragData.originalPeriodId;
+
+                    console.log(
+                        '🎯 [DragDrop] Moving assignment from:',
+                        originalDayId,
+                        originalPeriodId,
+                        'to:',
+                        dayId,
+                        periodId
+                    );
+
+                    // Check if it's actually moving to a different cell
+                    if (originalDayId !== dayId || originalPeriodId !== periodId) {
+                        // Emit update to move the assignment
+                        emit('update-assignments', {
+                            action: 'move',
+                            assignment: assignment,
+                            fromDayId: originalDayId,
+                            fromPeriodId: originalPeriodId,
+                            toDayId: dayId,
+                            toPeriodId: periodId,
+                        });
+                    }
+                }
+            } catch (error) {
+                console.error('🚨 [DragDrop] Error handling drop:', error);
+            }
+        }
+
+        // Inline Editing Methods
+        function isEditing(assignmentId) {
+            return editingAssignment.value?.id === assignmentId;
+        }
+
+        function handleAssignmentClick(assignment, dayId, periodId) {
+            if (props.isReadOnly) return;
+
+            // If already editing this assignment, do nothing
+            if (isEditing(assignment.id)) return;
+
+            // If editing another assignment, close it first
+            if (editingAssignment.value) {
+                cancelInlineEdit();
+            }
+
+            // For now, just show details (can be changed to start inline edit)
+            openAssignmentDetails(assignment);
+        }
+
+        function startInlineEdit(assignment, dayId, periodId) {
+            if (props.isReadOnly) return;
+
+            console.log('✏️ [InlineEdit] Starting edit for assignment:', assignment.id);
+
+            // Close any existing edit
+            if (editingAssignment.value) {
+                cancelInlineEdit();
+            }
+
+            editingAssignment.value = assignment;
+            editingCell.value = { dayId, periodId };
+        }
+
+        function saveInlineEdit(updatedAssignment) {
+            console.log('💾 [InlineEdit] Saving changes for assignment:', updatedAssignment.id);
+
+            // Create updated assignments array
+            const currentSchedules = isLiveMode.value ? props.liveSchedules : props.draftSchedules;
+            const updatedSchedules = currentSchedules.map(schedule =>
+                schedule.id === updatedAssignment.id ? updatedAssignment : schedule
+            );
+
+            // Emit update
+            emit('update-assignments', updatedSchedules);
+
+            // Clear editing state
+            editingAssignment.value = null;
+            editingCell.value = null;
+        }
+
+        function cancelInlineEdit() {
+            console.log('❌ [InlineEdit] Cancelling edit');
+            editingAssignment.value = null;
+            editingCell.value = null;
+        }
+
+        function deleteInlineAssignment(assignment) {
+            console.log('🗑️ [InlineEdit] Deleting assignment:', assignment.id);
+
+            // Create updated assignments array without this assignment
+            const currentSchedules = isLiveMode.value ? props.liveSchedules : props.draftSchedules;
+            const updatedSchedules = currentSchedules.filter(schedule => schedule.id !== assignment.id);
+
+            // Emit update
+            emit('update-assignments', updatedSchedules);
+
+            // Clear editing state
+            editingAssignment.value = null;
+            editingCell.value = null;
+        }
+
         // Emergency reactive check with recovery
         const emergencyCheck = () => {
             const daysOk = visibleDays.value.length > 0;
             const periodsOk = visiblePeriods.value.length > 0;
             const gridVisible = daysOk && periodsOk;
-            const usingEmergencyMode = (lastValidDays.value.length > 0 && visibleDays.value === lastValidDays.value) || 
-                                     (lastValidPeriods.value.length > 0 && visiblePeriods.value === lastValidPeriods.value);
-            
+            const usingEmergencyMode =
+                (lastValidDays.value.length > 0 && visibleDays.value === lastValidDays.value) ||
+                (lastValidPeriods.value.length > 0 && visiblePeriods.value === lastValidPeriods.value);
+
             console.log('🩺 [SchedulerGrid] Emergency health check:', {
                 visibleDays: visibleDays.value.length,
                 visiblePeriods: visiblePeriods.value.length,
@@ -1000,36 +1479,36 @@ export default {
                 rawPeriodsCount: props.periods?.length || 0,
                 rawDaysCount: props.schoolDays?.length || 0,
                 lastValidDaysCount: lastValidDays.value.length,
-                lastValidPeriodsCount: lastValidPeriods.value.length
+                lastValidPeriodsCount: lastValidPeriods.value.length,
             });
-            
+
             return gridVisible;
         };
-        
+
         // Emergency recovery function
         const emergencyRecover = () => {
             console.log('🚨 [SchedulerGrid] EMERGENCY RECOVERY ACTIVATED!');
-            
+
             // Force show all data
             showNonInstructional.value = true;
             focusedPeriodId.value = null;
-            
+
             // Clear cached data to force recalculation
             lastValidDays.value = [];
             lastValidPeriods.value = [];
-            
+
             // Force reactive recalculation
             nextTick(() => {
                 console.log('🚨 [SchedulerGrid] Emergency recovery completed, data should be visible');
                 emergencyCheck();
             });
         };
-        
+
         // Run emergency check on next tick and periodically
         setTimeout(() => {
             emergencyCheck();
         }, 100);
-        
+
         return {
             // State
             showNonInstructional,
@@ -1040,10 +1519,18 @@ export default {
             focusedPeriodId,
             lastValidDays,
             lastValidPeriods,
+            draggedCourse,
+            draggedAssignment,
+            dragOverCell,
+            editingAssignment,
+            editingCell,
+            searchTerm,
+            debouncedSearchTerm,
 
             // Computed
             visibleDays,
             visiblePeriods,
+            filteredEntries,
             yearGroups,
             availableClasses,
             yearGroupStats,
@@ -1078,7 +1565,25 @@ export default {
             assignCourseToSlot,
             getNoPreferredDaysCourses,
             assignCourseToFocusedSlot,
-            
+
+            // Drag and Drop Methods
+            handleCourseDragStart,
+            handleCourseDragEnd,
+            handleAssignmentDragStart,
+            handleAssignmentDragEnd,
+            handleCellDragOver,
+            handleCellDragEnter,
+            handleCellDragLeave,
+            handleCellDrop,
+
+            // Inline Editing Methods
+            isEditing,
+            handleAssignmentClick,
+            startInlineEdit,
+            saveInlineEdit,
+            cancelInlineEdit,
+            deleteInlineAssignment,
+
             // Emergency debug method
             emergencyCheck,
             emergencyRecover,
@@ -1153,6 +1658,60 @@ export default {
     display: flex;
     align-items: center;
     gap: 8px;
+    position: relative;
+}
+
+.search-input {
+    padding: 6px 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+    width: 200px;
+    transition: border-color 0.2s ease;
+}
+
+.search-input:focus {
+    outline: none;
+    border-color: #007cba;
+    box-shadow: 0 0 0 2px rgba(0, 123, 186, 0.2);
+}
+
+.clear-search-btn {
+    background: #6c757d;
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 20px;
+    height: 20px;
+    font-size: 12px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: -30px;
+    z-index: 2;
+}
+
+.clear-search-btn:hover {
+    background: #5a6268;
+}
+
+.filter-status {
+    margin-left: 8px;
+    padding: 4px 8px;
+    background: rgba(0, 123, 186, 0.1);
+    border: 1px solid rgba(0, 123, 186, 0.3);
+    border-radius: 4px;
+}
+
+.filter-tag {
+    display: inline-block;
+    background: #007cba;
+    color: white;
+    padding: 2px 6px;
+    margin: 0 2px;
+    border-radius: 3px;
+    font-size: 11px;
 }
 
 .filter-label {
@@ -1820,5 +2379,131 @@ export default {
     border: 2px solid #4caf50;
     border-radius: 6px;
     padding: 4px;
+}
+
+/* Drag and Drop Styles */
+.draggable-course {
+    cursor: grab;
+    transition: all 0.2s ease;
+    border: 1px solid rgba(0, 123, 186, 0.3);
+}
+
+.draggable-course:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+    border-color: #007cba;
+}
+
+.draggable-course:active {
+    cursor: grabbing;
+}
+
+.draggable-assignment {
+    cursor: grab;
+    transition: all 0.2s ease;
+}
+
+.draggable-assignment:hover {
+    transform: scale(1.02);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+.draggable-assignment:active {
+    cursor: grabbing;
+}
+
+.drop-zone {
+    position: relative;
+    transition: all 0.2s ease;
+}
+
+.drop-zone.drag-over {
+    background: rgba(0, 123, 186, 0.1) !important;
+    border: 2px dashed #007cba !important;
+    transform: scale(1.02);
+}
+
+.drop-zone.drag-over::after {
+    content: '📋 Drop here';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(0, 123, 186, 0.9);
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: bold;
+    pointer-events: none;
+    z-index: 10;
+}
+
+.assignment-item.dragging {
+    opacity: 0.5;
+    transform: rotate(5deg);
+}
+
+.course-card.dragging {
+    opacity: 0.5;
+    transform: rotate(-3deg) scale(1.05);
+}
+
+/* Enhanced visual feedback for drag operations */
+.scheduler-grid:has(.dragging) .drop-zone:not(.drag-over) {
+    background: rgba(255, 255, 255, 0.8);
+    border: 1px dashed #ddd;
+}
+
+.scheduler-grid:has(.dragging) .assignment-item:not(.dragging) {
+    opacity: 0.7;
+}
+
+/* Inline Editing Styles */
+.assignment-content {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.quick-edit-btn {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    background: rgba(0, 123, 186, 0.8);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 16px;
+    height: 16px;
+    font-size: 10px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: all 0.2s ease;
+    z-index: 2;
+}
+
+.assignment-item:hover .quick-edit-btn {
+    opacity: 1;
+}
+
+.quick-edit-btn:hover {
+    background: #007cba;
+    transform: scale(1.1);
+}
+
+.assignment-item.editing {
+    z-index: 100;
+    position: relative;
+}
+
+.assignment-item.editing .assignment-content {
+    display: none;
 }
 </style>

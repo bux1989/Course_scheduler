@@ -184,43 +184,52 @@ export default {
         });
         const periods = computed(() => {
             const rawPeriodsData = props.content.periods || [];
-            
+
             const processedPeriods = rawPeriodsData.map((period, index) => {
                 // Generate fallback period name from times, label, or index
                 let fallbackName = `Period ${index + 1}`;
                 if (period.start_time && period.end_time) {
                     fallbackName = `${period.start_time} - ${period.end_time}`;
                 }
-                
+
                 // Use the correct field names from the actual data structure
                 const periodName = period.name || period.label || period.group_label || fallbackName;
-                
+
                 // Determine if instructional based on block_type and other indicators
                 let isInstructional = true;
                 if (period.block_type) {
                     // Common non-instructional block types
-                    const nonInstructionalTypes = ['break', 'pause', 'lunch', 'recess', 'assembly', 'flexband', 'frühdienst'];
+                    const nonInstructionalTypes = [
+                        'break',
+                        'pause',
+                        'lunch',
+                        'recess',
+                        'assembly',
+                        'flexband',
+                        'frühdienst',
+                    ];
                     isInstructional = !nonInstructionalTypes.includes(period.block_type.toLowerCase());
                 } else if (period.attendance_requirement === 'optional') {
                     isInstructional = false;
-                } else if (period.label && (
-                    period.label.toLowerCase().includes('break') ||
-                    period.label.toLowerCase().includes('pause') ||
-                    period.label.toLowerCase().includes('lunch') ||
-                    period.label.toLowerCase().includes('flexband') ||
-                    period.label.toLowerCase().includes('frühdienst')
-                )) {
+                } else if (
+                    period.label &&
+                    (period.label.toLowerCase().includes('break') ||
+                        period.label.toLowerCase().includes('pause') ||
+                        period.label.toLowerCase().includes('lunch') ||
+                        period.label.toLowerCase().includes('flexband') ||
+                        period.label.toLowerCase().includes('frühdienst'))
+                ) {
                     isInstructional = false;
                 }
-                
+
                 return {
                     ...period,
                     name: periodName,
                     is_instructional: period.is_instructional !== undefined ? period.is_instructional : isInstructional,
-                    type: period.block_type || period.type || (isInstructional ? 'lesson' : 'break')
+                    type: period.block_type || period.type || (isInstructional ? 'lesson' : 'break'),
                 };
             });
-            
+
             return processedPeriods;
         });
         const courses = computed(() => {
@@ -237,14 +246,14 @@ export default {
         });
         const schoolDays = computed(() => {
             const rawDaysData = props.content.schoolDays || [];
-            
+
             // Create fallback day names if missing
             const defaultDayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-            
+
             const processedDays = rawDaysData.map((day, index) => {
                 // Use the correct field names from the actual data structure
                 const dayName = day.name || day.name_en || day.day_name || defaultDayNames[index] || `Day ${index + 1}`;
-                
+
                 return {
                     ...day,
                     // Use day_id as the main identifier if available, otherwise use id
@@ -252,12 +261,12 @@ export default {
                     name: dayName,
                     date: day.date || day.day_date || null,
                     is_active: day.is_active !== undefined ? day.is_active : true,
-                    day_number: day.day_number || (index + 1),
+                    day_number: day.day_number || index + 1,
                     // Keep both for compatibility
-                    day_id: day.day_id || day.id
+                    day_id: day.day_id || day.id,
                 };
             });
-            
+
             return processedDays;
         });
         const draftSchedules = computed(() => {
@@ -285,8 +294,8 @@ export default {
                 return courses.value;
             }
 
-            const currentDay = schoolDays.value.find(d => 
-                d.id === selectedCell.value.dayId || d.day_id === selectedCell.value.dayId
+            const currentDay = schoolDays.value.find(
+                d => d.id === selectedCell.value.dayId || d.day_id === selectedCell.value.dayId
             );
             const currentDayNumber = currentDay?.day_number;
 
@@ -305,7 +314,9 @@ export default {
                     }
                     // Handle object format {day_id, period_id}
                     else if (typeof slot === 'object') {
-                        return slot.day_id === selectedCell.value.dayId && slot.period_id === selectedCell.value.periodId;
+                        return (
+                            slot.day_id === selectedCell.value.dayId && slot.period_id === selectedCell.value.periodId
+                        );
                     }
                     return false;
                 });
@@ -521,7 +532,7 @@ export default {
                         draftId: draftId.value,
                         schedules: draftSchedules.value,
                         timestamp: new Date().toISOString(),
-                        action: 'save_draft'
+                        action: 'save_draft',
                     },
                 });
 
@@ -534,7 +545,7 @@ export default {
 
                 // Simulate save delay
                 await new Promise(resolve => setTimeout(resolve, 1000));
-                
+
                 // Only log success once, not repeatedly
                 console.log('💾 [wwElement] Draft saved successfully');
             } catch (error) {
@@ -587,8 +598,46 @@ export default {
             });
         }
 
-        function updateAssignments(assignments) {
-            updateDraftSchedules(assignments);
+        function updateAssignments(payload) {
+            if (payload.action === 'move' && payload.assignment) {
+                // Handle drag-and-drop assignment move
+                const updatedSchedules = [...draftSchedules.value];
+
+                // Find the assignment to move
+                const assignmentIndex = updatedSchedules.findIndex(a => a.id === payload.assignment.id);
+
+                if (assignmentIndex !== -1) {
+                    // Create updated assignment with new position
+                    const updatedAssignment = {
+                        ...updatedSchedules[assignmentIndex],
+                        day_id: payload.toDayId,
+                        period_id: payload.toPeriodId,
+                        // Update display fields if they exist
+                        day_name_de: schoolDays.value.find(d => d.id === payload.toDayId)?.name_de,
+                        day_name_en: schoolDays.value.find(d => d.id === payload.toDayId)?.name_en,
+                    };
+
+                    // Update the schedules array
+                    updatedSchedules[assignmentIndex] = updatedAssignment;
+
+                    // Push to undo stack
+                    undoStack.value.push(JSON.stringify(draftSchedules.value));
+
+                    // Update draft schedules
+                    updateDraftSchedules(updatedSchedules);
+
+                    console.log('✅ [DragDrop] Assignment moved successfully:', {
+                        assignmentId: payload.assignment.id,
+                        from: `${payload.fromDayId}-${payload.fromPeriodId}`,
+                        to: `${payload.toDayId}-${payload.toPeriodId}`,
+                    });
+                } else {
+                    console.warn('⚠️ [DragDrop] Could not find assignment to move:', payload.assignment.id);
+                }
+            } else {
+                // Handle other assignment updates (existing functionality)
+                updateDraftSchedules(payload);
+            }
         }
 
         function navigateToConflict(conflict) {
@@ -662,7 +711,7 @@ export default {
             console.log('School ID:', schoolId.value);
             console.log('Draft ID:', draftId.value);
             console.log('Published By:', publishedBy.value);
-            
+
             // Detailed periods analysis
             console.log('📅 PERIODS ANALYSIS:');
             console.log('  Raw periods:', props.content.periods);
@@ -672,7 +721,7 @@ export default {
                 console.log('  Sample period object keys:', Object.keys(samplePeriod));
                 console.log('  Sample period values:', samplePeriod);
             }
-            
+
             // Detailed schoolDays analysis
             console.log('🗓️ SCHOOL DAYS ANALYSIS:');
             console.log('  Raw schoolDays:', props.content.schoolDays);
@@ -682,7 +731,7 @@ export default {
                 console.log('  Sample day object keys:', Object.keys(sampleDay));
                 console.log('  Sample day values:', sampleDay);
             }
-            
+
             console.log('Courses:', courses.value.length, courses.value.slice(0, 2));
             console.log('Teachers:', teachers.value.length, teachers.value.slice(0, 2));
             console.log('Classes:', classes.value.length, classes.value.slice(0, 2));
@@ -716,19 +765,26 @@ export default {
         });
 
         // Watch for changes in props.content (only log significant changes)
-        watch(() => props.content, (newContent, oldContent) => {
-            // Only log when there are actual structural changes, not on every reactive update
-            if (newContent && oldContent && 
-                (newContent?.periods?.length !== oldContent?.periods?.length ||
-                 newContent?.schoolDays?.length !== oldContent?.schoolDays?.length ||
-                 newContent?.courses?.length !== oldContent?.courses?.length)) {
-                console.log('🔄 [wwElement] Content structure changed:', {
-                    periods: newContent?.periods?.length || 0,
-                    schoolDays: newContent?.schoolDays?.length || 0,
-                    courses: newContent?.courses?.length || 0
-                });
-            }
-        }, { deep: true });
+        watch(
+            () => props.content,
+            (newContent, oldContent) => {
+                // Only log when there are actual structural changes, not on every reactive update
+                if (
+                    newContent &&
+                    oldContent &&
+                    (newContent?.periods?.length !== oldContent?.periods?.length ||
+                        newContent?.schoolDays?.length !== oldContent?.schoolDays?.length ||
+                        newContent?.courses?.length !== oldContent?.courses?.length)
+                ) {
+                    console.log('🔄 [wwElement] Content structure changed:', {
+                        periods: newContent?.periods?.length || 0,
+                        schoolDays: newContent?.schoolDays?.length || 0,
+                        courses: newContent?.courses?.length || 0,
+                    });
+                }
+            },
+            { deep: true }
+        );
 
         return {
             // Data

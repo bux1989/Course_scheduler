@@ -229,45 +229,52 @@ export default {
         });
 
         // Watch for pre-selected course
-        watch(() => props.preSelectedCourse, (newPreSelectedCourse) => {
-            if (newPreSelectedCourse && props.visible) {
-                console.log('🎯 [AssignmentModal] Pre-selecting course:', {
-                    courseId: newPreSelectedCourse.id,
-                    courseName: newPreSelectedCourse.name || newPreSelectedCourse.course_name
-                });
-                selectCourse(newPreSelectedCourse);
-            }
-        }, { immediate: true });
+        watch(
+            () => props.preSelectedCourse,
+            newPreSelectedCourse => {
+                if (newPreSelectedCourse && props.visible) {
+                    console.log('🎯 [AssignmentModal] Pre-selecting course:', {
+                        courseId: newPreSelectedCourse.id,
+                        courseName: newPreSelectedCourse.name || newPreSelectedCourse.course_name,
+                    });
+                    selectCourse(newPreSelectedCourse);
+                }
+            },
+            { immediate: true }
+        );
 
         // Reset when modal closes
-        watch(() => props.visible, (isVisible) => {
-            if (!isVisible) {
-                selectedCourse.value = null;
-                assignmentForm.value = {
-                    class_id: '',
-                    teacher_ids: [],
-                    room_id: '',
-                    meeting_name: '',
-                };
+        watch(
+            () => props.visible,
+            isVisible => {
+                if (!isVisible) {
+                    selectedCourse.value = null;
+                    assignmentForm.value = {
+                        class_id: '',
+                        teacher_ids: [],
+                        room_id: '',
+                        meeting_name: '',
+                    };
+                }
             }
-        });
+        );
 
         // Computed
         const modalTitle = computed(() => {
             if (!props.period) return 'Manage Assignments';
-            
-            // Handle both day.id and day.day_id fields 
+
+            // Handle both day.id and day.day_id fields
             const dayData = props.schoolDays.find(d => d.id === props.dayId || d.day_id === props.dayId);
             const dayName = dayData?.name || 'Unknown Day';
             const periodName = props.period?.name || props.period?.label || 'Unknown Period';
-            
+
             return `${dayName} - ${periodName}`;
         });
 
         const periodInfo = computed(() => {
             if (!props.period) return null;
 
-            // Handle both day.id and day.day_id fields 
+            // Handle both day.id and day.day_id fields
             const dayData = props.schoolDays.find(d => d.id === props.dayId || d.day_id === props.dayId);
             const dayName = dayData?.name || 'Unknown Day';
             const periodName = props.period?.name || props.period?.label || 'Unknown Period';
@@ -290,47 +297,43 @@ export default {
 
         const filteredCourses = computed(() => {
             let courses = props.courses;
-            
+
             console.log('📚 [AssignmentModal] filteredCourses computation:', {
                 totalCourses: props.courses.length,
                 courseFilter: courseFilter.value,
                 yearGroupFilter: yearGroupFilter.value,
-                sampleCourse: props.courses[0]
+                sampleCourse: props.courses[0],
             });
 
             // Filter by search text
             if (courseFilter.value) {
                 const searchLower = courseFilter.value.toLowerCase();
-                courses = courses.filter(
-                    course => {
-                        // Enhanced search across multiple fields
-                        const searchableFields = [
-                            course.name,
-                            course.course_name,
-                            course.title,
-                            course.description,
-                            course.course_code,
-                            course.subject_name, // Add subject_name to search
-                            course.important_information // Add additional info field
-                        ].filter(Boolean); // Remove null/undefined values
-                        
-                        const matches = searchableFields.some(field => 
-                            field?.toLowerCase().includes(searchLower)
-                        );
-                        
-                        if (searchLower === 'archery') {
-                            console.log('🔍 [AssignmentModal] Archery search debug:', {
-                                courseId: course.id,
-                                searchableFields,
-                                matches,
-                                course: course
-                            });
-                        }
-                        
-                        return matches;
+                courses = courses.filter(course => {
+                    // Enhanced search across multiple fields
+                    const searchableFields = [
+                        course.name,
+                        course.course_name,
+                        course.title,
+                        course.description,
+                        course.course_code,
+                        course.subject_name, // Add subject_name to search
+                        course.important_information, // Add additional info field
+                    ].filter(Boolean); // Remove null/undefined values
+
+                    const matches = searchableFields.some(field => field?.toLowerCase().includes(searchLower));
+
+                    if (searchLower === 'archery') {
+                        console.log('🔍 [AssignmentModal] Archery search debug:', {
+                            courseId: course.id,
+                            searchableFields,
+                            matches,
+                            course: course,
+                        });
                     }
-                );
-                
+
+                    return matches;
+                });
+
                 console.log('📚 [AssignmentModal] Search filtering:', {
                     searchTerm: courseFilter.value,
                     beforeFiltering: props.courses.length,
@@ -338,8 +341,8 @@ export default {
                     matchedCourses: courses.map(c => ({
                         id: c.id,
                         name: c.name || c.course_name || c.title,
-                        code: c.course_code
-                    }))
+                        code: c.course_code,
+                    })),
                 });
             }
 
@@ -350,7 +353,7 @@ export default {
 
             console.log('📚 [AssignmentModal] Filtered courses result:', {
                 filteredCount: courses.length,
-                courses: courses.map(c => ({ id: c.id, name: c.name }))
+                courses: courses.map(c => ({ id: c.id, name: c.name })),
             });
 
             return courses;
@@ -468,17 +471,14 @@ export default {
             if (!course.possible_time_slots?.length) {
                 console.log('📚 [AssignmentModal] Course has no time slot restrictions:', {
                     courseId: course.id,
-                    courseName: course.name || course.course_name
+                    courseName: course.name || course.course_name,
                 });
                 return true; // No restrictions - course can be scheduled anywhere
             }
 
             // Find current day info - try multiple approaches
-            const currentDay = props.schoolDays.find(d => 
-                d.id === props.dayId || 
-                d.day_id === props.dayId
-            );
-            
+            const currentDay = props.schoolDays.find(d => d.id === props.dayId || d.day_id === props.dayId);
+
             // Get day number from multiple possible sources
             let currentDayNumber = currentDay?.day_number;
             if (!currentDayNumber) {
@@ -486,7 +486,7 @@ export default {
                 const dayIndex = props.schoolDays.findIndex(d => d.id === props.dayId || d.day_id === props.dayId);
                 currentDayNumber = dayIndex >= 0 ? dayIndex + 1 : null; // 1-based numbering
             }
-            
+
             console.log('📚 [AssignmentModal] Checking course availability:', {
                 courseId: course.id,
                 courseName: course.name || course.course_name,
@@ -495,7 +495,7 @@ export default {
                 currentPeriodId: props.periodId,
                 currentDay: currentDay,
                 currentDayNumber: currentDayNumber,
-                schoolDaysCount: props.schoolDays.length
+                schoolDaysCount: props.schoolDays.length,
             });
 
             const isAvailable = course.possible_time_slots.some(slot => {
@@ -504,38 +504,38 @@ export default {
                     const [dayNumber, periodId] = slot.split('|');
                     const slotDayNumber = parseInt(dayNumber);
                     const match = slotDayNumber === currentDayNumber && periodId === props.periodId;
-                    
+
                     console.log('  Checking string slot:', {
                         slot,
                         slotDayNumber,
                         periodId,
                         currentDayNumber,
                         currentPeriodId: props.periodId,
-                        matches: match
+                        matches: match,
                     });
-                    
+
                     return match;
                 }
                 // Handle object format {day_id, period_id}
                 else if (typeof slot === 'object') {
                     const match = slot.day_id === props.dayId && slot.period_id === props.periodId;
-                    
+
                     console.log('  Checking object slot:', {
                         slot,
                         currentDayId: props.dayId,
                         currentPeriodId: props.periodId,
-                        matches: match
+                        matches: match,
                     });
-                    
+
                     return match;
                 }
                 return false;
             });
-            
+
             console.log('📚 [AssignmentModal] Course availability result:', {
                 courseId: course.id,
                 courseName: course.name || course.course_name,
-                isAvailable: isAvailable
+                isAvailable: isAvailable,
             });
 
             return isAvailable;
