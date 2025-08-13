@@ -120,6 +120,7 @@ import { ref, computed, watch, onMounted } from 'vue';
 import SchedulerGrid from './components/scheduler/SchedulerGrid.vue';
 import AssignmentModal from './components/scheduler/AssignmentModal.vue';
 import ConflictPanel from './components/scheduler/ConflictPanel.vue';
+import { validateAndUnwrapArray } from './utils/arrayUtils.js';
 
 export default {
     name: 'CourseScheduler',
@@ -184,14 +185,15 @@ export default {
         });
         const periods = computed(() => {
             const rawPeriodsData = props.content.periods;
-            
-            // Robust array validation to prevent TypeError: .map is not a function
-            if (!rawPeriodsData || !Array.isArray(rawPeriodsData)) {
-                console.warn('[wwElement] periods prop is not an array:', typeof rawPeriodsData, rawPeriodsData);
+
+            // Use enhanced array validation to handle WeWeb reactive proxies
+            const validatedPeriods = validateAndUnwrapArray(rawPeriodsData, 'periods');
+
+            if (validatedPeriods.length === 0) {
                 return [];
             }
 
-            const processedPeriods = rawPeriodsData.map((period, index) => {
+            const processedPeriods = validatedPeriods.map((period, index) => {
                 // Generate fallback period name from times, label, or index
                 let fallbackName = `Period ${index + 1}`;
                 if (period.start_time && period.end_time) {
@@ -240,49 +242,34 @@ export default {
         });
         const courses = computed(() => {
             const rawCourses = props.content.courses;
-            if (!rawCourses || !Array.isArray(rawCourses)) {
-                console.warn('[wwElement] courses prop is not an array:', typeof rawCourses);
-                return [];
-            }
-            return rawCourses;
+            return validateAndUnwrapArray(rawCourses, 'courses');
         });
         const teachers = computed(() => {
             const rawTeachers = props.content.teachers;
-            if (!rawTeachers || !Array.isArray(rawTeachers)) {
-                console.warn('[wwElement] teachers prop is not an array:', typeof rawTeachers);
-                return [];
-            }
-            return rawTeachers;
+            return validateAndUnwrapArray(rawTeachers, 'teachers');
         });
         const classes = computed(() => {
             const rawClasses = props.content.classes;
-            if (!rawClasses || !Array.isArray(rawClasses)) {
-                console.warn('[wwElement] classes prop is not an array:', typeof rawClasses);
-                return [];
-            }
-            return rawClasses;
+            return validateAndUnwrapArray(rawClasses, 'classes');
         });
         const rooms = computed(() => {
             const rawRooms = props.content.rooms;
-            if (!rawRooms || !Array.isArray(rawRooms)) {
-                console.warn('[wwElement] rooms prop is not an array:', typeof rawRooms);
-                return [];
-            }
-            return rawRooms;
+            return validateAndUnwrapArray(rawRooms, 'rooms');
         });
         const schoolDays = computed(() => {
             const rawDaysData = props.content.schoolDays;
-            
-            // Robust array validation
-            if (!rawDaysData || !Array.isArray(rawDaysData)) {
-                console.warn('[wwElement] schoolDays prop is not an array:', typeof rawDaysData);
+
+            // Use enhanced array validation to handle WeWeb reactive proxies
+            const validatedDays = validateAndUnwrapArray(rawDaysData, 'schoolDays');
+
+            if (validatedDays.length === 0) {
                 return [];
             }
 
             // Create fallback day names if missing
             const defaultDayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
-            const processedDays = rawDaysData.map((day, index) => {
+            const processedDays = validatedDays.map((day, index) => {
                 // Use the correct field names from the actual data structure
                 const dayName = day.name || day.name_en || day.day_name || defaultDayNames[index] || `Day ${index + 1}`;
 
@@ -303,27 +290,15 @@ export default {
         });
         const draftSchedules = computed(() => {
             const rawDrafts = props.content.draftSchedules;
-            if (!rawDrafts || !Array.isArray(rawDrafts)) {
-                console.warn('[wwElement] draftSchedules prop is not an array:', typeof rawDrafts);
-                return [];
-            }
-            return rawDrafts;
+            return validateAndUnwrapArray(rawDrafts, 'draftSchedules');
         });
         const liveSchedules = computed(() => {
             const rawLive = props.content.liveSchedules;
-            if (!rawLive || !Array.isArray(rawLive)) {
-                console.warn('[wwElement] liveSchedules prop is not an array:', typeof rawLive);
-                return [];
-            }
-            return rawLive;
+            return validateAndUnwrapArray(rawLive, 'liveSchedules');
         });
         const subjects = computed(() => {
             const rawSubjects = props.content.subjects;
-            if (!rawSubjects || !Array.isArray(rawSubjects)) {
-                console.warn('[wwElement] subjects prop is not an array:', typeof rawSubjects);
-                return [];
-            }
-            return rawSubjects;
+            return validateAndUnwrapArray(rawSubjects, 'subjects');
         });
 
         // Computed state

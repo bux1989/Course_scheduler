@@ -396,6 +396,7 @@
 <script>
 import { computed, ref, watch, nextTick } from 'vue';
 import InlineAssignmentEditor from './InlineAssignmentEditor.vue';
+import { validateAndUnwrapArray } from '../../utils/arrayUtils.js';
 
 export default {
     name: 'SchedulerGrid',
@@ -457,30 +458,34 @@ export default {
 
         // Simplified computed properties without reactive caching to prevent disappearing
         const visibleDays = computed(() => {
-            // Simple validation with robust fallback
-            if (!props.schoolDays || !Array.isArray(props.schoolDays) || props.schoolDays.length === 0) {
+            // Use enhanced array validation to handle WeWeb reactive proxies
+            const validatedDays = validateAndUnwrapArray(props.schoolDays, 'schoolDays');
+
+            if (validatedDays.length === 0) {
                 return [];
             }
 
             const maxDaysLimit = props.maxDays || 7;
-            return props.schoolDays.slice(0, maxDaysLimit);
+            return validatedDays.slice(0, maxDaysLimit);
         });
 
         const visiblePeriods = computed(() => {
-            // Simple validation with robust fallback  
-            if (!props.periods || !Array.isArray(props.periods) || props.periods.length === 0) {
+            // Use enhanced array validation to handle WeWeb reactive proxies
+            const validatedPeriods = validateAndUnwrapArray(props.periods, 'periods');
+
+            if (validatedPeriods.length === 0) {
                 return [];
             }
 
-            let filteredPeriods = props.periods;
+            let filteredPeriods = validatedPeriods;
 
             // First filter by focused period if set
             if (focusedPeriodId.value) {
-                filteredPeriods = props.periods.filter(period => period.id === focusedPeriodId.value);
+                filteredPeriods = validatedPeriods.filter(period => period.id === focusedPeriodId.value);
             }
             // Then filter by instructional status
             else if (!showNonInstructional.value) {
-                filteredPeriods = props.periods.filter(period => {
+                filteredPeriods = validatedPeriods.filter(period => {
                     // Show periods where attendance_requirement is 'flexible' or 'required'
                     let shouldShow =
                         period.attendance_requirement === 'flexible' || period.attendance_requirement === 'required';
