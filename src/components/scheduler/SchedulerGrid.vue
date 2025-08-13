@@ -185,7 +185,7 @@
                                 :class="getAssignmentClasses(assignment)"
                                 :style="getAssignmentStyles(assignment)"
                                 @click.stop="handleAssignmentClick(assignment, day.id, period.id)"
-                                :draggable="!props.isReadOnly && !isEditing(assignment.id)"
+                                :draggable="!isReadOnly && !isEditing(assignment.id)"
                                 @dragstart="handleAssignmentDragStart($event, assignment, day.id, period.id)"
                                 @dragend="handleAssignmentDragEnd($event)"
                                 :data-assignment-id="assignment.id"
@@ -207,7 +207,7 @@
 
                                     <!-- Quick Edit Button -->
                                     <button
-                                        v-if="!props.isReadOnly"
+                                        v-if="!isReadOnly"
                                         @click.stop="startInlineEdit(assignment, day.id, period.id)"
                                         class="quick-edit-btn"
                                         title="Click to edit inline"
