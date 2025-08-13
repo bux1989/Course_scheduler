@@ -96,7 +96,16 @@
         </div>
 
         <!-- Main Grid (only show if we have data) -->
-        <div v-if="visibleDays.length > 0 && visiblePeriods.length > 0">
+        <div v-if="visibleDays.length > 0 && visiblePeriods.length > 0" class="main-grid-container">
+            <!-- Debug info for main grid -->
+            <div class="debug-grid-info">
+                <small>
+                    ✅ Grid Active - Days: {{ visibleDays.length }}, Periods: {{ visiblePeriods.length }} | 
+                    Drafts: {{ draftSchedules.length }}, Live: {{ liveSchedules.length }} |
+                    Mode: {{ isLiveMode ? 'Live' : 'Planning' }}
+                </small>
+            </div>
+            
             <!-- Grid Header with Days -->
             <div class="grid-header" role="row">
                 <div class="period-header-cell" role="columnheader">
@@ -218,6 +227,24 @@
                         </div>
                     </div>
                 </div>
+            </div>
+        </div>
+        
+        <!-- Debug info when grid is hidden -->
+        <div v-else class="grid-hidden-debug">
+            <div class="grid-hidden-message">
+                ❌ Grid Hidden - Debug Info:
+                <ul>
+                    <li>Visible Days: {{ visibleDays.length }} ({{ visibleDays.map(d => d.name).join(', ') }})</li>
+                    <li>Visible Periods: {{ visiblePeriods.length }} ({{ visiblePeriods.map(p => p.name || p.label).join(', ') }})</li>
+                    <li>Show Non-Instructional: {{ showNonInstructional }}</li>
+                    <li>Focused Period: {{ focusedPeriodId }}</li>
+                    <li>Total Periods Available: {{ periods.length }}</li>
+                    <li>Total School Days Available: {{ schoolDays.length }}</li>
+                </ul>
+                <button @click="showNonInstructional = true; focusedPeriodId = null" class="emergency-show-btn">
+                    🚨 Emergency: Show All Data
+                </button>
             </div>
         </div>
 
@@ -396,6 +423,12 @@ export default {
 
         // Computed properties
         const visibleDays = computed(() => {
+            // Defensive programming: ensure we have schoolDays
+            if (!props.schoolDays || props.schoolDays.length === 0) {
+                console.warn('⚠️ [SchedulerGrid] No school days available, returning empty array');
+                return [];
+            }
+            
             const days = props.schoolDays.slice(0, props.maxDays);
             console.log('🗓️ [SchedulerGrid] visibleDays computed:', {
                 totalSchoolDays: props.schoolDays.length,
@@ -405,6 +438,13 @@ export default {
                 draftSchedulesCount: props.draftSchedules.length,
                 sampleDayIds: props.draftSchedules.slice(0, 3).map(a => ({ day_id: a.day_id, period_id: a.period_id }))
             });
+            
+            // CRITICAL: Ensure we never return an empty array unless there truly are no school days
+            if (days.length === 0 && props.schoolDays.length > 0) {
+                console.warn('⚠️ [SchedulerGrid] visibleDays resulted in 0 days! Falling back to showing at least first day');
+                return props.schoolDays.slice(0, 1); // Show at least one day
+            }
+            
             return days;
         });
 
@@ -414,6 +454,12 @@ export default {
                 focusedPeriodId: focusedPeriodId.value,
                 totalPeriodsCount: props.periods.length
             });
+            
+            // Defensive programming: ensure we have periods
+            if (!props.periods || props.periods.length === 0) {
+                console.warn('⚠️ [SchedulerGrid] No periods available, returning empty array');
+                return [];
+            }
             
             let filteredPeriods = props.periods;
             
@@ -428,37 +474,43 @@ export default {
                 filteredPeriods = props.periods.filter(period => {
                     // Show periods where attendance_requirement is 'flexible' or 'required'
                     // This is the correct interpretation based on user feedback
-                    const shouldShow = period.attendance_requirement === 'flexible' || period.attendance_requirement === 'required';
+                    let shouldShow = period.attendance_requirement === 'flexible' || period.attendance_requirement === 'required';
                     
-                    // Alternative checks if attendance_requirement is not available
-                    if (!period.attendance_requirement) {
+                    // Alternative checks if attendance_requirement is not available or doesn't match expected values
+                    if (!shouldShow && !period.attendance_requirement) {
                         // Fall back to is_instructional field
                         if (period.is_instructional !== undefined) {
-                            return period.is_instructional;
+                            shouldShow = period.is_instructional === true;
                         }
-                        
                         // Check block_type - exclude known non-instructional types
-                        if (period.block_type) {
-                            const nonInstructionalTypes = ['break', 'pause', 'lunch', 'recess', 'assembly'];
-                            return !nonInstructionalTypes.includes(period.block_type.toLowerCase());
+                        else if (period.block_type) {
+                            const nonInstructionalTypes = ['break', 'pause', 'lunch', 'recess', 'assembly', 'flexband', 'frühdienst'];
+                            shouldShow = !nonInstructionalTypes.includes(period.block_type.toLowerCase());
                         }
-                        
                         // Fall back to label/name content analysis
-                        if (period.label || period.name) {
+                        else if (period.label || period.name) {
                             const text = (period.label || period.name).toLowerCase();
-                            const isBreakTime = text.includes('break') || text.includes('pause') || text.includes('lunch');
-                            return !isBreakTime;
+                            const isBreakTime = text.includes('break') || text.includes('pause') || text.includes('lunch') || 
+                                              text.includes('flexband') || text.includes('frühdienst') || text.includes('benutzerdefiniert');
+                            shouldShow = !isBreakTime;
                         }
-                        
                         // Default to showing if we can't determine
-                        return true;
+                        else {
+                            shouldShow = true;
+                        }
+                    }
+                    // If we still don't have a clear answer and attendance_requirement exists but is not 'flexible' or 'required'
+                    else if (!shouldShow && period.attendance_requirement && period.attendance_requirement !== 'optional') {
+                        // Show periods that aren't explicitly optional
+                        shouldShow = true;
                     }
                     
-                    console.log(`  Period "${period.name}" (id: ${period.id}):`, {
+                    console.log(`  Period "${period.name || period.label}" (id: ${period.id}):`, {
                         attendance_requirement: period.attendance_requirement,
                         block_type: period.block_type,
                         is_instructional: period.is_instructional,
                         label: period.label,
+                        name: period.name,
                         shouldShow: shouldShow,
                         type: period.type
                     });
@@ -468,12 +520,24 @@ export default {
                 console.log('📅 [SchedulerGrid] Showing ALL periods (including non-instructional)');
             }
             
+            // CRITICAL: Ensure we never return an empty array unless there truly are no periods
+            // If filtering results in empty array, fall back to showing all periods with a warning
+            if (filteredPeriods.length === 0 && props.periods.length > 0) {
+                console.warn('⚠️ [SchedulerGrid] Filtering resulted in 0 periods! Falling back to showing all periods to prevent component disappearance');
+                filteredPeriods = props.periods;
+                
+                // Update showNonInstructional to true to prevent infinite filtering
+                showNonInstructional.value = true;
+            }
+            
             console.log('📅 [SchedulerGrid] visiblePeriods computed RESULT:', {
                 filteredPeriodsCount: filteredPeriods.length,
+                originalPeriodsCount: props.periods.length,
                 periods: filteredPeriods.map(p => ({
                     id: p.id,
-                    name: p.name,
+                    name: p.name || p.label,
                     block_type: p.block_type,
+                    attendance_requirement: p.attendance_requirement,
                     is_instructional: p.is_instructional,
                     type: p.type
                 }))
@@ -903,7 +967,82 @@ export default {
                 assignCourseToSlot(course, firstDay.id, focusedPeriodId.value);
             }
         }
-
+        
+        // Enhanced lifecycle tracking to debug disappearing component
+        console.log('🔄 [SchedulerGrid] Setting up enhanced lifecycle tracking...');
+        
+        // Watch for critical computed properties changes
+        watch([visibleDays, visiblePeriods], ([newDays, newPeriods], [oldDays, oldPeriods]) => {
+            console.log('🔄 [SchedulerGrid] Critical computed properties changed:', {
+                visibleDays: {
+                    old: oldDays?.length || 0,
+                    new: newDays?.length || 0,
+                    names: newDays?.map(d => d.name).join(', ') || 'none'
+                },
+                visiblePeriods: {
+                    old: oldPeriods?.length || 0,
+                    new: newPeriods?.length || 0,
+                    names: newPeriods?.map(p => p.name || p.label).join(', ') || 'none'
+                },
+                gridWillBeVisible: (newDays?.length > 0) && (newPeriods?.length > 0),
+                showNonInstructional: showNonInstructional.value,
+                focusedPeriodId: focusedPeriodId.value
+            });
+            
+            // Emergency logging if grid becomes invisible
+            if ((newDays?.length === 0 || newPeriods?.length === 0) && (oldDays?.length > 0 && oldPeriods?.length > 0)) {
+                console.error('🚨 [SchedulerGrid] GRID BECAME INVISIBLE! Debug info:', {
+                    showNonInstructional: showNonInstructional.value,
+                    focusedPeriodId: focusedPeriodId.value,
+                    rawPeriodsCount: props.periods?.length || 0,
+                    rawDaysCount: props.schoolDays?.length || 0,
+                    samplePeriod: props.periods?.[0] || null,
+                    sampleDay: props.schoolDays?.[0] || null
+                });
+            }
+        }, { immediate: true });
+        
+        // Watch for prop changes that might cause issues
+        watch(() => props.periods, (newPeriods, oldPeriods) => {
+            console.log('🔄 [SchedulerGrid] Periods prop changed:', {
+                old: oldPeriods?.length || 0,
+                new: newPeriods?.length || 0,
+                samplePeriod: newPeriods?.[0] || null
+            });
+        }, { immediate: true });
+        
+        watch(() => props.schoolDays, (newDays, oldDays) => {
+            console.log('🔄 [SchedulerGrid] School days prop changed:', {
+                old: oldDays?.length || 0,
+                new: newDays?.length || 0,
+                sampleDay: newDays?.[0] || null
+            });
+        }, { immediate: true });
+        
+        // Emergency reactive check
+        const emergencyCheck = () => {
+            const daysOk = visibleDays.value.length > 0;
+            const periodsOk = visiblePeriods.value.length > 0;
+            const gridVisible = daysOk && periodsOk;
+            
+            console.log('🩺 [SchedulerGrid] Emergency health check:', {
+                visibleDays: visibleDays.value.length,
+                visiblePeriods: visiblePeriods.value.length,
+                gridVisible,
+                showNonInstructional: showNonInstructional.value,
+                focusedPeriodId: focusedPeriodId.value,
+                rawPeriodsCount: props.periods.length,
+                rawDaysCount: props.schoolDays.length
+            });
+            
+            return gridVisible;
+        };
+        
+        // Run emergency check on next tick and periodically
+        setTimeout(() => {
+            emergencyCheck();
+        }, 100);
+        
         return {
             // State
             showNonInstructional,
@@ -950,6 +1089,9 @@ export default {
             assignCourseToSlot,
             getNoPreferredDaysCourses,
             assignCourseToFocusedSlot,
+            
+            // Emergency debug method
+            emergencyCheck,
         };
     },
 };
@@ -1585,5 +1727,68 @@ export default {
 
 .period-label-cell:hover {
     background: #f0f7ff !important;
+}
+
+/* New debug styles for grid visibility issues */
+.debug-grid-info {
+    padding: 8px 16px;
+    background: #e8f5e8;
+    border: 1px solid #4caf50;
+    border-radius: 4px;
+    margin-bottom: 8px;
+    font-family: monospace;
+}
+
+.grid-hidden-debug {
+    padding: 20px;
+    background: #ffebee;
+    border: 2px solid #f44336;
+    border-radius: 8px;
+    margin: 16px;
+    text-align: center;
+}
+
+.grid-hidden-message {
+    color: #c62828;
+    font-weight: bold;
+    font-size: 1.1em;
+}
+
+.grid-hidden-message ul {
+    text-align: left;
+    display: inline-block;
+    margin: 12px 0;
+    color: #666;
+    font-weight: normal;
+    font-size: 0.9em;
+    font-family: monospace;
+}
+
+.grid-hidden-message li {
+    margin-bottom: 6px;
+}
+
+.emergency-show-btn {
+    padding: 12px 24px;
+    background: #f44336;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-size: 1em;
+    font-weight: bold;
+    cursor: pointer;
+    margin-top: 16px;
+    transition: all 0.2s;
+}
+
+.emergency-show-btn:hover {
+    background: #d32f2f;
+    transform: scale(1.05);
+}
+
+.main-grid-container {
+    border: 2px solid #4caf50;
+    border-radius: 6px;
+    padding: 4px;
 }
 </style>
