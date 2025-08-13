@@ -93,8 +93,8 @@
             <!-- Debug info for main grid with visibility status -->
             <div class="debug-grid-info">
                 <small>
-                    ✅ NORMAL MODE - Days: {{ safeLength(visibleDays) }}, Periods: {{ safeLength(visiblePeriods) }} | Drafts:
-                    {{ safeLength(draftSchedules) }}, Live: {{ safeLength(liveSchedules) }} | Mode:
+                    ✅ NORMAL MODE - Days: {{ safeLength(visibleDays) }}, Periods: {{ safeLength(visiblePeriods) }} |
+                    Drafts: {{ safeLength(draftSchedules) }}, Live: {{ safeLength(liveSchedules) }} | Mode:
                     {{ isLiveMode ? 'Live' : 'Planning' }}
                 </small>
             </div>
@@ -320,7 +320,10 @@
                                 <small v-if="course.subject_name">{{ course.subject_name }}</small>
                             </div>
                         </div>
-                        <div v-if="safeLength(getAvailableCoursesForSlot(day.id, focusedPeriodId)) === 0" class="no-courses">
+                        <div
+                            v-if="safeLength(getAvailableCoursesForSlot(day.id, focusedPeriodId)) === 0"
+                            class="no-courses"
+                        >
                             No courses available for this day/period
                         </div>
                     </div>
@@ -381,7 +384,7 @@
 <script>
 import { computed, ref, watch, nextTick } from 'vue';
 import InlineAssignmentEditor from './InlineAssignmentEditor.vue';
-import { validateAndUnwrapArray, safeLength, safeArray } from '../../utils/arrayUtils.js';
+import { validateAndUnwrapArray, safeLength, safeArray, toArray, len, nonEmpty } from '../../utils/arrayUtils.js';
 
 export default {
     name: 'SchedulerGrid',
@@ -597,7 +600,8 @@ export default {
                     yearClasses.some(cls => cls.id === assignment.class_id)
                 );
 
-                const totalSlots = safeLength(visiblePeriods.value) * safeLength(visibleDays.value) * safeLength(yearClasses);
+                const totalSlots =
+                    safeLength(visiblePeriods.value) * safeLength(visibleDays.value) * safeLength(yearClasses);
                 const scheduledCourses = yearAssignments.length;
                 const averagePerDay = scheduledCourses / safeLength(visibleDays.value);
                 const utilization = totalSlots > 0 ? (scheduledCourses / totalSlots) * 100 : 0;
@@ -1314,7 +1318,7 @@ export default {
             saveInlineEdit,
             cancelInlineEdit,
             deleteInlineAssignment,
-            
+
             // Utility functions
             safeLength,
             safeArray,

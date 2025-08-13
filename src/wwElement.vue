@@ -120,7 +120,15 @@ import { ref, computed, watch, onMounted } from 'vue';
 import SchedulerGrid from './components/scheduler/SchedulerGrid.vue';
 import AssignmentModal from './components/scheduler/AssignmentModal.vue';
 import ConflictPanel from './components/scheduler/ConflictPanel.vue';
-import { validateAndUnwrapArray, safeLength, safeArray } from './utils/arrayUtils.js';
+import {
+    validateAndUnwrapArray,
+    safeLength,
+    safeArray,
+    toArray,
+    len,
+    nonEmpty,
+    normalizePeriods,
+} from './utils/arrayUtils.js';
 
 export default {
     name: 'CourseScheduler',
@@ -183,89 +191,79 @@ export default {
         const publishedBy = computed(() => {
             return props.content.publishedBy || null;
         });
-        
-        // Safe array computed properties
+
+        // Safe array computed properties with enhanced WeWeb collection support
         const periods = computed(() => {
             const rawPeriodsData = props.content.periods;
-            const validatedPeriods = validateAndUnwrapArray(rawPeriodsData, 'periods');
 
-            if (safeLength(validatedPeriods) === 0) {
+            // Use the enhanced normalizePeriods function to handle both plain arrays
+            // and WeWeb numeric-key objects like {"0": {...}, "1": {...}}
+            const normalizedPeriods = normalizePeriods(rawPeriodsData);
+
+            if (!nonEmpty(normalizedPeriods)) {
+                console.log('📋 [Periods] No periods data available');
                 return [];
             }
 
-            const processedPeriods = validatedPeriods.map((period, index) => {
-                // Generate fallback period name from times, label, or index
-                let fallbackName = `Period ${index + 1}`;
-                if (period.start_time && period.end_time) {
-                    fallbackName = `${period.start_time} - ${period.end_time}`;
-                }
-
-                // Use the correct field names from the actual data structure
-                const periodName = period.name || period.label || period.group_label || fallbackName;
-
-                // Determine if instructional based on block_type and other indicators
-                let isInstructional = true;
-                if (period.block_type) {
-                    // Common non-instructional block types
-                    const nonInstructionalTypes = [
-                        'break',
-                        'pause',
-                        'lunch',
-                        'recess',
-                        'assembly',
-                        'flexband',
-                        'frühdienst',
-                    ];
-                    isInstructional = !nonInstructionalTypes.includes(period.block_type.toLowerCase());
-                } else if (period.attendance_requirement === 'optional') {
-                    isInstructional = false;
-                } else if (
-                    period.label &&
-                    (period.label.toLowerCase().includes('break') ||
-                        period.label.toLowerCase().includes('pause') ||
-                        period.label.toLowerCase().includes('lunch') ||
-                        period.label.toLowerCase().includes('flexband') ||
-                        period.label.toLowerCase().includes('frühdienst'))
-                ) {
-                    isInstructional = false;
-                }
-
-                return {
-                    ...period,
-                    name: periodName,
-                    is_instructional: period.is_instructional !== undefined ? period.is_instructional : isInstructional,
-                    type: period.block_type || period.type || (isInstructional ? 'lesson' : 'break'),
-                };
+            console.log('📋 [Periods] Processed periods:', {
+                count: len(normalizedPeriods),
+                sample: normalizedPeriods[0],
+                instructionalCount: normalizedPeriods.filter(p => p.is_instructional).length,
+                nonInstructionalCount: normalizedPeriods.filter(p => !p.is_instructional).length,
             });
 
-            return processedPeriods;
+            return normalizedPeriods;
         });
-        
+
         const courses = computed(() => {
             const rawCourses = props.content.courses;
-            return safeArray(validateAndUnwrapArray(rawCourses, 'courses'));
+            const coursesArray = toArray(rawCourses);
+            if (!nonEmpty(coursesArray)) {
+                // Fallback to legacy method for backward compatibility
+                return safeArray(validateAndUnwrapArray(rawCourses, 'courses'));
+            }
+            return coursesArray;
         });
-        
+
         const teachers = computed(() => {
             const rawTeachers = props.content.teachers;
-            return safeArray(validateAndUnwrapArray(rawTeachers, 'teachers'));
+            const teachersArray = toArray(rawTeachers);
+            if (!nonEmpty(teachersArray)) {
+                return safeArray(validateAndUnwrapArray(rawTeachers, 'teachers'));
+            }
+            return teachersArray;
         });
-        
+
         const classes = computed(() => {
             const rawClasses = props.content.classes;
-            return safeArray(validateAndUnwrapArray(rawClasses, 'classes'));
+            const classesArray = toArray(rawClasses);
+            if (!nonEmpty(classesArray)) {
+                return safeArray(validateAndUnwrapArray(rawClasses, 'classes'));
+            }
+            return classesArray;
         });
-        
+
         const rooms = computed(() => {
             const rawRooms = props.content.rooms;
-            return safeArray(validateAndUnwrapArray(rawRooms, 'rooms'));
+            const roomsArray = toArray(rawRooms);
+            if (!nonEmpty(roomsArray)) {
+                return safeArray(validateAndUnwrapArray(rawRooms, 'rooms'));
+            }
+            return roomsArray;
         });
-        
+
         const schoolDays = computed(() => {
             const rawDaysData = props.content.schoolDays;
-            const validatedDays = validateAndUnwrapArray(rawDaysData, 'schoolDays');
+            const schoolDaysArray = toArray(rawDaysData);
 
-            if (safeLength(validatedDays) === 0) {
+            let validatedDays;
+            if (nonEmpty(schoolDaysArray)) {
+                validatedDays = schoolDaysArray;
+            } else {
+                validatedDays = validateAndUnwrapArray(rawDaysData, 'schoolDays');
+            }
+
+            if (!nonEmpty(validatedDays)) {
                 return [];
             }
 
@@ -291,20 +289,32 @@ export default {
 
             return processedDays;
         });
-        
+
         const draftSchedules = computed(() => {
             const rawDrafts = props.content.draftSchedules;
-            return safeArray(validateAndUnwrapArray(rawDrafts, 'draftSchedules'));
+            const draftArray = toArray(rawDrafts);
+            if (!nonEmpty(draftArray)) {
+                return safeArray(validateAndUnwrapArray(rawDrafts, 'draftSchedules'));
+            }
+            return draftArray;
         });
-        
+
         const liveSchedules = computed(() => {
             const rawLive = props.content.liveSchedules;
-            return safeArray(validateAndUnwrapArray(rawLive, 'liveSchedules'));
+            const liveArray = toArray(rawLive);
+            if (!nonEmpty(liveArray)) {
+                return safeArray(validateAndUnwrapArray(rawLive, 'liveSchedules'));
+            }
+            return liveArray;
         });
-        
+
         const subjects = computed(() => {
             const rawSubjects = props.content.subjects;
-            return safeArray(validateAndUnwrapArray(rawSubjects, 'subjects'));
+            const subjectsArray = toArray(rawSubjects);
+            if (!nonEmpty(subjectsArray)) {
+                return safeArray(validateAndUnwrapArray(rawSubjects, 'subjects'));
+            }
+            return subjectsArray;
         });
 
         // Computed state
@@ -863,7 +873,7 @@ export default {
             autoResolveConflicts,
             emitTestEvent,
             logCurrentData,
-            
+
             // Utility functions
             safeLength,
             safeArray,

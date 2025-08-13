@@ -126,7 +126,9 @@
                     </div>
                 </div>
 
-                <div v-if="safeLength(filteredCourses) === 0" class="no-courses">No courses match your search criteria.</div>
+                <div v-if="safeLength(filteredCourses) === 0" class="no-courses">
+                    No courses match your search criteria.
+                </div>
             </div>
 
             <!-- Quick Assignment Form (appears after selecting course) -->
@@ -188,7 +190,7 @@
 
 <script>
 import { computed, ref, watch } from 'vue';
-import { safeLength, safeArray } from '../../utils/arrayUtils.js';
+import { safeLength, safeArray, toArray, len, nonEmpty } from '../../utils/arrayUtils.js';
 
 export default {
     name: 'AssignmentModal',
@@ -390,7 +392,9 @@ export default {
         });
 
         const isAssignmentValid = computed(() => {
-            return assignmentForm.value.class_id && assignmentForm.value.safeLength(assignmentForm.value.teacher_ids) > 0;
+            return (
+                assignmentForm.value.class_id && assignmentForm.value.safeLength(assignmentForm.value.teacher_ids) > 0
+            );
         });
 
         // Methods
@@ -652,7 +656,7 @@ export default {
             editAssignment,
             removeAssignment,
             closeModal,
-            
+
             // Utility functions
             safeLength,
             safeArray,
