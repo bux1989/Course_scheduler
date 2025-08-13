@@ -14,7 +14,7 @@
                         class="conflicts-btn"
                         :class="{ active: showConflicts }"
                     >
-                        ⚠️ Conflicts ({{ allConflicts.length }})
+                        ⚠️ Conflicts ({{ safeLength(allConflicts) }})
                     </button>
                 </div>
             </div>
@@ -73,7 +73,7 @@
         />
 
         <!-- Conflict Panel -->
-        <div v-if="showConflicts && allConflicts.length > 0" class="conflicts-sidebar">
+        <div v-if="showConflicts && safeLength(allConflicts) > 0" class="conflicts-sidebar">
             <ConflictPanel
                 :visible="showConflicts"
                 :conflicts="allConflicts"
@@ -100,8 +100,8 @@
                 <div><strong>Draft ID:</strong> {{ draftId }}</div>
                 <div><strong>Published By:</strong> {{ publishedBy || 'Not Published' }}</div>
                 <div>
-                    <strong>Data Counts:</strong> {{ periods.length }} periods, {{ courses.length }} courses,
-                    {{ teachers.length }} teachers
+                    <strong>Data Counts:</strong> {{ safeLength(periods) }} periods, {{ safeLength(courses) }} courses,
+                    {{ safeLength(teachers) }} teachers
                 </div>
                 <button @click="emitTestEvent" class="test-button">Test Event Emission</button>
             </div>
@@ -120,7 +120,7 @@ import { ref, computed, watch, onMounted } from 'vue';
 import SchedulerGrid from './components/scheduler/SchedulerGrid.vue';
 import AssignmentModal from './components/scheduler/AssignmentModal.vue';
 import ConflictPanel from './components/scheduler/ConflictPanel.vue';
-import { validateAndUnwrapArray } from './utils/arrayUtils.js';
+import { validateAndUnwrapArray, safeLength, safeArray } from './utils/arrayUtils.js';
 
 export default {
     name: 'CourseScheduler',
@@ -173,7 +173,7 @@ export default {
             conflicts: [],
         });
 
-        // Computed properties for data access
+        // Computed properties for data access using safe arrays
         const schoolId = computed(() => {
             return props.content.schoolId || 'No School ID';
         });
@@ -183,13 +183,13 @@ export default {
         const publishedBy = computed(() => {
             return props.content.publishedBy || null;
         });
+        
+        // Safe array computed properties
         const periods = computed(() => {
             const rawPeriodsData = props.content.periods;
-
-            // Use enhanced array validation to handle WeWeb reactive proxies
             const validatedPeriods = validateAndUnwrapArray(rawPeriodsData, 'periods');
 
-            if (validatedPeriods.length === 0) {
+            if (safeLength(validatedPeriods) === 0) {
                 return [];
             }
 
@@ -240,29 +240,32 @@ export default {
 
             return processedPeriods;
         });
+        
         const courses = computed(() => {
             const rawCourses = props.content.courses;
-            return validateAndUnwrapArray(rawCourses, 'courses');
+            return safeArray(validateAndUnwrapArray(rawCourses, 'courses'));
         });
+        
         const teachers = computed(() => {
             const rawTeachers = props.content.teachers;
-            return validateAndUnwrapArray(rawTeachers, 'teachers');
+            return safeArray(validateAndUnwrapArray(rawTeachers, 'teachers'));
         });
+        
         const classes = computed(() => {
             const rawClasses = props.content.classes;
-            return validateAndUnwrapArray(rawClasses, 'classes');
+            return safeArray(validateAndUnwrapArray(rawClasses, 'classes'));
         });
+        
         const rooms = computed(() => {
             const rawRooms = props.content.rooms;
-            return validateAndUnwrapArray(rawRooms, 'rooms');
+            return safeArray(validateAndUnwrapArray(rawRooms, 'rooms'));
         });
+        
         const schoolDays = computed(() => {
             const rawDaysData = props.content.schoolDays;
-
-            // Use enhanced array validation to handle WeWeb reactive proxies
             const validatedDays = validateAndUnwrapArray(rawDaysData, 'schoolDays');
 
-            if (validatedDays.length === 0) {
+            if (safeLength(validatedDays) === 0) {
                 return [];
             }
 
@@ -288,22 +291,25 @@ export default {
 
             return processedDays;
         });
+        
         const draftSchedules = computed(() => {
             const rawDrafts = props.content.draftSchedules;
-            return validateAndUnwrapArray(rawDrafts, 'draftSchedules');
+            return safeArray(validateAndUnwrapArray(rawDrafts, 'draftSchedules'));
         });
+        
         const liveSchedules = computed(() => {
             const rawLive = props.content.liveSchedules;
-            return validateAndUnwrapArray(rawLive, 'liveSchedules');
+            return safeArray(validateAndUnwrapArray(rawLive, 'liveSchedules'));
         });
+        
         const subjects = computed(() => {
             const rawSubjects = props.content.subjects;
-            return validateAndUnwrapArray(rawSubjects, 'subjects');
+            return safeArray(validateAndUnwrapArray(rawSubjects, 'subjects'));
         });
 
         // Computed state
         const isReadOnly = computed(() => !!publishedBy.value);
-        const canUndo = computed(() => undoStack.value.length > 0);
+        const canUndo = computed(() => safeLength(undoStack.value) > 0);
 
         // Conflict detection
         const allConflicts = computed(() => {
@@ -324,7 +330,7 @@ export default {
             // Filter courses based on possible_time_slots
             const filteredCourses = courses.value.filter(course => {
                 // If no restrictions, course is available
-                if (!course.possible_time_slots?.length) return true;
+                if (safeLength(course.possible_time_slots) === 0) return true;
 
                 // Check if current slot is in possible slots
                 return course.possible_time_slots.some(slot => {
@@ -364,7 +370,7 @@ export default {
 
             // Check each slot for conflicts
             slotMap.forEach((assignments, slotKey) => {
-                if (assignments.length < 2) return;
+                if (safeLength(assignments) < 2) return;
 
                 const [dayId, periodId] = slotKey.split('-').map(Number);
 
@@ -380,7 +386,7 @@ export default {
                 });
 
                 teacherMap.forEach((teacherAssignments, teacherId) => {
-                    if (teacherAssignments.length > 1) {
+                    if (safeLength(teacherAssignments) > 1) {
                         conflicts.push({
                             id: `${conflictId}-teacher-${teacherId}-${slotKey}`,
                             type: 'teacher',
@@ -389,7 +395,7 @@ export default {
                             period_id: periodId,
                             affected_teachers: [teacherId],
                             affected_courses: teacherAssignments.map(a => a.course_id),
-                            message: `Teacher is assigned to ${teacherAssignments.length} courses at the same time`,
+                            message: `Teacher is assigned to ${safeLength(teacherAssignments)} courses at the same time`,
                             auto_resolvable: false,
                         });
                     }
@@ -407,7 +413,7 @@ export default {
                 });
 
                 roomMap.forEach((roomAssignments, roomId) => {
-                    if (roomAssignments.length > 1) {
+                    if (safeLength(roomAssignments) > 1) {
                         conflicts.push({
                             id: `${conflictId}-room-${roomId}-${slotKey}`,
                             type: 'room',
@@ -416,7 +422,7 @@ export default {
                             period_id: periodId,
                             affected_rooms: [roomId],
                             affected_courses: roomAssignments.map(a => a.course_id),
-                            message: `Room is booked for ${roomAssignments.length} courses at the same time`,
+                            message: `Room is booked for ${safeLength(roomAssignments)} courses at the same time`,
                             auto_resolvable: true,
                         });
                     }
@@ -434,7 +440,7 @@ export default {
                 });
 
                 classMap.forEach((classAssignments, classId) => {
-                    if (classAssignments.length > 1) {
+                    if (safeLength(classAssignments) > 1) {
                         conflicts.push({
                             id: `${conflictId}-class-${classId}-${slotKey}`,
                             type: 'class',
@@ -443,7 +449,7 @@ export default {
                             period_id: periodId,
                             affected_classes: [classId],
                             affected_courses: classAssignments.map(a => a.course_id),
-                            message: `Class has ${classAssignments.length} overlapping assignments`,
+                            message: `Class has ${safeLength(classAssignments)} overlapping assignments`,
                             auto_resolvable: false,
                         });
                     }
@@ -457,7 +463,7 @@ export default {
             const currentState = JSON.stringify(draftSchedules.value);
             undoStack.value.push(currentState);
 
-            if (undoStack.value.length > maxUndoSteps) {
+            if (safeLength(undoStack.value) > maxUndoSteps) {
                 undoStack.value.shift();
             }
         }
@@ -537,7 +543,7 @@ export default {
         }
 
         function undo() {
-            if (undoStack.value.length === 0) return;
+            if (safeLength(undoStack.value) === 0) return;
 
             const previousState = undoStack.value.pop();
             const previousSchedules = JSON.parse(previousState);
@@ -709,13 +715,13 @@ export default {
                         message: 'Comprehensive Course Scheduler is working!',
                         timestamp: new Date().toISOString(),
                         data: {
-                            periods: periods.value.length,
-                            courses: courses.value.length,
-                            teachers: teachers.value.length,
-                            classes: classes.value.length,
-                            rooms: rooms.value.length,
-                            draftSchedules: draftSchedules.value.length,
-                            conflicts: allConflicts.value.length,
+                            periods: safeLength(periods.value),
+                            courses: safeLength(courses.value),
+                            teachers: safeLength(teachers.value),
+                            classes: safeLength(classes.value),
+                            rooms: safeLength(rooms.value),
+                            draftSchedules: safeLength(draftSchedules.value),
+                            conflicts: safeLength(allConflicts.value),
                             isReadOnly: isReadOnly.value,
                         },
                     },
@@ -738,7 +744,7 @@ export default {
             console.log('📅 PERIODS ANALYSIS:');
             console.log('  Raw periods:', props.content.periods);
             console.log('  Processed periods:', periods.value);
-            if (periods.value.length > 0) {
+            if (safeLength(periods.value) > 0) {
                 const samplePeriod = periods.value[0];
                 console.log('  Sample period object keys:', Object.keys(samplePeriod));
                 console.log('  Sample period values:', samplePeriod);
@@ -748,21 +754,21 @@ export default {
             console.log('🗓️ SCHOOL DAYS ANALYSIS:');
             console.log('  Raw schoolDays:', props.content.schoolDays);
             console.log('  Processed schoolDays:', schoolDays.value);
-            if (schoolDays.value.length > 0) {
+            if (safeLength(schoolDays.value) > 0) {
                 const sampleDay = schoolDays.value[0];
                 console.log('  Sample day object keys:', Object.keys(sampleDay));
                 console.log('  Sample day values:', sampleDay);
             }
 
-            console.log('Courses:', courses.value.length, courses.value.slice(0, 2));
-            console.log('Teachers:', teachers.value.length, teachers.value.slice(0, 2));
-            console.log('Classes:', classes.value.length, classes.value.slice(0, 2));
-            console.log('Rooms:', rooms.value.length, rooms.value.slice(0, 2));
-            console.log('Draft Schedules:', draftSchedules.value.length, draftSchedules.value.slice(0, 2));
-            console.log('Live Schedules:', liveSchedules.value.length, liveSchedules.value.slice(0, 2));
+            console.log('Courses:', safeLength(courses.value), courses.value.slice(0, 2));
+            console.log('Teachers:', safeLength(teachers.value), teachers.value.slice(0, 2));
+            console.log('Classes:', safeLength(classes.value), classes.value.slice(0, 2));
+            console.log('Rooms:', safeLength(rooms.value), rooms.value.slice(0, 2));
+            console.log('Draft Schedules:', safeLength(draftSchedules.value), draftSchedules.value.slice(0, 2));
+            console.log('Live Schedules:', safeLength(liveSchedules.value), liveSchedules.value.slice(0, 2));
             console.log('Is Read Only:', isReadOnly.value);
             console.log('Can Undo:', canUndo.value);
-            console.log('All Conflicts:', allConflicts.value.length, allConflicts.value);
+            console.log('All Conflicts:', safeLength(allConflicts.value), allConflicts.value);
             console.log('🐛 [wwElement] === END COMPLETE DATA DUMP ===');
         }
 
@@ -857,6 +863,10 @@ export default {
             autoResolveConflicts,
             emitTestEvent,
             logCurrentData,
+            
+            // Utility functions
+            safeLength,
+            safeArray,
         };
     },
 };

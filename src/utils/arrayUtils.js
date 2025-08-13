@@ -77,3 +77,36 @@ export function validateAndUnwrapArray(data, propName = 'unknown') {
 
     return result;
 }
+
+/**
+ * Safe length helper - returns 0 for non-arrays or undefined values
+ * @param {*} value - The value to get length from
+ * @returns {number} - Length or 0
+ */
+export function safeLength(value) {
+    if (Array.isArray(value)) {
+        return value.length;
+    }
+    if (value && typeof value === 'object' && typeof value.length === 'number') {
+        return value.length;
+    }
+    return 0;
+}
+
+/**
+ * Safe array helper - ensures value is always an array
+ * @param {*} value - The value to convert to safe array
+ * @returns {Array} - The safe array or empty array
+ */
+export function safeArray(value) {
+    if (Array.isArray(value)) {
+        return value;
+    }
+    if (Array.isArray(value?.value)) {
+        return value.value;
+    }
+    if (value && typeof value === 'object' && typeof value.length === 'number' && typeof value.forEach === 'function') {
+        return Array.from(value);
+    }
+    return [];
+}

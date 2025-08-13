@@ -15,8 +15,8 @@
             </div>
 
             <!-- Existing Assignments -->
-            <div v-if="existingAssignments.length > 0" class="existing-assignments">
-                <h3>Current Assignments ({{ existingAssignments.length }})</h3>
+            <div v-if="safeLength(existingAssignments) > 0" class="existing-assignments">
+                <h3>Current Assignments ({{ safeLength(existingAssignments) }})</h3>
                 <div class="assignment-list">
                     <div
                         v-for="(assignment, index) in existingAssignments"
@@ -44,7 +44,7 @@
                             <div v-if="assignment.class_id" class="detail-item">
                                 <strong>Class:</strong> {{ getClassName(assignment.class_id) }}
                             </div>
-                            <div v-if="assignment.teacher_ids?.length" class="detail-item">
+                            <div v-if="safeLength(assignment.teacher_ids) > 0" class="detail-item">
                                 <strong>Teachers:</strong> {{ getTeacherNames(assignment.teacher_ids) }}
                             </div>
                             <div v-if="assignment.room_id" class="detail-item">
@@ -118,7 +118,7 @@
                         </div>
 
                         <div class="course-details">
-                            <div v-if="course.year_groups?.length" class="detail-small">
+                            <div v-if="safeLength(course.year_groups) > 0" class="detail-small">
                                 Years: {{ course.year_groups.join(', ') }}
                             </div>
                             <div v-if="course.duration" class="detail-small">Duration: {{ course.duration }}min</div>
@@ -126,7 +126,7 @@
                     </div>
                 </div>
 
-                <div v-if="filteredCourses.length === 0" class="no-courses">No courses match your search criteria.</div>
+                <div v-if="safeLength(filteredCourses) === 0" class="no-courses">No courses match your search criteria.</div>
             </div>
 
             <!-- Quick Assignment Form (appears after selecting course) -->
@@ -188,6 +188,7 @@
 
 <script>
 import { computed, ref, watch } from 'vue';
+import { safeLength, safeArray } from '../../utils/arrayUtils.js';
 
 export default {
     name: 'AssignmentModal',
@@ -299,7 +300,7 @@ export default {
             let courses = props.courses;
 
             console.log('📚 [AssignmentModal] filteredCourses computation:', {
-                totalCourses: props.courses.length,
+                totalCourses: safeLength(props.courses),
                 courseFilter: courseFilter.value,
                 yearGroupFilter: yearGroupFilter.value,
                 sampleCourse: props.courses[0],
@@ -336,8 +337,8 @@ export default {
 
                 console.log('📚 [AssignmentModal] Search filtering:', {
                     searchTerm: courseFilter.value,
-                    beforeFiltering: props.courses.length,
-                    afterFiltering: courses.length,
+                    beforeFiltering: safeLength(props.courses),
+                    afterFiltering: safeLength(courses),
                     matchedCourses: courses.map(c => ({
                         id: c.id,
                         name: c.name || c.course_name || c.title,
@@ -352,7 +353,7 @@ export default {
             }
 
             console.log('📚 [AssignmentModal] Filtered courses result:', {
-                filteredCount: courses.length,
+                filteredCount: safeLength(courses),
                 courses: courses.map(c => ({ id: c.id, name: c.name })),
             });
 
@@ -389,7 +390,7 @@ export default {
         });
 
         const isAssignmentValid = computed(() => {
-            return assignmentForm.value.class_id && assignmentForm.value.teacher_ids.length > 0;
+            return assignmentForm.value.class_id && assignmentForm.value.safeLength(assignmentForm.value.teacher_ids) > 0;
         });
 
         // Methods
@@ -495,7 +496,7 @@ export default {
                 currentPeriodId: props.periodId,
                 currentDay: currentDay,
                 currentDayNumber: currentDayNumber,
-                schoolDaysCount: props.schoolDays.length,
+                schoolDaysCount: safeLength(props.schoolDays),
             });
 
             const isAvailable = course.possible_time_slots.some(slot => {
@@ -651,6 +652,10 @@ export default {
             editAssignment,
             removeAssignment,
             closeModal,
+            
+            // Utility functions
+            safeLength,
+            safeArray,
         };
     },
 };

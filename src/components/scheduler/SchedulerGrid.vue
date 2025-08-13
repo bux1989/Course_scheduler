@@ -89,27 +89,12 @@
         </div>
 
         <!-- Main Grid -->
-        <div v-if="visibleDays.length > 0 && visiblePeriods.length > 0" class="main-grid-container">
+        <div v-if="safeLength(visibleDays) > 0 && safeLength(visiblePeriods) > 0" class="main-grid-container">
             <!-- Debug info for main grid with visibility status -->
-            <div
-                class="debug-grid-info"
-                :style="{
-                    color:
-                        (lastValidDays.length > 0 && visibleDays === lastValidDays) ||
-                        (lastValidPeriods.length > 0 && visiblePeriods === lastValidPeriods)
-                            ? '#e74c3c'
-                            : '#27ae60',
-                }"
-            >
+            <div class="debug-grid-info">
                 <small>
-                    {{
-                        (lastValidDays.length > 0 && visibleDays === lastValidDays) ||
-                        (lastValidPeriods.length > 0 && visiblePeriods === lastValidPeriods)
-                            ? '🚨 EMERGENCY MODE'
-                            : '✅ NORMAL MODE'
-                    }}
-                    - Days: {{ visibleDays.length }}, Periods: {{ visiblePeriods.length }} | Drafts:
-                    {{ draftSchedules.length }}, Live: {{ liveSchedules.length }} | Mode:
+                    ✅ NORMAL MODE - Days: {{ safeLength(visibleDays) }}, Periods: {{ safeLength(visiblePeriods) }} | Drafts:
+                    {{ safeLength(draftSchedules) }}, Live: {{ safeLength(liveSchedules) }} | Mode:
                     {{ isLiveMode ? 'Live' : 'Planning' }}
                 </small>
             </div>
@@ -119,7 +104,7 @@
                 <div class="period-header-cell" role="columnheader">
                     <span class="period-label">Period</span>
                     <div class="debug-info">
-                        <small>Days: {{ visibleDays.length }}, Periods: {{ visiblePeriods.length }}</small>
+                        <small>Days: {{ safeLength(visibleDays) }}, Periods: {{ safeLength(visiblePeriods) }}</small>
                     </div>
                 </div>
                 <div
@@ -192,7 +177,7 @@
                         :data-period-id="period.id"
                     >
                         <!-- Multiple Assignments Display -->
-                        <div v-if="getCellAssignments(day.id, period.id).length > 0" class="assignments-container">
+                        <div v-if="safeLength(getCellAssignments(day.id, period.id)) > 0" class="assignments-container">
                             <div
                                 v-for="(assignment, index) in getCellAssignments(day.id, period.id)"
                                 :key="index"
@@ -213,7 +198,7 @@
                                     <span class="class-name" v-if="assignment.class_id">{{
                                         getClassName(assignment.class_id)
                                     }}</span>
-                                    <span class="teacher-names" v-if="assignment.teacher_ids?.length">
+                                    <span class="teacher-names" v-if="safeLength(assignment.teacher_ids) > 0">
                                         {{ getTeacherNames(assignment.teacher_ids) }}
                                     </span>
                                     <span class="room-name" v-if="assignment.room_id">{{
@@ -281,16 +266,16 @@
             <div class="grid-hidden-message">
                 ❌ Grid Hidden - Debug Info:
                 <ul>
-                    <li>Visible Days: {{ visibleDays.length }} ({{ visibleDays.map(d => d.name).join(', ') }})</li>
+                    <li>Visible Days: {{ safeLength(visibleDays) }} ({{ visibleDays.map(d => d.name).join(', ') }})</li>
                     <li>
-                        Visible Periods: {{ visiblePeriods.length }} ({{
+                        Visible Periods: {{ safeLength(visiblePeriods) }} ({{
                             visiblePeriods.map(p => p.name || p.label).join(', ')
                         }})
                     </li>
                     <li>Show Non-Instructional: {{ showNonInstructional }}</li>
                     <li>Focused Period: {{ focusedPeriodId }}</li>
-                    <li>Total Periods Available: {{ periods.length }}</li>
-                    <li>Total School Days Available: {{ schoolDays.length }}</li>
+                    <li>Total Periods Available: {{ safeLength(periods) }}</li>
+                    <li>Total School Days Available: {{ safeLength(schoolDays) }}</li>
                 </ul>
                 <button
                     @click="
@@ -335,7 +320,7 @@
                                 <small v-if="course.subject_name">{{ course.subject_name }}</small>
                             </div>
                         </div>
-                        <div v-if="getAvailableCoursesForSlot(day.id, focusedPeriodId).length === 0" class="no-courses">
+                        <div v-if="safeLength(getAvailableCoursesForSlot(day.id, focusedPeriodId)) === 0" class="no-courses">
                             No courses available for this day/period
                         </div>
                     </div>
@@ -343,7 +328,7 @@
             </div>
 
             <!-- No Preferred Days Courses Panel -->
-            <div v-if="getNoPreferredDaysCourses().length > 0" class="no-preferred-days-panel">
+            <div v-if="safeLength(getNoPreferredDaysCourses()) > 0" class="no-preferred-days-panel">
                 <h4>📅 Courses with No Preferred Days</h4>
                 <p class="panel-description">
                     These courses have no time slot restrictions and can be scheduled on any day:
@@ -396,7 +381,7 @@
 <script>
 import { computed, ref, watch, nextTick } from 'vue';
 import InlineAssignmentEditor from './InlineAssignmentEditor.vue';
-import { validateAndUnwrapArray } from '../../utils/arrayUtils.js';
+import { validateAndUnwrapArray, safeLength, safeArray } from '../../utils/arrayUtils.js';
 
 export default {
     name: 'SchedulerGrid',
@@ -458,10 +443,9 @@ export default {
 
         // Simplified computed properties without reactive caching to prevent disappearing
         const visibleDays = computed(() => {
-            // Use enhanced array validation to handle WeWeb reactive proxies
             const validatedDays = validateAndUnwrapArray(props.schoolDays, 'schoolDays');
 
-            if (validatedDays.length === 0) {
+            if (safeLength(validatedDays) === 0) {
                 return [];
             }
 
@@ -470,10 +454,9 @@ export default {
         });
 
         const visiblePeriods = computed(() => {
-            // Use enhanced array validation to handle WeWeb reactive proxies
             const validatedPeriods = validateAndUnwrapArray(props.periods, 'periods');
 
-            if (validatedPeriods.length === 0) {
+            if (safeLength(validatedPeriods) === 0) {
                 return [];
             }
 
@@ -541,8 +524,8 @@ export default {
             }
 
             // Simple fallback - if no periods match filters, show all periods
-            if (filteredPeriods.length === 0 && props.periods.length > 0) {
-                filteredPeriods = props.periods;
+            if (safeLength(filteredPeriods) === 0 && safeLength(props.periods) > 0) {
+                filteredPeriods = safeArray(props.periods);
             }
 
             return filteredPeriods;
@@ -614,9 +597,9 @@ export default {
                     yearClasses.some(cls => cls.id === assignment.class_id)
                 );
 
-                const totalSlots = visiblePeriods.value.length * visibleDays.value.length * yearClasses.length;
+                const totalSlots = safeLength(visiblePeriods.value) * safeLength(visibleDays.value) * safeLength(yearClasses);
                 const scheduledCourses = yearAssignments.length;
-                const averagePerDay = scheduledCourses / visibleDays.value.length;
+                const averagePerDay = scheduledCourses / safeLength(visibleDays.value);
                 const utilization = totalSlots > 0 ? (scheduledCourses / totalSlots) * 100 : 0;
 
                 return {
@@ -683,9 +666,9 @@ export default {
             const assignments = getCellAssignments(dayId, periodId);
             const classes = [];
 
-            if (assignments.length > 0) {
+            if (safeLength(assignments) > 0) {
                 classes.push('has-assignments');
-                if (assignments.length > 1) classes.push('multiple-assignments');
+                if (safeLength(assignments) > 1) classes.push('multiple-assignments');
             }
 
             // Check for conflicts
@@ -699,11 +682,11 @@ export default {
 
         function getCellAriaLabel(day, period) {
             const assignments = getCellAssignments(day.id, period.id);
-            if (assignments.length === 0) {
+            if (safeLength(assignments) === 0) {
                 return `${day.name} ${period.name}: Empty, click to add assignment`;
             }
             const courseNames = assignments.map(a => getDisplayName(a)).join(', ');
-            return `${day.name} ${period.name}: ${courseNames}, ${assignments.length} assignment${assignments.length > 1 ? 's' : ''}`;
+            return `${day.name} ${period.name}: ${courseNames}, ${safeLength(assignments)} assignment${safeLength(assignments) > 1 ? 's' : ''}`;
         }
 
         function getAssignmentClasses(assignment) {
@@ -875,7 +858,7 @@ export default {
                 periodId,
                 currentDay,
                 currentDayNumber,
-                coursesTotal: props.courses.length,
+                coursesTotal: safeLength(props.courses),
             });
 
             // Filter courses that are available for this specific day/period
@@ -922,7 +905,7 @@ export default {
                 if (selectedClass) {
                     availableCourses = availableCourses.filter(course => {
                         // Check if course is available for the selected class's year group
-                        if (course.is_for_year_groups && course.is_for_year_groups.length > 0) {
+                        if (course.is_for_year_groups && course.safeLength(course.is_for_year_groups) > 0) {
                             return course.is_for_year_groups.includes(selectedClass.year_group);
                         }
                         return true; // If no restrictions, course is available
@@ -933,7 +916,7 @@ export default {
             console.log('🎯 [SchedulerGrid] Available courses for slot (after filtering):', {
                 dayId,
                 periodId,
-                availableCount: availableCourses.length,
+                availableCount: safeLength(availableCourses),
                 searchTerm: debouncedSearchTerm.value,
                 classFilter: selectedClassFilter.value,
                 courses: availableCourses.map(c => ({ id: c.id, name: c.name || c.course_name })),
@@ -972,7 +955,7 @@ export default {
             // Get courses that have no possible_time_slots restrictions for the focused period
             const coursesWithoutRestrictions = props.courses.filter(course => {
                 // Course has no time slot restrictions
-                return !course.possible_time_slots || course.possible_time_slots.length === 0;
+                return !course.possible_time_slots || course.safeLength(course.possible_time_slots) === 0;
             });
 
             // Filter by current search term and class filter for consistency
@@ -1005,8 +988,8 @@ export default {
             }
 
             console.log('📅 [NoPreferredDays] Filtered courses:', {
-                total: coursesWithoutRestrictions.length,
-                afterSearch: filteredCourses.length,
+                total: safeLength(coursesWithoutRestrictions),
+                afterSearch: safeLength(filteredCourses),
                 searchTerm: debouncedSearchTerm.value,
                 classFilter: selectedClassFilter.value,
             });
@@ -1331,6 +1314,10 @@ export default {
             saveInlineEdit,
             cancelInlineEdit,
             deleteInlineAssignment,
+            
+            // Utility functions
+            safeLength,
+            safeArray,
         };
     },
 };
