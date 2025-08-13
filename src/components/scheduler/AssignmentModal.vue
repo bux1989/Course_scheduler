@@ -297,8 +297,22 @@ export default {
                 courses = courses.filter(
                     course =>
                         course.name?.toLowerCase().includes(searchLower) ||
-                        course.description?.toLowerCase().includes(searchLower)
+                        course.course_name?.toLowerCase().includes(searchLower) ||
+                        course.title?.toLowerCase().includes(searchLower) ||
+                        course.description?.toLowerCase().includes(searchLower) ||
+                        course.course_code?.toLowerCase().includes(searchLower)
                 );
+                
+                console.log('📚 [AssignmentModal] Search filtering:', {
+                    searchTerm: courseFilter.value,
+                    beforeFiltering: props.courses.length,
+                    afterFiltering: courses.length,
+                    matchedCourses: courses.map(c => ({
+                        id: c.id,
+                        name: c.name || c.course_name || c.title,
+                        code: c.course_code
+                    }))
+                });
             }
 
             // Filter by year group

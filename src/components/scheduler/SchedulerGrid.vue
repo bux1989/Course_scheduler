@@ -11,6 +11,28 @@
                     />
                     Show Non-Instructional Blocks
                 </label>
+                
+                <label class="filter-label">
+                    <input
+                        type="checkbox"
+                        v-model="showLessonSchedules"
+                        @change="handleLessonScheduleToggle"
+                    />
+                    Show Lesson Schedules (No Course)
+                </label>
+            </div>
+
+            <div class="toolbar-section">
+                <label class="mode-switcher">
+                    <span>Planning Mode</span>
+                    <input
+                        type="checkbox"
+                        v-model="isLiveMode"
+                        @change="handleModeSwitch"
+                        class="mode-toggle"
+                    />
+                    <span>Live Mode</span>
+                </label>
             </div>
 
             <div class="toolbar-section">
@@ -18,6 +40,18 @@
                     <option value="">All Years</option>
                     <option v-for="year in yearGroups" :key="year" :value="year">{{ year }}</option>
                 </select>
+            </div>
+
+            <div class="toolbar-section">
+                <button 
+                    @click="clearPeriodFocus" 
+                    v-if="focusedPeriodId"
+                    class="focus-button active"
+                    title="Show all periods"
+                >
+                    Show All Periods (Currently: {{ getFocusedPeriodName() }})
+                </button>
+                <span v-else class="focus-hint">Click a period name to focus on that period only</span>
             </div>
 
             <div class="toolbar-actions">
@@ -90,7 +124,13 @@
                     :aria-rowindex="periodIndex + 1"
                 >
                     <!-- Period Label -->
-                    <div class="period-label-cell" role="rowheader">
+                    <div 
+                        class="period-label-cell" 
+                        role="rowheader"
+                        :class="{ 'focused': focusedPeriodId === period.id }"
+                        @click="togglePeriodFocus(period.id)"
+                        title="Click to focus on this period"
+                    >
                         <div class="period-info">
                             <span class="period-name">{{ period.name }}</span>
                             <span class="period-time"
@@ -230,16 +270,22 @@ export default {
         'cell-click',
         'assignment-details',
         'toggle-non-instructional',
+        'toggle-lesson-schedules',
         'filter-year',
         'undo-last',
         'save-draft',
         'update-assignments',
+        'mode-changed',
+        'period-focus-changed',
     ],
 
     setup(props, { emit }) {
         // Local state
         const showNonInstructional = ref(true);
+        const showLessonSchedules = ref(true);
+        const isLiveMode = ref(false);
         const selectedYearFilter = ref('');
+        const focusedPeriodId = ref(null);
         
         // Debug logging for props and state
         console.log('🚀 [SchedulerGrid] Component setup initialized with props:', {
@@ -295,14 +341,19 @@ export default {
         const visiblePeriods = computed(() => {
             console.log('📅 [SchedulerGrid] visiblePeriods computation START:', {
                 showNonInstructional: showNonInstructional.value,
+                focusedPeriodId: focusedPeriodId.value,
                 totalPeriodsCount: props.periods.length
             });
             
-            let filteredPeriods;
-            if (showNonInstructional.value) {
-                console.log('📅 [SchedulerGrid] Showing ALL periods (including non-instructional)');
-                filteredPeriods = props.periods;
-            } else {
+            let filteredPeriods = props.periods;
+            
+            // First filter by focused period if set
+            if (focusedPeriodId.value) {
+                console.log('📅 [SchedulerGrid] Filtering to focused period:', focusedPeriodId.value);
+                filteredPeriods = props.periods.filter(period => period.id === focusedPeriodId.value);
+            }
+            // Then filter by instructional status
+            else if (!showNonInstructional.value) {
                 console.log('📅 [SchedulerGrid] Filtering to ONLY instructional periods');
                 filteredPeriods = props.periods.filter(period => {
                     // More sophisticated instructional detection based on block_type and other fields
@@ -340,6 +391,8 @@ export default {
                     });
                     return isInstructional;
                 });
+            } else {
+                console.log('📅 [SchedulerGrid] Showing ALL periods (including non-instructional)');
             }
             
             console.log('📅 [SchedulerGrid] visiblePeriods computed RESULT:', {
@@ -398,13 +451,24 @@ export default {
         }
 
         function getCellAssignments(dayId, periodId) {
-            const assignments = props.draftSchedules.filter(
+            // Get the appropriate schedule data based on mode
+            const scheduleData = isLiveMode.value ? props.liveSchedules : props.draftSchedules;
+            
+            let assignments = scheduleData.filter(
                 assignment => {
                     const dayMatch = assignment.day_id === dayId;
                     const periodMatch = assignment.period_id === periodId;
                     return dayMatch && periodMatch;
                 }
             );
+            
+            // Filter out lesson schedules if disabled
+            if (!showLessonSchedules.value) {
+                assignments = assignments.filter(assignment => {
+                    // Keep assignments that have a course_id (not lesson schedules)
+                    return assignment.course_id;
+                });
+            }
             
             // Sort assignments by class name, then by course/subject name
             const sortedAssignments = assignments.sort((a, b) => {
@@ -425,7 +489,9 @@ export default {
                 console.log(`🎯 [SchedulerGrid] getCellAssignments(${dayId}, ${periodId}):`, {
                     assignmentsFound: sortedAssignments.length,
                     assignments: sortedAssignments,
-                    sampleAssignment: sortedAssignments[0]
+                    sampleAssignment: sortedAssignments[0],
+                    isLiveMode: isLiveMode.value,
+                    showLessonSchedules: showLessonSchedules.value
                 });
             }
             
@@ -591,10 +657,45 @@ export default {
             emit('assignment-details', assignment);
         }
 
+        // New event handlers
+        function handleLessonScheduleToggle() {
+            console.log('📊 [SchedulerGrid] Lesson schedules toggled:', showLessonSchedules.value);
+            emit('toggle-lesson-schedules', showLessonSchedules.value);
+        }
+
+        function handleModeSwitch() {
+            console.log('🔄 [SchedulerGrid] Mode switched:', isLiveMode.value ? 'Live' : 'Planning');
+            emit('mode-changed', isLiveMode.value ? 'live' : 'planning');
+        }
+
+        function togglePeriodFocus(periodId) {
+            if (focusedPeriodId.value === periodId) {
+                focusedPeriodId.value = null;
+            } else {
+                focusedPeriodId.value = periodId;
+            }
+            console.log('🎯 [SchedulerGrid] Period focus changed:', focusedPeriodId.value);
+            emit('period-focus-changed', focusedPeriodId.value);
+        }
+
+        function clearPeriodFocus() {
+            focusedPeriodId.value = null;
+            console.log('🎯 [SchedulerGrid] Period focus cleared');
+            emit('period-focus-changed', null);
+        }
+
+        function getFocusedPeriodName() {
+            const period = props.periods.find(p => p.id === focusedPeriodId.value);
+            return period?.name || 'Unknown Period';
+        }
+
         return {
             // State
             showNonInstructional,
+            showLessonSchedules,
+            isLiveMode,
             selectedYearFilter,
+            focusedPeriodId,
 
             // Computed
             visibleDays,
@@ -621,6 +722,11 @@ export default {
             handleCellClick,
             openAssignmentModal,
             openAssignmentDetails,
+            handleLessonScheduleToggle,
+            handleModeSwitch,
+            togglePeriodFocus,
+            clearPeriodFocus,
+            getFocusedPeriodName,
         };
     },
 };
@@ -1039,5 +1145,95 @@ export default {
 
 .scheduler-grid[data-readonly='true'] .schedule-cell:hover {
     background: inherit;
+}
+
+/* New styles for enhanced functionality */
+.filter-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.9em;
+    margin-right: 16px;
+}
+
+.mode-switcher {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.9em;
+}
+
+.mode-toggle {
+    width: 40px;
+    height: 20px;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    background: #ccc;
+    border-radius: 10px;
+    position: relative;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+
+.mode-toggle:checked {
+    background: #007cba;
+}
+
+.mode-toggle::before {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 16px;
+    height: 16px;
+    background: white;
+    border-radius: 50%;
+    transition: left 0.3s;
+}
+
+.mode-toggle:checked::before {
+    left: 22px;
+}
+
+.focus-button {
+    padding: 6px 12px;
+    border: 1px solid #007cba;
+    border-radius: 4px;
+    background: white;
+    color: #007cba;
+    cursor: pointer;
+    font-size: 0.9em;
+    transition: all 0.2s;
+}
+
+.focus-button:hover {
+    background: #007cba;
+    color: white;
+}
+
+.focus-button.active {
+    background: #007cba;
+    color: white;
+}
+
+.focus-hint {
+    font-size: 0.85em;
+    color: #666;
+    font-style: italic;
+}
+
+.period-label-cell.focused {
+    background: #e6f7ff !important;
+    border-left: 4px solid #007cba;
+}
+
+.period-label-cell {
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.period-label-cell:hover {
+    background: #f0f7ff !important;
 }
 </style>

@@ -40,6 +40,9 @@
                 @cell-click="handleCellClick"
                 @assignment-details="handleAssignmentDetails"
                 @toggle-non-instructional="handleToggleNonInstructional"
+                @toggle-lesson-schedules="handleToggleLessonSchedules"
+                @mode-changed="handleModeChanged"
+                @period-focus-changed="handlePeriodFocusChanged"
                 @filter-year="handleFilterYear"
                 @undo-last="undo"
                 @save-draft="saveDraft"
@@ -680,6 +683,27 @@ export default {
             });
         }
 
+        function handleToggleLessonSchedules(show) {
+            emit('trigger-event', {
+                name: 'toggleLessonSchedules',
+                event: { showLessonSchedules: show },
+            });
+        }
+
+        function handleModeChanged(mode) {
+            emit('trigger-event', {
+                name: 'modeChanged',
+                event: { mode: mode },
+            });
+        }
+
+        function handlePeriodFocusChanged(periodId) {
+            emit('trigger-event', {
+                name: 'periodFocusChanged',
+                event: { focusedPeriodId: periodId },
+            });
+        }
+
         function handleFilterYear(year) {
             emit('trigger-event', {
                 name: 'filterYear',
@@ -888,6 +912,9 @@ export default {
             saveDraft,
             handleAssignmentDetails,
             handleToggleNonInstructional,
+            handleToggleLessonSchedules,
+            handleModeChanged,
+            handlePeriodFocusChanged,
             handleFilterYear,
             navigateToConflict,
             applySuggestion,
