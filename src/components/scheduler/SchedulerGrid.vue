@@ -442,6 +442,15 @@ export default {
         const editingAssignment = ref(null);
         const editingCell = ref(null);
 
+        // Watch for unexpected focusedPeriodId changes
+        watch(focusedPeriodId, (newValue, oldValue) => {
+            console.log('🔍 [SchedulerGrid] focusedPeriodId changed:', {
+                from: oldValue,
+                to: newValue,
+                stack: new Error().stack?.split('\n')[2]?.trim()
+            });
+        });
+
         // Component initialized
 
         // Simplified computed properties without reactive caching to prevent disappearing
@@ -470,11 +479,39 @@ export default {
                 return [];
             }
 
+            console.log('🔍 [SchedulerGrid] DEBUG: Period processing details:', {
+                totalPeriods: safeLength(validatedPeriods),
+                focusedPeriodId: focusedPeriodId.value,
+                showNonInstructional: showNonInstructional.value,
+                samplePeriodIds: validatedPeriods.slice(0, 3).map(p => ({ id: p.id, block_number: p.block_number, label: p.label })),
+                allPeriodIds: validatedPeriods.map(p => p.id)
+            });
+
             let filteredPeriods = validatedPeriods;
 
             // First filter by focused period if set
             if (focusedPeriodId.value) {
-                filteredPeriods = validatedPeriods.filter(period => period.id === focusedPeriodId.value);
+                console.log('🔍 [SchedulerGrid] Filtering by focused period ID:', focusedPeriodId.value);
+                const focusedPeriods = validatedPeriods.filter(period => period.id === focusedPeriodId.value);
+                
+                console.log('🔍 [SchedulerGrid] After focused period filter:', {
+                    originalCount: safeLength(validatedPeriods),
+                    filteredCount: safeLength(focusedPeriods),
+                    foundMatch: focusedPeriods.length > 0,
+                    matchedPeriods: focusedPeriods.map(p => ({ id: p.id, label: p.label }))
+                });
+
+                // Safety check: if focused period ID doesn't match any periods, clear the focus and show all
+                if (safeLength(focusedPeriods) === 0) {
+                    console.warn('🚨 [SchedulerGrid] Focused period ID does not match any periods. Clearing focus.', {
+                        focusedId: focusedPeriodId.value,
+                        availableIds: validatedPeriods.map(p => p.id)
+                    });
+                    focusedPeriodId.value = null;
+                    // Don't filter, show all periods
+                } else {
+                    filteredPeriods = focusedPeriods;
+                }
             }
             // Then filter by instructional status
             else if (!showNonInstructional.value) {
