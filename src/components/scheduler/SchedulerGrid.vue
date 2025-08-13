@@ -525,26 +525,27 @@ export default {
         // Computed properties with robust fallback mechanisms
         const visibleDays = computed(() => {
             // Emergency fallback: if props are temporarily undefined during reactive updates
-            if (!props.schoolDays) {
-                console.warn('⚠️ [SchedulerGrid] schoolDays prop is undefined, using last valid state');
-                return lastValidDays.value;
+            if (!props.schoolDays || !Array.isArray(props.schoolDays)) {
+                if (lastValidDays.value.length > 0) {
+                    return lastValidDays.value;
+                }
+                return [];
             }
 
             // No school days available
             if (props.schoolDays.length === 0) {
                 // If we previously had valid days, keep showing them briefly to prevent flicker
                 if (lastValidDays.value.length > 0) {
-                    console.warn('⚠️ [SchedulerGrid] Using last valid days to prevent component disappearing');
                     return lastValidDays.value;
                 }
                 return [];
             }
 
-            const days = props.schoolDays.slice(0, props.maxDays);
+            const maxDaysLimit = props.maxDays || 7; // Default fallback
+            const days = props.schoolDays.slice(0, maxDaysLimit);
 
             // CRITICAL: Ensure we never return an empty array unless there truly are no school days
             if (days.length === 0 && props.schoolDays.length > 0) {
-                console.warn('⚠️ [SchedulerGrid] visibleDays resulted in 0 days! Using fallback');
                 const fallbackDays = props.schoolDays.slice(0, 1);
                 lastValidDays.value = fallbackDays; // Cache for future use
                 return fallbackDays;
@@ -560,16 +561,17 @@ export default {
 
         const visiblePeriods = computed(() => {
             // Emergency fallback: if props are temporarily undefined during reactive updates
-            if (!props.periods) {
-                console.warn('⚠️ [SchedulerGrid] periods prop is undefined, using last valid state');
-                return lastValidPeriods.value;
+            if (!props.periods || !Array.isArray(props.periods)) {
+                if (lastValidPeriods.value.length > 0) {
+                    return lastValidPeriods.value;
+                }
+                return [];
             }
 
             // No periods available
             if (props.periods.length === 0) {
                 // If we previously had valid periods, keep showing them briefly to prevent flicker
                 if (lastValidPeriods.value.length > 0) {
-                    console.warn('⚠️ [SchedulerGrid] Using last valid periods to prevent component disappearing');
                     return lastValidPeriods.value;
                 }
                 return [];
@@ -640,22 +642,13 @@ export default {
 
             // CRITICAL: Robust fallback to prevent component disappearing
             if (filteredPeriods.length === 0 && props.periods.length > 0) {
-                console.warn('⚠️ [SchedulerGrid] Filtering resulted in 0 periods! Implementing emergency recovery');
-
                 // First try using cached valid periods
                 if (lastValidPeriods.value.length > 0) {
-                    console.warn('🚨 [SchedulerGrid] Using last valid periods to prevent component disappearing');
                     return lastValidPeriods.value;
                 }
 
-                // Final fallback: show all periods and update filter state
-                console.warn('🚨 [SchedulerGrid] EMERGENCY: Showing all periods to prevent component disappearance');
+                // Final fallback: show all periods
                 filteredPeriods = props.periods;
-
-                // Update showNonInstructional to true to prevent infinite filtering loops
-                nextTick(() => {
-                    showNonInstructional.value = true;
-                });
             }
 
             // Cache valid state to prevent component disappearing during future updates
@@ -850,24 +843,13 @@ export default {
 
         function getCourseName(courseId) {
             if (!courseId) {
-                console.log('⚠️ [SchedulerGrid] getCourseName: No courseId provided');
                 return null; // Return null instead of "No Course" to allow fallback to subject
             }
             const course = props.courses.find(c => c.id === courseId);
             const courseName = course?.name || course?.course_name || course?.title;
 
             if (!course) {
-                console.log('⚠️ [SchedulerGrid] getCourseName: Course not found for ID:', courseId, {
-                    availableCourses: props.courses.length,
-                    sampleCourseIds: props.courses.slice(0, 3).map(c => c.id),
-                });
                 return null; // Return null to allow fallback to subject
-            } else {
-                console.log('✅ [SchedulerGrid] getCourseName found course:', {
-                    courseId: courseId,
-                    courseName: courseName,
-                    course: course,
-                });
             }
 
             return courseName || null;
@@ -1159,71 +1141,29 @@ export default {
             }
         }
 
-        // Enhanced lifecycle tracking to debug disappearing component
-        console.log('🔄 [SchedulerGrid] Setting up enhanced lifecycle tracking...');
-
         // Watch for critical computed properties changes
         watch(
             [visibleDays, visiblePeriods],
             ([newDays, newPeriods], [oldDays, oldPeriods]) => {
-                console.log('🔄 [SchedulerGrid] Critical computed properties changed:', {
-                    visibleDays: {
-                        old: oldDays?.length || 0,
-                        new: newDays?.length || 0,
-                        names: newDays?.map(d => d.name).join(', ') || 'none',
-                    },
-                    visiblePeriods: {
-                        old: oldPeriods?.length || 0,
-                        new: newPeriods?.length || 0,
-                        names: newPeriods?.map(p => p.name || p.label).join(', ') || 'none',
-                    },
-                    gridWillBeVisible: newDays?.length > 0 && newPeriods?.length > 0,
-                    showNonInstructional: showNonInstructional.value,
-                    focusedPeriodId: focusedPeriodId.value,
-                });
-
-                // Emergency logging if grid becomes invisible
-                if (
-                    (newDays?.length === 0 || newPeriods?.length === 0) &&
-                    oldDays?.length > 0 &&
-                    oldPeriods?.length > 0
-                ) {
-                    console.error('🚨 [SchedulerGrid] GRID BECAME INVISIBLE! Debug info:', {
+                // Only log critical failures
+                if ((newDays?.length || 0) === 0 && (oldDays?.length || 0) > 0) {
+                    console.error('🚨 [SchedulerGrid] GRID BECAME INVISIBLE! Days issue:', {
+                        rawDaysCount: props.schoolDays?.length || 0,
+                        oldDays: oldDays?.length || 0,
                         showNonInstructional: showNonInstructional.value,
                         focusedPeriodId: focusedPeriodId.value,
+                    });
+                }
+                if ((newPeriods?.length || 0) === 0 && (oldPeriods?.length || 0) > 0) {
+                    console.error('🚨 [SchedulerGrid] GRID BECAME INVISIBLE! Periods issue:', {
                         rawPeriodsCount: props.periods?.length || 0,
-                        rawDaysCount: props.schoolDays?.length || 0,
-                        samplePeriod: props.periods?.[0] || null,
-                        sampleDay: props.schoolDays?.[0] || null,
+                        oldPeriods: oldPeriods?.length || 0,
+                        showNonInstructional: showNonInstructional.value,
+                        focusedPeriodId: focusedPeriodId.value,
                     });
                 }
             },
-            { immediate: true }
-        );
-
-        // Watch for prop changes that might cause issues
-        watch(
-            () => props.periods,
-            (newPeriods, oldPeriods) => {
-                console.log('🔄 [SchedulerGrid] Periods prop changed:', {
-                    old: oldPeriods?.length || 0,
-                    new: newPeriods?.length || 0,
-                    samplePeriod: newPeriods?.[0] || null,
-                });
-            },
-            { immediate: true }
-        );
-
-        watch(
-            () => props.schoolDays,
-            (newDays, oldDays) => {
-                console.log('🔄 [SchedulerGrid] School days prop changed:', {
-                    old: oldDays?.length || 0,
-                    new: newDays?.length || 0,
-                    sampleDay: newDays?.[0] || null,
-                });
-            },
-            { immediate: true }
+            { immediate: false } // Don't trigger on mount
         );
 
         // Drag and Drop State
@@ -1469,18 +1409,21 @@ export default {
                 (lastValidDays.value.length > 0 && visibleDays.value === lastValidDays.value) ||
                 (lastValidPeriods.value.length > 0 && visiblePeriods.value === lastValidPeriods.value);
 
-            console.log('🩺 [SchedulerGrid] Emergency health check:', {
-                visibleDays: visibleDays.value.length,
-                visiblePeriods: visiblePeriods.value.length,
-                gridVisible,
-                usingEmergencyMode,
-                showNonInstructional: showNonInstructional.value,
-                focusedPeriodId: focusedPeriodId.value,
-                rawPeriodsCount: props.periods?.length || 0,
-                rawDaysCount: props.schoolDays?.length || 0,
-                lastValidDaysCount: lastValidDays.value.length,
-                lastValidPeriodsCount: lastValidPeriods.value.length,
-            });
+            // Only log if there's an issue
+            if (!gridVisible || usingEmergencyMode) {
+                console.log('🩺 [SchedulerGrid] Emergency health check:', {
+                    visibleDays: visibleDays.value.length,
+                    visiblePeriods: visiblePeriods.value.length,
+                    gridVisible,
+                    usingEmergencyMode,
+                    showNonInstructional: showNonInstructional.value,
+                    focusedPeriodId: focusedPeriodId.value,
+                    rawPeriodsCount: props.periods?.length || 0,
+                    rawDaysCount: props.schoolDays?.length || 0,
+                    lastValidDaysCount: lastValidDays.value.length,
+                    lastValidPeriodsCount: lastValidPeriods.value.length,
+                });
+            }
 
             return gridVisible;
         };
@@ -1503,11 +1446,6 @@ export default {
                 emergencyCheck();
             });
         };
-
-        // Run emergency check on next tick and periodically
-        setTimeout(() => {
-            emergencyCheck();
-        }, 100);
 
         return {
             // State
