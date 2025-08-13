@@ -202,7 +202,7 @@ export default {
                 let isInstructional = true;
                 if (period.block_type) {
                     // Common non-instructional block types
-                    const nonInstructionalTypes = ['break', 'pause', 'lunch', 'recess', 'assembly', 'flexband'];
+                    const nonInstructionalTypes = ['break', 'pause', 'lunch', 'recess', 'assembly', 'flexband', 'frühdienst'];
                     isInstructional = !nonInstructionalTypes.includes(period.block_type.toLowerCase());
                 } else if (period.attendance_requirement === 'optional') {
                     isInstructional = false;
@@ -210,7 +210,8 @@ export default {
                     period.label.toLowerCase().includes('break') ||
                     period.label.toLowerCase().includes('pause') ||
                     period.label.toLowerCase().includes('lunch') ||
-                    period.label.toLowerCase().includes('flexband')
+                    period.label.toLowerCase().includes('flexband') ||
+                    period.label.toLowerCase().includes('frühdienst')
                 )) {
                     isInstructional = false;
                 }
@@ -253,6 +254,13 @@ export default {
         const courses = computed(() => {
             const coursesData = props.content.courses || [];
             console.log('📚 [wwElement] courses computed:', coursesData.length, 'courses:', coursesData);
+            
+            // Debug: Sample course data structure
+            if (coursesData.length > 0) {
+                console.log('📚 Sample course:', coursesData[0]);
+                console.log('📚 Course fields:', Object.keys(coursesData[0]));
+            }
+            
             return coursesData;
         });
         const teachers = computed(() => {
@@ -328,11 +336,25 @@ export default {
         const draftSchedules = computed(() => {
             const draftData = props.content.draftSchedules || [];
             console.log('📊 [wwElement] draftSchedules computed:', draftData.length, 'schedules:', draftData);
+            
+            // Debug: Sample assignment data structure
+            if (draftData.length > 0) {
+                console.log('📊 Sample draft assignment:', draftData[0]);
+                console.log('📊 Draft assignment fields:', Object.keys(draftData[0]));
+            }
+            
             return draftData;
         });
         const liveSchedules = computed(() => {
             const liveData = props.content.liveSchedules || [];
             console.log('🔴 [wwElement] liveSchedules computed:', liveData.length, 'schedules:', liveData);
+            
+            // Debug: Sample live assignment data structure
+            if (liveData.length > 0) {
+                console.log('🔴 Sample live assignment:', liveData[0]);
+                console.log('🔴 Live assignment fields:', Object.keys(liveData[0]));
+            }
+            
             return liveData;
         });
 

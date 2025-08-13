@@ -284,7 +284,9 @@ export default {
                 totalSchoolDays: props.schoolDays.length,
                 maxDays: props.maxDays,
                 visibleDaysCount: days.length,
-                visibleDays: days
+                visibleDaysIds: days.map(d => ({ id: d.id, name: d.name })),
+                draftSchedulesCount: props.draftSchedules.length,
+                sampleDayIds: props.draftSchedules.slice(0, 3).map(a => ({ day_id: a.day_id, period_id: a.period_id }))
             });
             return days;
         });
@@ -302,9 +304,35 @@ export default {
             } else {
                 console.log('📅 [SchedulerGrid] Filtering to ONLY instructional periods');
                 filteredPeriods = props.periods.filter(period => {
-                    const isInstructional = period.is_instructional !== false;
+                    // More sophisticated instructional detection based on block_type and other fields
+                    let isInstructional = true;
+                    
+                    // Check block_type first (most reliable indicator)
+                    if (period.block_type) {
+                        const nonInstructionalTypes = ['break', 'pause', 'lunch', 'recess', 'assembly', 'flexband', 'frühdienst'];
+                        isInstructional = !nonInstructionalTypes.includes(period.block_type.toLowerCase());
+                    } 
+                    // Fall back to is_instructional field if available
+                    else if (period.is_instructional !== undefined) {
+                        isInstructional = period.is_instructional;
+                    }
+                    // Fall back to attendance_requirement
+                    else if (period.attendance_requirement === 'optional') {
+                        isInstructional = false;
+                    }
+                    // Fall back to label/name content
+                    else if (period.label || period.name) {
+                        const text = (period.label || period.name).toLowerCase();
+                        if (text.includes('break') || text.includes('pause') || text.includes('lunch') || text.includes('flexband') || text.includes('frühdienst')) {
+                            isInstructional = false;
+                        }
+                    }
+                    
                     console.log(`  Period "${period.name}" (id: ${period.id}):`, {
+                        block_type: period.block_type,
                         is_instructional: period.is_instructional,
+                        attendance_requirement: period.attendance_requirement,
+                        label: period.label,
                         computed_isInstructional: isInstructional,
                         included: isInstructional,
                         type: period.type
@@ -318,6 +346,7 @@ export default {
                 periods: filteredPeriods.map(p => ({
                     id: p.id,
                     name: p.name,
+                    block_type: p.block_type,
                     is_instructional: p.is_instructional,
                     type: p.type
                 }))
@@ -432,9 +461,27 @@ export default {
         }
 
         function getCourseName(courseId) {
-            if (!courseId) return 'No Course';
+            if (!courseId) {
+                console.log('⚠️ [SchedulerGrid] getCourseName: No courseId provided');
+                return 'No Course';
+            }
             const course = props.courses.find(c => c.id === courseId);
-            return course?.name || 'Unknown Course';
+            const courseName = course?.name || course?.course_name || course?.title || 'Unknown Course';
+            
+            if (!course) {
+                console.log('⚠️ [SchedulerGrid] getCourseName: Course not found for ID:', courseId, {
+                    availableCourses: props.courses.length,
+                    sampleCourseIds: props.courses.slice(0, 3).map(c => c.id)
+                });
+            } else {
+                console.log('✅ [SchedulerGrid] getCourseName found course:', {
+                    courseId: courseId,
+                    courseName: courseName,
+                    course: course
+                });
+            }
+            
+            return courseName;
         }
 
         function getClassName(classId) {
