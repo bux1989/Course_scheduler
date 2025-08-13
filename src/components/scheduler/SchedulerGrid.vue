@@ -384,7 +384,16 @@
 <script>
 import { computed, ref, watch, nextTick } from 'vue';
 import InlineAssignmentEditor from './InlineAssignmentEditor.vue';
-import { validateAndUnwrapArray, safeLength, safeArray, toArray, len, nonEmpty } from '../../utils/arrayUtils.js';
+import {
+    validateAndUnwrapArray,
+    safeLength,
+    safeArray,
+    toArray,
+    len,
+    nonEmpty,
+    normalizeCourse,
+    normalizePossibleSlots,
+} from '../../utils/arrayUtils.js';
 
 export default {
     name: 'SchedulerGrid',
@@ -922,46 +931,38 @@ export default {
         }
 
         function getAvailableCoursesForSlot(dayId, periodId) {
-            // Get the day information
-            const currentDay = props.schoolDays.find(d => d.id === dayId || d.day_id === dayId);
-
-            // Get day number from multiple possible sources
-            let currentDayNumber = currentDay?.day_number;
-            if (!currentDayNumber) {
-                // Fall back to finding by index if day_number not available
-                const dayIndex = props.schoolDays.findIndex(d => d.id === dayId || d.day_id === dayId);
-                currentDayNumber = dayIndex >= 0 ? dayIndex + 1 : null; // 1-based numbering
-            }
-
             console.log('🎯 [SchedulerGrid] getAvailableCoursesForSlot:', {
                 dayId,
                 periodId,
-                currentDay,
-                currentDayNumber,
                 coursesTotal: safeLength(props.courses),
             });
 
-            // Filter courses that are available for this specific day/period
-            let availableCourses = props.courses.filter(course => {
+            // CRITICAL FIX: Normalize courses to use possibleSlots with dayId parsing
+            const normalizedCourses = props.courses.map((course, idx) => normalizeCourse(course, idx));
+
+            // Filter courses that are available for this specific day/period using dayId
+            let availableCourses = normalizedCourses.filter(course => {
                 // If course has no time slot restrictions, it's available anywhere
-                if (!course.possible_time_slots?.length) {
+                if (safeLength(course.possibleSlots) === 0) {
                     return true;
                 }
 
                 // Check if this day/period combination is in the course's possible slots
-                return course.possible_time_slots.some(slot => {
-                    // Handle string format "day_number|period_id"
-                    if (typeof slot === 'string' && slot.includes('|')) {
-                        const [dayNumber, slotPeriodId] = slot.split('|');
-                        const slotDayNumber = parseInt(dayNumber);
-                        return slotDayNumber === currentDayNumber && slotPeriodId === periodId;
-                    }
-                    // Handle object format {day_id, period_id}
-                    else if (typeof slot === 'object') {
-                        return slot.day_id === dayId && slot.period_id === periodId;
-                    }
-                    return false;
+                const isAvailable = course.possibleSlots.some(slot => {
+                    return slot.dayId === dayId && slot.periodId === periodId;
                 });
+
+                if (isAvailable) {
+                    console.log('  ✅ Course available for slot:', {
+                        courseName: course.name,
+                        courseId: course.id,
+                        possibleSlots: course.possibleSlots,
+                        dayId,
+                        periodId,
+                    });
+                }
+
+                return isAvailable;
             });
 
             // Apply search filter

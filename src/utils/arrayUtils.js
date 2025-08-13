@@ -291,3 +291,65 @@ export function safeArray(value) {
     }
     return [];
 }
+
+/**
+ * Parse and normalize possible_time_slots from courses
+ * CRITICAL FIX: Handle dayId vs dayNumber confusion
+ *
+ * Tokens like "2|5e4753c0-..." have dayId=2 (backend ID), not dayNumber=2 (UI display order)
+ * This was causing courses to appear available on wrong days.
+ *
+ * @param {Array} slots - Raw possible_time_slots array
+ * @returns {Array} - Normalized slots as [{ dayId, periodId }]
+ */
+export function normalizePossibleSlots(slots) {
+    return toArray(slots)
+        .map(s => {
+            if (typeof s === 'string' && s.includes('|')) {
+                const [dayIdRaw, periodId] = s.split('|');
+                return {
+                    dayId: Number(dayIdRaw), // canonical backend dayId
+                    periodId: String(periodId), // canonical period UUID
+                };
+            } else if (typeof s === 'object' && s !== null) {
+                return {
+                    dayId: Number(s.day_id ?? s.dayId),
+                    periodId: String(s.period_id ?? s.periodId),
+                };
+            }
+            // Handle any other formats by returning invalid slot that won't match
+            return { dayId: -1, periodId: '' };
+        })
+        .filter(slot => slot.dayId > 0 && slot.periodId);
+}
+
+/**
+ * Normalize course data with proper possible_time_slots parsing
+ * CRITICAL FIX: Use canonical dayId + periodId for all availability logic
+ *
+ * @param {Object} course - Raw course data
+ * @param {number} idx - Index for fallback ID generation
+ * @returns {Object} - Normalized course
+ */
+export function normalizeCourse(course, idx) {
+    return {
+        // Basic course info
+        id: course.id ?? course.course_id ?? course.uuid ?? `course-fallback-${idx}`,
+        name: course.name ?? course.title ?? course.course_name ?? '',
+        code: course.code ?? course.short_code ?? course.course_code ?? '',
+        capacity: course.capacity ?? course.max ?? course.max_students ?? null,
+        subject: course.subject ?? course.subject_name ?? '',
+
+        // Normalize year groups
+        yearGroups: toArray(course.year_groups ?? course.yearGroups ?? course.is_for_year_groups ?? []),
+
+        // CRITICAL: Parse possible_time_slots using dayId (not dayNumber)
+        possibleSlots: normalizePossibleSlots(course.possible_time_slots ?? course.possibleSlots ?? []),
+
+        // Keep original for backward compatibility if needed
+        possible_time_slots: course.possible_time_slots,
+
+        // Other fields
+        ...course,
+    };
+}

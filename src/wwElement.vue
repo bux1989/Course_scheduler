@@ -128,6 +128,8 @@ import {
     len,
     nonEmpty,
     normalizePeriods,
+    normalizeCourse,
+    normalizePossibleSlots,
 } from './utils/arrayUtils.js';
 
 export default {
@@ -233,7 +235,8 @@ export default {
                 rawKeys: typeof rawCourses === 'object' && rawCourses ? Object.keys(rawCourses).slice(0, 5) : 'N/A',
             });
 
-            return coursesArray; // Enhanced toArray handles all fallback cases
+            // CRITICAL FIX: Apply normalizeCourse to handle possible_time_slots dayId parsing
+            return coursesArray.map((course, idx) => normalizeCourse(course, idx));
         });
 
         const teachers = computed(() => {
@@ -377,32 +380,34 @@ export default {
                 return courses.value;
             }
 
-            const currentDay = schoolDays.value.find(
-                d => d.id === selectedCell.value.dayId || d.day_id === selectedCell.value.dayId
-            );
-            const currentDayNumber = currentDay?.day_number;
+            // CRITICAL FIX: Use dayId (backend ID) directly instead of dayNumber (UI order)
+            const currentDayId = selectedCell.value.dayId;
+            const currentPeriodId = selectedCell.value.periodId;
 
-            // Filter courses based on possible_time_slots
+            console.log('🎯 [wwElement] availableCoursesForSlot filtering:', {
+                currentDayId,
+                currentPeriodId,
+                totalCourses: safeLength(courses.value),
+            });
+
+            // Filter courses based on normalized possibleSlots (using dayId + periodId)
             const filteredCourses = courses.value.filter(course => {
                 // If no restrictions, course is available
-                if (safeLength(course.possible_time_slots) === 0) return true;
+                if (safeLength(course.possibleSlots) === 0) return true;
 
-                // Check if current slot is in possible slots
-                return course.possible_time_slots.some(slot => {
-                    // Handle string format "day_number|period_id"
-                    if (typeof slot === 'string' && slot.includes('|')) {
-                        const [dayNumber, periodId] = slot.split('|');
-                        const slotDayNumber = parseInt(dayNumber);
-                        return slotDayNumber === currentDayNumber && periodId === selectedCell.value.periodId;
-                    }
-                    // Handle object format {day_id, period_id}
-                    else if (typeof slot === 'object') {
-                        return (
-                            slot.day_id === selectedCell.value.dayId && slot.period_id === selectedCell.value.periodId
-                        );
-                    }
-                    return false;
+                // Check if current slot is in possible slots using dayId + periodId
+                const isAvailable = course.possibleSlots.some(slot => {
+                    return slot.dayId === currentDayId && slot.periodId === currentPeriodId;
                 });
+
+                if (isAvailable) {
+                    console.log('  ✅ Available course:', {
+                        courseName: course.name,
+                        possibleSlots: course.possibleSlots,
+                    });
+                }
+
+                return isAvailable;
             });
 
             return filteredCourses;

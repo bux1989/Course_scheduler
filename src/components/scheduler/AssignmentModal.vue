@@ -190,7 +190,15 @@
 
 <script>
 import { computed, ref, watch } from 'vue';
-import { safeLength, safeArray, toArray, len, nonEmpty } from '../../utils/arrayUtils.js';
+import {
+    safeLength,
+    safeArray,
+    toArray,
+    len,
+    nonEmpty,
+    normalizeCourse,
+    normalizePossibleSlots,
+} from '../../utils/arrayUtils.js';
 
 export default {
     name: 'AssignmentModal',
@@ -470,74 +478,44 @@ export default {
         }
 
         function isCourseAvailable(course) {
+            // CRITICAL FIX: Normalize course to get proper possibleSlots parsing
+            const normalizedCourse = normalizeCourse(course, 0);
+
             // Check if course is available for this time slot
-            if (!course.possible_time_slots?.length) {
+            if (safeLength(normalizedCourse.possibleSlots) === 0) {
                 console.log('📚 [AssignmentModal] Course has no time slot restrictions:', {
-                    courseId: course.id,
-                    courseName: course.name || course.course_name,
+                    courseId: normalizedCourse.id,
+                    courseName: normalizedCourse.name,
                 });
                 return true; // No restrictions - course can be scheduled anywhere
             }
 
-            // Find current day info - try multiple approaches
-            const currentDay = props.schoolDays.find(d => d.id === props.dayId || d.day_id === props.dayId);
-
-            // Get day number from multiple possible sources
-            let currentDayNumber = currentDay?.day_number;
-            if (!currentDayNumber) {
-                // Fall back to finding by index if day_number not available
-                const dayIndex = props.schoolDays.findIndex(d => d.id === props.dayId || d.day_id === props.dayId);
-                currentDayNumber = dayIndex >= 0 ? dayIndex + 1 : null; // 1-based numbering
-            }
-
             console.log('📚 [AssignmentModal] Checking course availability:', {
-                courseId: course.id,
-                courseName: course.name || course.course_name,
-                possible_time_slots: course.possible_time_slots,
+                courseId: normalizedCourse.id,
+                courseName: normalizedCourse.name,
+                possibleSlots: normalizedCourse.possibleSlots,
                 currentDayId: props.dayId,
                 currentPeriodId: props.periodId,
-                currentDay: currentDay,
-                currentDayNumber: currentDayNumber,
-                schoolDaysCount: safeLength(props.schoolDays),
             });
 
-            const isAvailable = course.possible_time_slots.some(slot => {
-                // Handle string format "day_number|period_id"
-                if (typeof slot === 'string' && slot.includes('|')) {
-                    const [dayNumber, periodId] = slot.split('|');
-                    const slotDayNumber = parseInt(dayNumber);
-                    const match = slotDayNumber === currentDayNumber && periodId === props.periodId;
+            // Check availability using dayId + periodId matching
+            const isAvailable = normalizedCourse.possibleSlots.some(slot => {
+                const match = slot.dayId === props.dayId && slot.periodId === props.periodId;
 
-                    console.log('  Checking string slot:', {
+                if (match) {
+                    console.log('  ✅ Slot matches:', {
                         slot,
-                        slotDayNumber,
-                        periodId,
-                        currentDayNumber,
-                        currentPeriodId: props.periodId,
-                        matches: match,
+                        targetDayId: props.dayId,
+                        targetPeriodId: props.periodId,
                     });
-
-                    return match;
                 }
-                // Handle object format {day_id, period_id}
-                else if (typeof slot === 'object') {
-                    const match = slot.day_id === props.dayId && slot.period_id === props.periodId;
 
-                    console.log('  Checking object slot:', {
-                        slot,
-                        currentDayId: props.dayId,
-                        currentPeriodId: props.periodId,
-                        matches: match,
-                    });
-
-                    return match;
-                }
-                return false;
+                return match;
             });
 
             console.log('📚 [AssignmentModal] Course availability result:', {
-                courseId: course.id,
-                courseName: course.name || course.course_name,
+                courseId: normalizedCourse.id,
+                courseName: normalizedCourse.name,
                 isAvailable: isAvailable,
             });
 
