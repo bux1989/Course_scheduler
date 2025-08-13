@@ -183,7 +183,13 @@ export default {
             return props.content.publishedBy || null;
         });
         const periods = computed(() => {
-            const rawPeriodsData = props.content.periods || [];
+            const rawPeriodsData = props.content.periods;
+            
+            // Robust array validation to prevent TypeError: .map is not a function
+            if (!rawPeriodsData || !Array.isArray(rawPeriodsData)) {
+                console.warn('[wwElement] periods prop is not an array:', typeof rawPeriodsData, rawPeriodsData);
+                return [];
+            }
 
             const processedPeriods = rawPeriodsData.map((period, index) => {
                 // Generate fallback period name from times, label, or index
@@ -233,19 +239,45 @@ export default {
             return processedPeriods;
         });
         const courses = computed(() => {
-            return props.content.courses || [];
+            const rawCourses = props.content.courses;
+            if (!rawCourses || !Array.isArray(rawCourses)) {
+                console.warn('[wwElement] courses prop is not an array:', typeof rawCourses);
+                return [];
+            }
+            return rawCourses;
         });
         const teachers = computed(() => {
-            return props.content.teachers || [];
+            const rawTeachers = props.content.teachers;
+            if (!rawTeachers || !Array.isArray(rawTeachers)) {
+                console.warn('[wwElement] teachers prop is not an array:', typeof rawTeachers);
+                return [];
+            }
+            return rawTeachers;
         });
         const classes = computed(() => {
-            return props.content.classes || [];
+            const rawClasses = props.content.classes;
+            if (!rawClasses || !Array.isArray(rawClasses)) {
+                console.warn('[wwElement] classes prop is not an array:', typeof rawClasses);
+                return [];
+            }
+            return rawClasses;
         });
         const rooms = computed(() => {
-            return props.content.rooms || [];
+            const rawRooms = props.content.rooms;
+            if (!rawRooms || !Array.isArray(rawRooms)) {
+                console.warn('[wwElement] rooms prop is not an array:', typeof rawRooms);
+                return [];
+            }
+            return rawRooms;
         });
         const schoolDays = computed(() => {
-            const rawDaysData = props.content.schoolDays || [];
+            const rawDaysData = props.content.schoolDays;
+            
+            // Robust array validation
+            if (!rawDaysData || !Array.isArray(rawDaysData)) {
+                console.warn('[wwElement] schoolDays prop is not an array:', typeof rawDaysData);
+                return [];
+            }
 
             // Create fallback day names if missing
             const defaultDayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -270,13 +302,28 @@ export default {
             return processedDays;
         });
         const draftSchedules = computed(() => {
-            return props.content.draftSchedules || [];
+            const rawDrafts = props.content.draftSchedules;
+            if (!rawDrafts || !Array.isArray(rawDrafts)) {
+                console.warn('[wwElement] draftSchedules prop is not an array:', typeof rawDrafts);
+                return [];
+            }
+            return rawDrafts;
         });
         const liveSchedules = computed(() => {
-            return props.content.liveSchedules || [];
+            const rawLive = props.content.liveSchedules;
+            if (!rawLive || !Array.isArray(rawLive)) {
+                console.warn('[wwElement] liveSchedules prop is not an array:', typeof rawLive);
+                return [];
+            }
+            return rawLive;
         });
         const subjects = computed(() => {
-            return props.content.subjects || [];
+            const rawSubjects = props.content.subjects;
+            if (!rawSubjects || !Array.isArray(rawSubjects)) {
+                console.warn('[wwElement] subjects prop is not an array:', typeof rawSubjects);
+                return [];
+            }
+            return rawSubjects;
         });
 
         // Computed state
