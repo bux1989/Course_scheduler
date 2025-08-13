@@ -182,26 +182,53 @@ export default {
             const rawPeriodsData = props.content.periods || [];
             console.log('📅 [wwElement] periods computed:', rawPeriodsData.length, 'periods:', rawPeriodsData);
             
+            // Debug: Check available field names
+            if (rawPeriodsData.length > 0) {
+                console.log('📅 Available period field names:', Object.keys(rawPeriodsData[0]));
+                console.log('📅 Sample period data:', rawPeriodsData[0]);
+            }
+            
             const processedPeriods = rawPeriodsData.map((period, index) => {
-                // Generate fallback period name from times or index
+                // Generate fallback period name from times, label, or index
                 let fallbackName = `Period ${index + 1}`;
                 if (period.start_time && period.end_time) {
                     fallbackName = `${period.start_time} - ${period.end_time}`;
                 }
                 
+                // Use the correct field names from the actual data structure
+                const periodName = period.name || period.label || period.group_label || fallbackName;
+                
+                // Determine if instructional based on block_type and other indicators
+                let isInstructional = true;
+                if (period.block_type) {
+                    // Common non-instructional block types
+                    const nonInstructionalTypes = ['break', 'pause', 'lunch', 'recess', 'assembly', 'flexband'];
+                    isInstructional = !nonInstructionalTypes.includes(period.block_type.toLowerCase());
+                } else if (period.attendance_requirement === 'optional') {
+                    isInstructional = false;
+                } else if (period.label && (
+                    period.label.toLowerCase().includes('break') ||
+                    period.label.toLowerCase().includes('pause') ||
+                    period.label.toLowerCase().includes('lunch') ||
+                    period.label.toLowerCase().includes('flexband')
+                )) {
+                    isInstructional = false;
+                }
+                
                 const processedPeriod = {
                     ...period,
-                    name: period.name || period.period_name || fallbackName,
-                    is_instructional: period.is_instructional !== undefined ? period.is_instructional : 
-                                    period.instructional !== undefined ? period.instructional :
-                                    period.type !== 'break' && period.type !== 'pause' && period.type !== 'lunch', // Default to true unless explicitly a break
-                    type: period.type || (period.is_instructional === false ? 'break' : 'lesson')
+                    name: periodName,
+                    is_instructional: period.is_instructional !== undefined ? period.is_instructional : isInstructional,
+                    type: period.block_type || period.type || (isInstructional ? 'lesson' : 'break')
                 };
                 
                 console.log(`  Period ${index}:`, {
                     original: {
                         id: period.id,
                         name: period.name,
+                        label: period.label,
+                        block_type: period.block_type,
+                        attendance_requirement: period.attendance_requirement,
                         is_instructional: period.is_instructional,
                         start_time: period.start_time,
                         end_time: period.end_time,
@@ -247,20 +274,49 @@ export default {
             const rawDaysData = props.content.schoolDays || [];
             console.log('🗓️ [wwElement] schoolDays computed:', rawDaysData.length, 'days:', rawDaysData);
             
+            // Debug: Check available field names  
+            if (rawDaysData.length > 0) {
+                console.log('🗓️ Available school day field names:', Object.keys(rawDaysData[0]));
+                console.log('🗓️ Sample school day data:', rawDaysData[0]);
+            }
+            
             // Create fallback day names if missing
             const defaultDayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
             
             const processedDays = rawDaysData.map((day, index) => {
+                // Use the correct field names from the actual data structure
+                const dayName = day.name || day.name_en || day.day_name || defaultDayNames[index] || `Day ${index + 1}`;
+                
                 const processedDay = {
                     ...day,
-                    name: day.name || day.day_name || defaultDayNames[index] || `Day ${index + 1}`,
+                    // Use day_id as the main identifier if available, otherwise use id
+                    id: day.day_id || day.id,
+                    name: dayName,
                     date: day.date || day.day_date || null,
-                    is_active: day.is_active !== undefined ? day.is_active : true
+                    is_active: day.is_active !== undefined ? day.is_active : true,
+                    day_number: day.day_number || (index + 1),
+                    // Keep both for compatibility
+                    day_id: day.day_id || day.id
                 };
                 
                 console.log(`  Day ${index}:`, {
-                    original: { id: day.id, name: day.name, date: day.date, is_active: day.is_active },
-                    processed: { id: processedDay.id, name: processedDay.name, date: processedDay.date, is_active: processedDay.is_active }
+                    original: { 
+                        id: day.id, 
+                        day_id: day.day_id,
+                        name: day.name, 
+                        name_en: day.name_en,
+                        name_de: day.name_de,
+                        date: day.date, 
+                        is_active: day.is_active,
+                        day_number: day.day_number 
+                    },
+                    processed: { 
+                        id: processedDay.id, 
+                        name: processedDay.name, 
+                        date: processedDay.date, 
+                        is_active: processedDay.is_active,
+                        day_number: processedDay.day_number
+                    }
                 });
                 
                 return processedDay;
@@ -425,6 +481,15 @@ export default {
         function handleCellClick({ dayId, periodId, period, mode }) {
             if (isReadOnly.value) return;
 
+            console.log('🎯 [wwElement] handleCellClick called:', {
+                dayId, 
+                periodId, 
+                periodData: period,
+                mode,
+                schoolDaysCount: schoolDays.value.length,
+                draftSchedulesCount: draftSchedules.value.length
+            });
+
             // Get existing assignments for this cell
             const assignments = draftSchedules.value.filter(
                 assignment => assignment.day_id === dayId && assignment.period_id === periodId
@@ -434,6 +499,13 @@ export default {
             const conflicts = allConflicts.value.filter(
                 conflict => conflict.day_id === dayId && conflict.period_id === periodId
             );
+
+            console.log('🎯 [wwElement] Cell click - found data:', {
+                assignmentsCount: assignments.length,
+                assignments: assignments,
+                conflictsCount: conflicts.length,
+                conflicts: conflicts
+            });
 
             selectedCell.value = {
                 dayId,

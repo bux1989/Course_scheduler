@@ -229,19 +229,44 @@ export default {
         // Computed
         const modalTitle = computed(() => {
             if (!props.period) return 'Manage Assignments';
-            const dayName = props.schoolDays.find(d => d.id === props.dayId)?.name || 'Unknown Day';
-            return `${dayName} - ${props.period.name}`;
+            
+            // Handle both day.id and day.day_id fields 
+            const dayData = props.schoolDays.find(d => d.id === props.dayId || d.day_id === props.dayId);
+            const dayName = dayData?.name || 'Unknown Day';
+            const periodName = props.period?.name || props.period?.label || 'Unknown Period';
+            
+            console.log('🎯 [AssignmentModal] modalTitle computation:', {
+                dayId: props.dayId,
+                periodId: props.periodId,
+                dayData: dayData,
+                dayName: dayName,
+                periodName: periodName,
+                schoolDays: props.schoolDays.map(d => ({ id: d.id, day_id: d.day_id, name: d.name }))
+            });
+            
+            return `${dayName} - ${periodName}`;
         });
 
         const periodInfo = computed(() => {
             if (!props.period) return null;
 
-            const dayName = props.schoolDays.find(d => d.id === props.dayId)?.name || 'Unknown Day';
+            // Handle both day.id and day.day_id fields 
+            const dayData = props.schoolDays.find(d => d.id === props.dayId || d.day_id === props.dayId);
+            const dayName = dayData?.name || 'Unknown Day';
+            const periodName = props.period?.name || props.period?.label || 'Unknown Period';
             const timeRange = `${formatTime(props.period.start_time)} - ${formatTime(props.period.end_time)}`;
+
+            console.log('🎯 [AssignmentModal] periodInfo computation:', {
+                dayId: props.dayId,
+                dayData: dayData,
+                dayName: dayName,
+                periodName: periodName,
+                timeRange: timeRange
+            });
 
             return {
                 dayName,
-                periodName: props.period.name,
+                periodName,
                 timeRange,
             };
         });
@@ -256,13 +281,20 @@ export default {
 
         const filteredCourses = computed(() => {
             let courses = props.courses;
+            
+            console.log('📚 [AssignmentModal] filteredCourses computation:', {
+                totalCourses: props.courses.length,
+                courseFilter: courseFilter.value,
+                yearGroupFilter: yearGroupFilter.value,
+                sampleCourse: props.courses[0]
+            });
 
             // Filter by search text
             if (courseFilter.value) {
                 const searchLower = courseFilter.value.toLowerCase();
                 courses = courses.filter(
                     course =>
-                        course.name.toLowerCase().includes(searchLower) ||
+                        course.name?.toLowerCase().includes(searchLower) ||
                         course.description?.toLowerCase().includes(searchLower)
                 );
             }
@@ -271,6 +303,11 @@ export default {
             if (yearGroupFilter.value) {
                 courses = courses.filter(course => course.year_groups?.includes(yearGroupFilter.value));
             }
+
+            console.log('📚 [AssignmentModal] Filtered courses result:', {
+                filteredCount: courses.length,
+                courses: courses.map(c => ({ id: c.id, name: c.name }))
+            });
 
             return courses;
         });

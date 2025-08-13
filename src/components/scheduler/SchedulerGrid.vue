@@ -368,9 +368,23 @@ export default {
         }
 
         function getCellAssignments(dayId, periodId) {
-            return props.draftSchedules.filter(
-                assignment => assignment.day_id === dayId && assignment.period_id === periodId
+            const assignments = props.draftSchedules.filter(
+                assignment => {
+                    const dayMatch = assignment.day_id === dayId;
+                    const periodMatch = assignment.period_id === periodId;
+                    return dayMatch && periodMatch;
+                }
             );
+            
+            if (assignments.length > 0) {
+                console.log(`🎯 [SchedulerGrid] getCellAssignments(${dayId}, ${periodId}):`, {
+                    assignmentsFound: assignments.length,
+                    assignments: assignments,
+                    sampleAssignment: assignments[0]
+                });
+            }
+            
+            return assignments;
         }
 
         function getCellClasses(dayId, periodId) {
