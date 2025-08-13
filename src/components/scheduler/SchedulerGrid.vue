@@ -88,57 +88,8 @@
             </div>
         </div>
 
-        <!-- Emergency Recovery Indicator -->
-        <div
-            v-if="
-                (lastValidDays.length > 0 && visibleDays === lastValidDays) ||
-                (lastValidPeriods.length > 0 && visiblePeriods === lastValidPeriods)
-            "
-            class="emergency-recovery-notice"
-        >
-            <div class="emergency-message">
-                🚨 <strong>Emergency Recovery Mode:</strong> Component temporarily using cached data to prevent
-                disappearing.
-                <button @click="emergencyRecover" class="emergency-recover-btn">🚨 Emergency: Show All Data</button>
-            </div>
-        </div>
-        <div v-if="visibleDays.length === 0 || visiblePeriods.length === 0" class="debug-message-panel">
-            <h3>⚠️ Debug Information</h3>
-            <div class="debug-messages">
-                <div v-if="visibleDays.length === 0" class="debug-warning">
-                    <strong>No School Days Found:</strong>
-                    <ul>
-                        <li>Raw schoolDays prop: {{ JSON.stringify(schoolDays) }}</li>
-                        <li>schoolDays length: {{ schoolDays.length }}</li>
-                        <li>maxDays setting: {{ maxDays }}</li>
-                    </ul>
-                </div>
-                <div v-if="visiblePeriods.length === 0" class="debug-warning">
-                    <strong>No Periods Visible:</strong>
-                    <ul>
-                        <li>Raw periods prop: {{ JSON.stringify(periods) }}</li>
-                        <li>periods length: {{ periods.length }}</li>
-                        <li>showNonInstructional: {{ showNonInstructional }}</li>
-                        <li>Filtered periods count: {{ visiblePeriods.length }}</li>
-                    </ul>
-                </div>
-            </div>
-        </div>
-
-        <!-- Main Grid (only show if we have data) -->
-        <div
-            v-if="visibleDays.length > 0 && visiblePeriods.length > 0"
-            class="main-grid-container"
-            :class="{
-                'emergency-mode':
-                    (lastValidDays.length > 0 && visibleDays === lastValidDays) ||
-                    (lastValidPeriods.length > 0 && visiblePeriods === lastValidPeriods),
-                'normal-mode': !(
-                    (lastValidDays.length > 0 && visibleDays === lastValidDays) ||
-                    (lastValidPeriods.length > 0 && visiblePeriods === lastValidPeriods)
-                ),
-            }"
-        >
+        <!-- Main Grid -->
+        <div v-if="visibleDays.length > 0 && visiblePeriods.length > 0" class="main-grid-container">
             <!-- Debug info for main grid with visibility status -->
             <div
                 class="debug-grid-info"
@@ -504,76 +455,20 @@ export default {
 
         // Component initialized
 
-        // Watch for critical data structure changes
-        watch(
-            [() => props.schoolDays, () => props.periods],
-            ([newDays, newPeriods]) => {
-                if (!newDays || newDays.length === 0) {
-                    console.warn('⚠️ [SchedulerGrid] No school days found!');
-                }
-                if (!newPeriods || newPeriods.length === 0) {
-                    console.warn('⚠️ [SchedulerGrid] No periods found!');
-                }
-            },
-            { immediate: true }
-        );
-
-        // Reactive state to prevent component disappearing during updates
-        const lastValidDays = ref([]);
-        const lastValidPeriods = ref([]);
-
-        // Computed properties with robust fallback mechanisms
+        // Simplified computed properties without reactive caching to prevent disappearing
         const visibleDays = computed(() => {
-            // Emergency fallback: if props are temporarily undefined during reactive updates
-            if (!props.schoolDays || !Array.isArray(props.schoolDays)) {
-                if (lastValidDays.value.length > 0) {
-                    return lastValidDays.value;
-                }
+            // Simple validation with robust fallback
+            if (!props.schoolDays || !Array.isArray(props.schoolDays) || props.schoolDays.length === 0) {
                 return [];
             }
 
-            // No school days available
-            if (props.schoolDays.length === 0) {
-                // If we previously had valid days, keep showing them briefly to prevent flicker
-                if (lastValidDays.value.length > 0) {
-                    return lastValidDays.value;
-                }
-                return [];
-            }
-
-            const maxDaysLimit = props.maxDays || 7; // Default fallback
-            const days = props.schoolDays.slice(0, maxDaysLimit);
-
-            // CRITICAL: Ensure we never return an empty array unless there truly are no school days
-            if (days.length === 0 && props.schoolDays.length > 0) {
-                const fallbackDays = props.schoolDays.slice(0, 1);
-                lastValidDays.value = fallbackDays; // Cache for future use
-                return fallbackDays;
-            }
-
-            // Cache valid state to prevent component disappearing during updates
-            if (days.length > 0) {
-                lastValidDays.value = days;
-            }
-
-            return days;
+            const maxDaysLimit = props.maxDays || 7;
+            return props.schoolDays.slice(0, maxDaysLimit);
         });
 
         const visiblePeriods = computed(() => {
-            // Emergency fallback: if props are temporarily undefined during reactive updates
-            if (!props.periods || !Array.isArray(props.periods)) {
-                if (lastValidPeriods.value.length > 0) {
-                    return lastValidPeriods.value;
-                }
-                return [];
-            }
-
-            // No periods available
-            if (props.periods.length === 0) {
-                // If we previously had valid periods, keep showing them briefly to prevent flicker
-                if (lastValidPeriods.value.length > 0) {
-                    return lastValidPeriods.value;
-                }
+            // Simple validation with robust fallback  
+            if (!props.periods || !Array.isArray(props.periods) || props.periods.length === 0) {
                 return [];
             }
 
@@ -640,20 +535,9 @@ export default {
                 });
             }
 
-            // CRITICAL: Robust fallback to prevent component disappearing
+            // Simple fallback - if no periods match filters, show all periods
             if (filteredPeriods.length === 0 && props.periods.length > 0) {
-                // First try using cached valid periods
-                if (lastValidPeriods.value.length > 0) {
-                    return lastValidPeriods.value;
-                }
-
-                // Final fallback: show all periods
                 filteredPeriods = props.periods;
-            }
-
-            // Cache valid state to prevent component disappearing during future updates
-            if (filteredPeriods.length > 0) {
-                lastValidPeriods.value = filteredPeriods;
             }
 
             return filteredPeriods;
@@ -940,17 +824,14 @@ export default {
 
         // New event handlers
         function handleLessonScheduleToggle() {
-            console.log('📊 [SchedulerGrid] Lesson schedules toggled:', showLessonSchedules.value);
             emit('toggle-lesson-schedules', showLessonSchedules.value);
         }
 
         function handleClassFilterChange() {
-            console.log('🎓 [SchedulerGrid] Class filter changed:', selectedClassFilter.value);
-            // We don't emit this since it's just a UI filter, not an external state change
+            // Class filter is handled locally - no need to emit
         }
 
         function handleModeSwitch() {
-            console.log('🔄 [SchedulerGrid] Mode switched:', isLiveMode.value ? 'Live' : 'Planning');
             emit('mode-changed', isLiveMode.value ? 'live' : 'planning');
         }
         function togglePeriodFocus(periodId) {
@@ -959,13 +840,11 @@ export default {
             } else {
                 focusedPeriodId.value = periodId;
             }
-            console.log('🎯 [SchedulerGrid] Period focus changed:', focusedPeriodId.value);
             emit('period-focus-changed', focusedPeriodId.value);
         }
 
         function clearPeriodFocus() {
             focusedPeriodId.value = null;
-            console.log('🎯 [SchedulerGrid] Period focus cleared');
             emit('period-focus-changed', null);
         }
 
@@ -1140,31 +1019,6 @@ export default {
                 assignCourseToSlot(course, firstDay.id, focusedPeriodId.value);
             }
         }
-
-        // Watch for critical computed properties changes
-        watch(
-            [visibleDays, visiblePeriods],
-            ([newDays, newPeriods], [oldDays, oldPeriods]) => {
-                // Only log critical failures
-                if ((newDays?.length || 0) === 0 && (oldDays?.length || 0) > 0) {
-                    console.error('🚨 [SchedulerGrid] GRID BECAME INVISIBLE! Days issue:', {
-                        rawDaysCount: props.schoolDays?.length || 0,
-                        oldDays: oldDays?.length || 0,
-                        showNonInstructional: showNonInstructional.value,
-                        focusedPeriodId: focusedPeriodId.value,
-                    });
-                }
-                if ((newPeriods?.length || 0) === 0 && (oldPeriods?.length || 0) > 0) {
-                    console.error('🚨 [SchedulerGrid] GRID BECAME INVISIBLE! Periods issue:', {
-                        rawPeriodsCount: props.periods?.length || 0,
-                        oldPeriods: oldPeriods?.length || 0,
-                        showNonInstructional: showNonInstructional.value,
-                        focusedPeriodId: focusedPeriodId.value,
-                    });
-                }
-            },
-            { immediate: false } // Don't trigger on mount
-        );
 
         // Drag and Drop State
         const draggedCourse = ref(null);
@@ -1400,53 +1254,6 @@ export default {
             editingCell.value = null;
         }
 
-        // Emergency reactive check with recovery
-        const emergencyCheck = () => {
-            const daysOk = visibleDays.value.length > 0;
-            const periodsOk = visiblePeriods.value.length > 0;
-            const gridVisible = daysOk && periodsOk;
-            const usingEmergencyMode =
-                (lastValidDays.value.length > 0 && visibleDays.value === lastValidDays.value) ||
-                (lastValidPeriods.value.length > 0 && visiblePeriods.value === lastValidPeriods.value);
-
-            // Only log if there's an issue
-            if (!gridVisible || usingEmergencyMode) {
-                console.log('🩺 [SchedulerGrid] Emergency health check:', {
-                    visibleDays: visibleDays.value.length,
-                    visiblePeriods: visiblePeriods.value.length,
-                    gridVisible,
-                    usingEmergencyMode,
-                    showNonInstructional: showNonInstructional.value,
-                    focusedPeriodId: focusedPeriodId.value,
-                    rawPeriodsCount: props.periods?.length || 0,
-                    rawDaysCount: props.schoolDays?.length || 0,
-                    lastValidDaysCount: lastValidDays.value.length,
-                    lastValidPeriodsCount: lastValidPeriods.value.length,
-                });
-            }
-
-            return gridVisible;
-        };
-
-        // Emergency recovery function
-        const emergencyRecover = () => {
-            console.log('🚨 [SchedulerGrid] EMERGENCY RECOVERY ACTIVATED!');
-
-            // Force show all data
-            showNonInstructional.value = true;
-            focusedPeriodId.value = null;
-
-            // Clear cached data to force recalculation
-            lastValidDays.value = [];
-            lastValidPeriods.value = [];
-
-            // Force reactive recalculation
-            nextTick(() => {
-                console.log('🚨 [SchedulerGrid] Emergency recovery completed, data should be visible');
-                emergencyCheck();
-            });
-        };
-
         return {
             // State
             showNonInstructional,
@@ -1455,8 +1262,6 @@ export default {
             selectedYearFilter,
             selectedClassFilter,
             focusedPeriodId,
-            lastValidDays,
-            lastValidPeriods,
             draggedCourse,
             draggedAssignment,
             dragOverCell,
@@ -1521,10 +1326,6 @@ export default {
             saveInlineEdit,
             cancelInlineEdit,
             deleteInlineAssignment,
-
-            // Emergency debug method
-            emergencyCheck,
-            emergencyRecover,
         };
     },
 };
