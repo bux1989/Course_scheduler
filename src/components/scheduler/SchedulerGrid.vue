@@ -442,13 +442,11 @@ export default {
         const editingAssignment = ref(null);
         const editingCell = ref(null);
 
-        // Watch for unexpected focusedPeriodId changes
+        // Watch for unexpected focusedPeriodId changes (simplified logging)
         watch(focusedPeriodId, (newValue, oldValue) => {
-            console.log('🔍 [SchedulerGrid] focusedPeriodId changed:', {
-                from: oldValue,
-                to: newValue,
-                stack: new Error().stack?.split('\n')[2]?.trim()
-            });
+            if (newValue !== oldValue) {
+                console.log('🔍 [SchedulerGrid] focusedPeriodId changed:', { from: oldValue, to: newValue });
+            }
         });
 
         // Component initialized
@@ -479,33 +477,27 @@ export default {
                 return [];
             }
 
-            console.log('🔍 [SchedulerGrid] DEBUG: Period processing details:', {
-                totalPeriods: safeLength(validatedPeriods),
-                focusedPeriodId: focusedPeriodId.value,
-                showNonInstructional: showNonInstructional.value,
-                samplePeriodIds: validatedPeriods.slice(0, 3).map(p => ({ id: p.id, block_number: p.block_number, label: p.label })),
-                allPeriodIds: validatedPeriods.map(p => p.id)
-            });
+            // Debug info only when periods change
+            if (safeLength(validatedPeriods) > 0) {
+                console.log('🔍 [SchedulerGrid] Period processing summary:', {
+                    totalPeriods: safeLength(validatedPeriods),
+                    focusedPeriodId: focusedPeriodId.value,
+                    showNonInstructional: showNonInstructional.value,
+                    stableIds: validatedPeriods.slice(0, 3).map(p => p.id) // Show stable IDs generated
+                });
+            }
 
             let filteredPeriods = validatedPeriods;
 
             // First filter by focused period if set
             if (focusedPeriodId.value) {
-                console.log('🔍 [SchedulerGrid] Filtering by focused period ID:', focusedPeriodId.value);
                 const focusedPeriods = validatedPeriods.filter(period => period.id === focusedPeriodId.value);
                 
-                console.log('🔍 [SchedulerGrid] After focused period filter:', {
-                    originalCount: safeLength(validatedPeriods),
-                    filteredCount: safeLength(focusedPeriods),
-                    foundMatch: focusedPeriods.length > 0,
-                    matchedPeriods: focusedPeriods.map(p => ({ id: p.id, label: p.label }))
-                });
-
                 // Safety check: if focused period ID doesn't match any periods, clear the focus and show all
                 if (safeLength(focusedPeriods) === 0) {
                     console.warn('🚨 [SchedulerGrid] Focused period ID does not match any periods. Clearing focus.', {
                         focusedId: focusedPeriodId.value,
-                        availableIds: validatedPeriods.map(p => p.id)
+                        availableIds: validatedPeriods.slice(0, 5).map(p => p.id)
                     });
                     focusedPeriodId.value = null;
                     // Don't filter, show all periods
@@ -515,8 +507,6 @@ export default {
             }
             // Then filter by instructional status
             else if (!showNonInstructional.value) {
-                console.log('🔍 [SchedulerGrid] Filtering periods - showNonInstructional:', showNonInstructional.value);
-                console.log('🔍 [SchedulerGrid] Sample period before filtering:', validatedPeriods[0]);
                 
                 filteredPeriods = validatedPeriods.filter(period => {
                     // Show periods where attendance_requirement is 'flexible' or 'required' or 'contracted'
@@ -572,13 +562,6 @@ export default {
                     }
 
                     return shouldShow;
-                });
-                
-                console.log('🔍 [SchedulerGrid] Filtered periods result:', {
-                    originalCount: safeLength(validatedPeriods),
-                    filteredCount: safeLength(filteredPeriods),
-                    showNonInstructional: showNonInstructional.value,
-                    sampleFiltered: filteredPeriods[0]
                 });
             }
 

@@ -210,6 +210,13 @@ export default {
                 sample: normalizedPeriods[0],
                 instructionalCount: normalizedPeriods.filter(p => p.is_instructional).length,
                 nonInstructionalCount: normalizedPeriods.filter(p => !p.is_instructional).length,
+                // Show ID transformation for debugging UUID issues
+                idTransformations: normalizedPeriods.slice(0, 3).map(p => ({
+                    originalId: p.originalId,
+                    stableId: p.id,
+                    blockNumber: p.block_number,
+                    label: p.label
+                }))
             });
 
             return normalizedPeriods;
