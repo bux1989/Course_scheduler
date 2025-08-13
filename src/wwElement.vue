@@ -215,8 +215,8 @@ export default {
                     originalId: p.originalId,
                     stableId: p.id,
                     blockNumber: p.block_number,
-                    label: p.label
-                }))
+                    label: p.label,
+                })),
             });
 
             return normalizedPeriods;

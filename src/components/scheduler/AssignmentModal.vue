@@ -392,9 +392,7 @@ export default {
         });
 
         const isAssignmentValid = computed(() => {
-            return (
-                assignmentForm.value.class_id && assignmentForm.value.safeLength(assignmentForm.value.teacher_ids) > 0
-            );
+            return assignmentForm.value.class_id && safeLength(assignmentForm.value.teacher_ids) > 0;
         });
 
         // Methods

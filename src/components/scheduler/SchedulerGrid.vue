@@ -472,7 +472,7 @@ export default {
                     periodsType: typeof props.periods,
                     periodsLength: props.periods?.length,
                     periodsKeys: Object.keys(props.periods || {}),
-                    samplePeriod: Array.isArray(props.periods) ? props.periods[0] : props.periods
+                    samplePeriod: Array.isArray(props.periods) ? props.periods[0] : props.periods,
                 });
                 return [];
             }
@@ -483,7 +483,7 @@ export default {
                     totalPeriods: safeLength(validatedPeriods),
                     focusedPeriodId: focusedPeriodId.value,
                     showNonInstructional: showNonInstructional.value,
-                    stableIds: validatedPeriods.slice(0, 3).map(p => p.id) // Show stable IDs generated
+                    stableIds: validatedPeriods.slice(0, 3).map(p => p.id), // Show stable IDs generated
                 });
             }
 
@@ -492,12 +492,12 @@ export default {
             // First filter by focused period if set
             if (focusedPeriodId.value) {
                 const focusedPeriods = validatedPeriods.filter(period => period.id === focusedPeriodId.value);
-                
+
                 // Safety check: if focused period ID doesn't match any periods, clear the focus and show all
                 if (safeLength(focusedPeriods) === 0) {
                     console.warn('🚨 [SchedulerGrid] Focused period ID does not match any periods. Clearing focus.', {
                         focusedId: focusedPeriodId.value,
-                        availableIds: validatedPeriods.slice(0, 5).map(p => p.id)
+                        availableIds: validatedPeriods.slice(0, 5).map(p => p.id),
                     });
                     focusedPeriodId.value = null;
                     // Don't filter, show all periods
@@ -507,11 +507,10 @@ export default {
             }
             // Then filter by instructional status
             else if (!showNonInstructional.value) {
-                
                 filteredPeriods = validatedPeriods.filter(period => {
                     // Show periods where attendance_requirement is 'flexible' or 'required' or 'contracted'
                     let shouldShow =
-                        period.attendance_requirement === 'flexible' || 
+                        period.attendance_requirement === 'flexible' ||
                         period.attendance_requirement === 'required' ||
                         period.attendance_requirement === 'contracted';
 
@@ -948,7 +947,7 @@ export default {
                 if (selectedClass) {
                     availableCourses = availableCourses.filter(course => {
                         // Check if course is available for the selected class's year group
-                        if (course.is_for_year_groups && course.safeLength(course.is_for_year_groups) > 0) {
+                        if (course.is_for_year_groups && safeLength(course.is_for_year_groups) > 0) {
                             return course.is_for_year_groups.includes(selectedClass.year_group);
                         }
                         return true; // If no restrictions, course is available
@@ -998,7 +997,7 @@ export default {
             // Get courses that have no possible_time_slots restrictions for the focused period
             const coursesWithoutRestrictions = props.courses.filter(course => {
                 // Course has no time slot restrictions
-                return !course.possible_time_slots || course.safeLength(course.possible_time_slots) === 0;
+                return !course.possible_time_slots || safeLength(course.possible_time_slots) === 0;
             });
 
             // Filter by current search term and class filter for consistency

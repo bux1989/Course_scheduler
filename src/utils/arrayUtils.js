@@ -42,10 +42,10 @@ export function nonEmpty(a) {
 
 /**
  * Normalize period data to unified shape, handling various WeWeb collection formats
- * 
+ *
  * CRITICAL FIX: Ensures stable Vue :key values by always using block_number-based IDs
  * instead of database UUIDs which can cause Vue reactive DOM issues and grid disappearing.
- * 
+ *
  * @param {*} periodsData - Raw periods data from WeWeb (array or numeric-key object)
  * @returns {Array} - Normalized periods array with stable IDs for Vue reactivity
  */
@@ -97,7 +97,7 @@ export function normalizePeriods(periodsData) {
             // Generate a consistent, stable ID for Vue key tracking
             // Priority: use block_number for stability, fallback to original id only if no block_number conflicts
             const stableId = `period-${blockNumber}`;
-            
+
             return {
                 // Preserve original data
                 ...period,
