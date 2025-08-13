@@ -457,9 +457,16 @@ export default {
         });
 
         const visiblePeriods = computed(() => {
-            const validatedPeriods = validateAndUnwrapArray(props.periods, 'periods');
+            // Use the periods directly - they are already normalized in the parent component
+            const validatedPeriods = safeArray(props.periods);
 
             if (safeLength(validatedPeriods) === 0) {
+                console.log('🔍 [SchedulerGrid] No periods available:', {
+                    periodsType: typeof props.periods,
+                    periodsLength: props.periods?.length,
+                    periodsKeys: Object.keys(props.periods || {}),
+                    samplePeriod: Array.isArray(props.periods) ? props.periods[0] : props.periods
+                });
                 return [];
             }
 
@@ -471,10 +478,15 @@ export default {
             }
             // Then filter by instructional status
             else if (!showNonInstructional.value) {
+                console.log('🔍 [SchedulerGrid] Filtering periods - showNonInstructional:', showNonInstructional.value);
+                console.log('🔍 [SchedulerGrid] Sample period before filtering:', validatedPeriods[0]);
+                
                 filteredPeriods = validatedPeriods.filter(period => {
-                    // Show periods where attendance_requirement is 'flexible' or 'required'
+                    // Show periods where attendance_requirement is 'flexible' or 'required' or 'contracted'
                     let shouldShow =
-                        period.attendance_requirement === 'flexible' || period.attendance_requirement === 'required';
+                        period.attendance_requirement === 'flexible' || 
+                        period.attendance_requirement === 'required' ||
+                        period.attendance_requirement === 'contracted';
 
                     // Alternative checks if attendance_requirement is not available or doesn't match expected values
                     if (!shouldShow && !period.attendance_requirement) {
@@ -523,6 +535,13 @@ export default {
                     }
 
                     return shouldShow;
+                });
+                
+                console.log('🔍 [SchedulerGrid] Filtered periods result:', {
+                    originalCount: safeLength(validatedPeriods),
+                    filteredCount: safeLength(filteredPeriods),
+                    showNonInstructional: showNonInstructional.value,
+                    sampleFiltered: filteredPeriods[0]
                 });
             }
 
