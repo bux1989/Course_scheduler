@@ -30,107 +30,143 @@
             </div>
         </div>
 
-        <!-- Grid Header with Days -->
-        <div class="grid-header" role="row">
-            <div class="period-header-cell" role="columnheader">
-                <span class="period-label">Period</span>
-            </div>
-            <div
-                v-for="(day, index) in visibleDays"
-                :key="day.id"
-                class="day-header-cell"
-                role="columnheader"
-                :aria-colindex="index + 1"
-            >
-                <span class="day-name">{{ day.name }}</span>
-                <span class="day-date" v-if="day.date">{{ formatDate(day.date) }}</span>
+        <!-- Debug Messages for Empty Data -->
+        <div v-if="visibleDays.length === 0 || visiblePeriods.length === 0" class="debug-message-panel">
+            <h3>⚠️ Debug Information</h3>
+            <div class="debug-messages">
+                <div v-if="visibleDays.length === 0" class="debug-warning">
+                    <strong>No School Days Found:</strong>
+                    <ul>
+                        <li>Raw schoolDays prop: {{ JSON.stringify(schoolDays) }}</li>
+                        <li>schoolDays length: {{ schoolDays.length }}</li>
+                        <li>maxDays setting: {{ maxDays }}</li>
+                    </ul>
+                </div>
+                <div v-if="visiblePeriods.length === 0" class="debug-warning">
+                    <strong>No Periods Visible:</strong>
+                    <ul>
+                        <li>Raw periods prop: {{ JSON.stringify(periods) }}</li>
+                        <li>periods length: {{ periods.length }}</li>
+                        <li>showNonInstructional: {{ showNonInstructional }}</li>
+                        <li>Filtered periods count: {{ visiblePeriods.length }}</li>
+                    </ul>
+                </div>
             </div>
         </div>
 
-        <!-- Grid Body -->
-        <div class="grid-body">
-            <div
-                v-for="(period, periodIndex) in visiblePeriods"
-                :key="period.id"
-                class="grid-row"
-                :class="{ 'non-instructional': !period.is_instructional }"
-                role="row"
-                :aria-rowindex="periodIndex + 1"
-            >
-                <!-- Period Label -->
-                <div class="period-label-cell" role="rowheader">
-                    <div class="period-info">
-                        <span class="period-name">{{ period.name }}</span>
-                        <span class="period-time"
-                            >{{ formatTime(period.start_time) }} - {{ formatTime(period.end_time) }}</span
-                        >
-                        <span v-if="!period.is_instructional" class="non-instructional-badge">
-                            {{ period.type || 'Break' }}
-                        </span>
+        <!-- Main Grid (only show if we have data) -->
+        <div v-if="visibleDays.length > 0 && visiblePeriods.length > 0">
+            <!-- Grid Header with Days -->
+            <div class="grid-header" role="row">
+                <div class="period-header-cell" role="columnheader">
+                    <span class="period-label">Period</span>
+                    <div class="debug-info">
+                        <small>Days: {{ visibleDays.length }}, Periods: {{ visiblePeriods.length }}</small>
                     </div>
                 </div>
-
-                <!-- Day Cells -->
                 <div
-                    v-for="day in visibleDays"
-                    :key="`${period.id}-${day.id}`"
-                    class="schedule-cell"
-                    :class="getCellClasses(day.id, period.id)"
-                    role="gridcell"
-                    tabindex="0"
-                    @click="handleCellClick(day.id, period.id, period)"
-                    @keydown.enter="handleCellClick(day.id, period.id, period)"
-                    @keydown.space.prevent="handleCellClick(day.id, period.id, period)"
-                    :aria-label="getCellAriaLabel(day, period)"
+                    v-for="(day, index) in visibleDays"
+                    :key="day.id"
+                    class="day-header-cell"
+                    role="columnheader"
+                    :aria-colindex="index + 1"
                 >
-                    <!-- Multiple Assignments Display -->
-                    <div v-if="getCellAssignments(day.id, period.id).length > 0" class="assignments-container">
-                        <div
-                            v-for="(assignment, index) in getCellAssignments(day.id, period.id)"
-                            :key="index"
-                            class="assignment-item"
-                            :class="getAssignmentClasses(assignment)"
-                            :style="getAssignmentStyles(assignment)"
-                            @click.stop="openAssignmentDetails(assignment)"
-                        >
-                            <div class="assignment-content">
-                                <span class="course-name">{{ getCourseName(assignment.course_id) }}</span>
-                                <span class="class-name" v-if="assignment.class_id">{{
-                                    getClassName(assignment.class_id)
-                                }}</span>
-                                <span class="teacher-names" v-if="assignment.teacher_ids?.length">
-                                    {{ getTeacherNames(assignment.teacher_ids) }}
-                                </span>
-                                <span class="room-name" v-if="assignment.room_id">{{
-                                    getRoomName(assignment.room_id)
-                                }}</span>
-                            </div>
+                    <span class="day-name">{{ day.name }}</span>
+                    <span class="day-date" v-if="day.date">{{ formatDate(day.date) }}</span>
+                    <div class="debug-info">
+                        <small>ID: {{ day.id }}</small>
+                    </div>
+                </div>
+            </div>
 
-                            <!-- Conflict Indicators -->
-                            <div v-if="hasConflicts(assignment)" class="conflict-indicator" title="Has conflicts">
-                                ⚠️
-                            </div>
-
-                            <!-- Deleted Entity Warnings -->
-                            <div v-if="hasDeletedEntities(assignment)" class="deleted-warning" title="Missing data">
-                                ❌
+            <!-- Grid Body -->
+            <div class="grid-body">
+                <div
+                    v-for="(period, periodIndex) in visiblePeriods"
+                    :key="period.id"
+                    class="grid-row"
+                    :class="{ 'non-instructional': !period.is_instructional }"
+                    role="row"
+                    :aria-rowindex="periodIndex + 1"
+                >
+                    <!-- Period Label -->
+                    <div class="period-label-cell" role="rowheader">
+                        <div class="period-info">
+                            <span class="period-name">{{ period.name }}</span>
+                            <span class="period-time"
+                                >{{ formatTime(period.start_time) }} - {{ formatTime(period.end_time) }}</span
+                            >
+                            <span v-if="!period.is_instructional" class="non-instructional-badge">
+                                {{ period.type || 'Break' }}
+                            </span>
+                            <div class="debug-info">
+                                <small>ID: {{ period.id }}, Instructional: {{ period.is_instructional !== false ? 'Yes' : 'No' }}</small>
                             </div>
                         </div>
-
-                        <!-- Add More Button for cells with assignments -->
-                        <button
-                            class="add-more-button"
-                            @click.stop="openAssignmentModal(day.id, period.id, period)"
-                            title="Add another assignment"
-                        >
-                            +
-                        </button>
                     </div>
 
-                    <!-- Empty Cell -->
-                    <div v-else class="empty-cell" @click="openAssignmentModal(day.id, period.id, period)">
-                        <span class="add-icon">+</span>
-                        <span class="add-text">Add Course</span>
+                    <!-- Day Cells -->
+                    <div
+                        v-for="day in visibleDays"
+                        :key="`${period.id}-${day.id}`"
+                        class="schedule-cell"
+                        :class="getCellClasses(day.id, period.id)"
+                        role="gridcell"
+                        tabindex="0"
+                        @click="handleCellClick(day.id, period.id, period)"
+                        @keydown.enter="handleCellClick(day.id, period.id, period)"
+                        @keydown.space.prevent="handleCellClick(day.id, period.id, period)"
+                        :aria-label="getCellAriaLabel(day, period)"
+                    >
+                        <!-- Multiple Assignments Display -->
+                        <div v-if="getCellAssignments(day.id, period.id).length > 0" class="assignments-container">
+                            <div
+                                v-for="(assignment, index) in getCellAssignments(day.id, period.id)"
+                                :key="index"
+                                class="assignment-item"
+                                :class="getAssignmentClasses(assignment)"
+                                :style="getAssignmentStyles(assignment)"
+                                @click.stop="openAssignmentDetails(assignment)"
+                            >
+                                <div class="assignment-content">
+                                    <span class="course-name">{{ getCourseName(assignment.course_id) }}</span>
+                                    <span class="class-name" v-if="assignment.class_id">{{
+                                        getClassName(assignment.class_id)
+                                    }}</span>
+                                    <span class="teacher-names" v-if="assignment.teacher_ids?.length">
+                                        {{ getTeacherNames(assignment.teacher_ids) }}
+                                    </span>
+                                    <span class="room-name" v-if="assignment.room_id">{{
+                                        getRoomName(assignment.room_id)
+                                    }}</span>
+                                </div>
+
+                                <!-- Conflict Indicators -->
+                                <div v-if="hasConflicts(assignment)" class="conflict-indicator" title="Has conflicts">
+                                    ⚠️
+                                </div>
+
+                                <!-- Deleted Entity Warnings -->
+                                <div v-if="hasDeletedEntities(assignment)" class="deleted-warning" title="Missing data">
+                                    ❌
+                                </div>
+                            </div>
+
+                            <!-- Add More Button for cells with assignments -->
+                            <button
+                                class="add-more-button"
+                                @click.stop="openAssignmentModal(day.id, period.id, period)"
+                                title="Add another assignment"
+                            >
+                                +
+                            </button>
+                        </div>
+
+                        <!-- Empty Cell -->
+                        <div v-else class="empty-cell" @click="openAssignmentModal(day.id, period.id, period)">
+                            <span class="add-icon">+</span>
+                            <span class="add-text">Add Course</span>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -203,17 +239,91 @@ export default {
         // Local state
         const showNonInstructional = ref(true);
         const selectedYearFilter = ref('');
+        
+        // Debug logging for props and state
+        console.log('🚀 [SchedulerGrid] Component setup initialized with props:', {
+            periodsCount: props.periods?.length || 0,
+            schoolDaysCount: props.schoolDays?.length || 0,
+            coursesCount: props.courses?.length || 0,
+            teachersCount: props.teachers?.length || 0,
+            classesCount: props.classes?.length || 0,
+            roomsCount: props.rooms?.length || 0,
+            draftSchedulesCount: props.draftSchedules?.length || 0,
+            maxDays: props.maxDays,
+            isReadOnly: props.isReadOnly,
+            showStatistics: props.showStatistics
+        });
+        
+        // Check for empty data and warn
+        watch([() => props.schoolDays, () => props.periods], ([newDays, newPeriods]) => {
+            if (!newDays || newDays.length === 0) {
+                console.warn('⚠️ [SchedulerGrid] No school days found!', {
+                    schoolDays: newDays,
+                    schoolDaysType: typeof newDays,
+                    allProps: {
+                        periods: props.periods,
+                        schoolDays: props.schoolDays,
+                        courses: props.courses,
+                        teachers: props.teachers
+                    }
+                });
+            }
+            
+            if (!newPeriods || newPeriods.length === 0) {
+                console.warn('⚠️ [SchedulerGrid] No periods found!', {
+                    periods: newPeriods,
+                    periodsType: typeof newPeriods
+                });
+            }
+        }, { immediate: true });
 
         // Computed properties
         const visibleDays = computed(() => {
-            return props.schoolDays.slice(0, props.maxDays);
+            const days = props.schoolDays.slice(0, props.maxDays);
+            console.log('🗓️ [SchedulerGrid] visibleDays computed:', {
+                totalSchoolDays: props.schoolDays.length,
+                maxDays: props.maxDays,
+                visibleDaysCount: days.length,
+                visibleDays: days
+            });
+            return days;
         });
 
         const visiblePeriods = computed(() => {
+            console.log('📅 [SchedulerGrid] visiblePeriods computation START:', {
+                showNonInstructional: showNonInstructional.value,
+                totalPeriodsCount: props.periods.length
+            });
+            
+            let filteredPeriods;
             if (showNonInstructional.value) {
-                return props.periods;
+                console.log('📅 [SchedulerGrid] Showing ALL periods (including non-instructional)');
+                filteredPeriods = props.periods;
+            } else {
+                console.log('📅 [SchedulerGrid] Filtering to ONLY instructional periods');
+                filteredPeriods = props.periods.filter(period => {
+                    const isInstructional = period.is_instructional !== false;
+                    console.log(`  Period "${period.name}" (id: ${period.id}):`, {
+                        is_instructional: period.is_instructional,
+                        computed_isInstructional: isInstructional,
+                        included: isInstructional,
+                        type: period.type
+                    });
+                    return isInstructional;
+                });
             }
-            return props.periods.filter(period => period.is_instructional !== false);
+            
+            console.log('📅 [SchedulerGrid] visiblePeriods computed RESULT:', {
+                filteredPeriodsCount: filteredPeriods.length,
+                periods: filteredPeriods.map(p => ({
+                    id: p.id,
+                    name: p.name,
+                    is_instructional: p.is_instructional,
+                    type: p.type
+                }))
+            });
+            
+            return filteredPeriods;
         });
 
         const yearGroups = computed(() => {
@@ -758,6 +868,56 @@ export default {
 .schedule-cell:focus {
     outline: 2px solid #007cba;
     outline-offset: -2px;
+}
+
+/* Debug message panel */
+.debug-message-panel {
+    padding: 20px;
+    background: #fff3cd;
+    border: 1px solid #ffeaa7;
+    border-radius: 4px;
+    margin: 16px;
+}
+
+.debug-message-panel h3 {
+    margin: 0 0 12px 0;
+    color: #856404;
+}
+
+.debug-warning {
+    margin-bottom: 16px;
+    padding: 12px;
+    background: #fff;
+    border-left: 4px solid #ffc107;
+    border-radius: 4px;
+}
+
+.debug-warning strong {
+    display: block;
+    margin-bottom: 8px;
+    color: #856404;
+}
+
+.debug-warning ul {
+    margin: 8px 0 0 16px;
+    color: #6c757d;
+    font-family: monospace;
+    font-size: 0.9em;
+}
+
+.debug-warning li {
+    margin-bottom: 4px;
+    word-break: break-all;
+}
+
+/* Debug info styling */
+.debug-info {
+    font-size: 0.7em;
+    color: #888;
+    margin-top: 2px;
+    padding: 2px;
+    background: rgba(0, 0, 0, 0.05);
+    border-radius: 2px;
 }
 
 /* Read-only mode */

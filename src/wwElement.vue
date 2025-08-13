@@ -103,6 +103,9 @@
 
         <!-- Show test data toggle -->
         <button @click="showTestData = !showTestData" class="test-toggle" title="Toggle test data">🧪</button>
+
+        <!-- Debug data button -->
+        <button @click="logCurrentData" class="debug-toggle" title="Log current data to console">🐛</button>
     </div>
 </template>
 
@@ -163,17 +166,76 @@ export default {
         });
 
         // Computed properties for data access
-        const schoolId = computed(() => props.content.schoolId || 'No School ID');
-        const draftId = computed(() => props.content.draftId || 'No Draft ID');
-        const publishedBy = computed(() => props.content.publishedBy || null);
-        const periods = computed(() => props.content.periods || []);
-        const courses = computed(() => props.content.courses || []);
-        const teachers = computed(() => props.content.teachers || []);
-        const classes = computed(() => props.content.classes || []);
-        const rooms = computed(() => props.content.rooms || []);
-        const schoolDays = computed(() => props.content.schoolDays || []);
-        const draftSchedules = computed(() => props.content.draftSchedules || []);
-        const liveSchedules = computed(() => props.content.liveSchedules || []);
+        const schoolId = computed(() => {
+            console.log('🏫 [wwElement] schoolId computed:', props.content.schoolId);
+            return props.content.schoolId || 'No School ID';
+        });
+        const draftId = computed(() => {
+            console.log('📝 [wwElement] draftId computed:', props.content.draftId);
+            return props.content.draftId || 'No Draft ID';
+        });
+        const publishedBy = computed(() => {
+            console.log('✅ [wwElement] publishedBy computed:', props.content.publishedBy);
+            return props.content.publishedBy || null;
+        });
+        const periods = computed(() => {
+            const periodsData = props.content.periods || [];
+            console.log('📅 [wwElement] periods computed:', periodsData.length, 'periods:', periodsData);
+            periodsData.forEach((period, index) => {
+                console.log(`  Period ${index}:`, {
+                    id: period.id,
+                    name: period.name,
+                    is_instructional: period.is_instructional,
+                    start_time: period.start_time,
+                    end_time: period.end_time,
+                    type: period.type
+                });
+            });
+            return periodsData;
+        });
+        const courses = computed(() => {
+            const coursesData = props.content.courses || [];
+            console.log('📚 [wwElement] courses computed:', coursesData.length, 'courses:', coursesData);
+            return coursesData;
+        });
+        const teachers = computed(() => {
+            const teachersData = props.content.teachers || [];
+            console.log('👨‍🏫 [wwElement] teachers computed:', teachersData.length, 'teachers:', teachersData);
+            return teachersData;
+        });
+        const classes = computed(() => {
+            const classesData = props.content.classes || [];
+            console.log('🎓 [wwElement] classes computed:', classesData.length, 'classes:', classesData);
+            return classesData;
+        });
+        const rooms = computed(() => {
+            const roomsData = props.content.rooms || [];
+            console.log('🏛️ [wwElement] rooms computed:', roomsData.length, 'rooms:', roomsData);
+            return roomsData;
+        });
+        const schoolDays = computed(() => {
+            const schoolDaysData = props.content.schoolDays || [];
+            console.log('🗓️ [wwElement] schoolDays computed:', schoolDaysData.length, 'days:', schoolDaysData);
+            schoolDaysData.forEach((day, index) => {
+                console.log(`  Day ${index}:`, {
+                    id: day.id,
+                    name: day.name,
+                    date: day.date,
+                    is_active: day.is_active
+                });
+            });
+            return schoolDaysData;
+        });
+        const draftSchedules = computed(() => {
+            const draftData = props.content.draftSchedules || [];
+            console.log('📊 [wwElement] draftSchedules computed:', draftData.length, 'schedules:', draftData);
+            return draftData;
+        });
+        const liveSchedules = computed(() => {
+            const liveData = props.content.liveSchedules || [];
+            console.log('🔴 [wwElement] liveSchedules computed:', liveData.length, 'schedules:', liveData);
+            return liveData;
+        });
 
         // Computed state
         const isReadOnly = computed(() => !!publishedBy.value);
@@ -506,6 +568,22 @@ export default {
             }
         }
 
+        function logCurrentData() {
+            console.log('📋 [wwElement] CURRENT DATA DUMP:');
+            console.log('  Full Props Object:', props);
+            console.log('  Content Object:', props.content);
+            console.log('  School Days:', schoolDays.value);
+            console.log('  Periods:', periods.value);
+            console.log('  Courses:', courses.value);
+            console.log('  Teachers:', teachers.value);
+            console.log('  Classes:', classes.value);
+            console.log('  Rooms:', rooms.value);
+            console.log('  Draft Schedules:', draftSchedules.value);
+            console.log('  Live Schedules:', liveSchedules.value);
+            console.log('  IsReadOnly:', isReadOnly.value);
+            console.log('  AllConflicts:', allConflicts.value);
+        }
+
         // Auto-save functionality
         let saveTimeout;
         watch(
@@ -520,6 +598,31 @@ export default {
             },
             { deep: true }
         );
+
+        // Debug logging on mount
+        onMounted(() => {
+            console.log('🚀 [wwElement] Component mounted with content:', {
+                fullContent: props.content,
+                periods: periods.value,
+                schoolDays: schoolDays.value,
+                courses: courses.value,
+                teachers: teachers.value,
+                classes: classes.value,
+                rooms: rooms.value,
+                draftSchedules: draftSchedules.value,
+                liveSchedules: liveSchedules.value
+            });
+        });
+
+        // Watch for changes in props.content
+        watch(() => props.content, (newContent, oldContent) => {
+            console.log('🔄 [wwElement] Content prop changed:', {
+                newContent,
+                oldContent,
+                periodsChanged: newContent?.periods !== oldContent?.periods,
+                schoolDaysChanged: newContent?.schoolDays !== oldContent?.schoolDays
+            });
+        }, { deep: true });
 
         return {
             // Data
@@ -565,6 +668,7 @@ export default {
             ignoreConflict,
             autoResolveConflicts,
             emitTestEvent,
+            logCurrentData,
         };
     },
 };
@@ -714,6 +818,27 @@ export default {
     border: none;
     border-radius: 50%;
     background: #007cba;
+    color: white;
+    font-size: 1.2em;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    z-index: 1000;
+    transition: all 0.2s;
+
+    &:hover {
+        transform: scale(1.1);
+    }
+}
+
+.debug-toggle {
+    position: fixed;
+    bottom: 70px;
+    right: 20px;
+    width: 40px;
+    height: 40px;
+    border: none;
+    border-radius: 50%;
+    background: #ff6b6b;
     color: white;
     font-size: 1.2em;
     cursor: pointer;
