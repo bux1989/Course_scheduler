@@ -299,20 +299,53 @@ export default {
 
         const draftSchedules = computed(() => {
             const rawDrafts = props.content.draftSchedules;
-            const draftArray = toArray(rawDrafts);
-            if (!nonEmpty(draftArray)) {
-                return safeArray(validateAndUnwrapArray(rawDrafts, 'draftSchedules'));
+            
+            // Use enhanced toArray function to handle WeWeb collection formats
+            let finalDraftArray = toArray(rawDrafts);
+            
+            // Fallback to legacy method if toArray didn't find anything
+            if (!nonEmpty(finalDraftArray)) {
+                finalDraftArray = safeArray(validateAndUnwrapArray(rawDrafts, 'draftSchedules'));
             }
-            return draftArray;
+
+            // Debug: Log draft schedules data
+            console.log('📝 [wwElement] Draft Schedules computed:', {
+                rawDraftsType: typeof rawDrafts,
+                rawDraftsIsArray: Array.isArray(rawDrafts),
+                rawDraftsLength: rawDrafts?.length,
+                rawDraftsKeys: typeof rawDrafts === 'object' ? Object.keys(rawDrafts || {}).slice(0, 5) : 'N/A',
+                finalArrayLength: safeLength(finalDraftArray),
+                sampleDraft: finalDraftArray[0],
+                sampleDraftKeys: finalDraftArray[0] ? Object.keys(finalDraftArray[0]) : [],
+                firstFewDrafts: finalDraftArray.slice(0, 2),
+            });
+
+            return finalDraftArray;
         });
 
         const liveSchedules = computed(() => {
             const rawLive = props.content.liveSchedules;
-            const liveArray = toArray(rawLive);
-            if (!nonEmpty(liveArray)) {
-                return safeArray(validateAndUnwrapArray(rawLive, 'liveSchedules'));
+            
+            // Use enhanced toArray function to handle WeWeb collection formats  
+            let finalLiveArray = toArray(rawLive);
+            
+            // Fallback to legacy method if toArray didn't find anything
+            if (!nonEmpty(finalLiveArray)) {
+                finalLiveArray = safeArray(validateAndUnwrapArray(rawLive, 'liveSchedules'));
             }
-            return liveArray;
+
+            // Debug: Log live schedules data
+            console.log('📺 [wwElement] Live Schedules computed:', {
+                rawLiveType: typeof rawLive,
+                rawLiveIsArray: Array.isArray(rawLive),
+                rawLiveLength: rawLive?.length,
+                rawLiveKeys: typeof rawLive === 'object' ? Object.keys(rawLive || {}).slice(0, 5) : 'N/A',
+                finalArrayLength: safeLength(finalLiveArray),
+                sampleLive: finalLiveArray[0],
+                firstFewLive: finalLiveArray.slice(0, 2),
+            });
+
+            return finalLiveArray;
         });
 
         const subjects = computed(() => {
