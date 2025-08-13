@@ -526,6 +526,7 @@ export default {
 .scheduler-grid {
     display: flex;
     flex-direction: column;
+    width: 100%;
     border: 1px solid #ddd;
     border-radius: 6px;
     overflow: hidden;

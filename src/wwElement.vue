@@ -179,19 +179,49 @@ export default {
             return props.content.publishedBy || null;
         });
         const periods = computed(() => {
-            const periodsData = props.content.periods || [];
-            console.log('📅 [wwElement] periods computed:', periodsData.length, 'periods:', periodsData);
-            periodsData.forEach((period, index) => {
+            const rawPeriodsData = props.content.periods || [];
+            console.log('📅 [wwElement] periods computed:', rawPeriodsData.length, 'periods:', rawPeriodsData);
+            
+            const processedPeriods = rawPeriodsData.map((period, index) => {
+                // Generate fallback period name from times or index
+                let fallbackName = `Period ${index + 1}`;
+                if (period.start_time && period.end_time) {
+                    fallbackName = `${period.start_time} - ${period.end_time}`;
+                }
+                
+                const processedPeriod = {
+                    ...period,
+                    name: period.name || period.period_name || fallbackName,
+                    is_instructional: period.is_instructional !== undefined ? period.is_instructional : 
+                                    period.instructional !== undefined ? period.instructional :
+                                    period.type !== 'break' && period.type !== 'pause' && period.type !== 'lunch', // Default to true unless explicitly a break
+                    type: period.type || (period.is_instructional === false ? 'break' : 'lesson')
+                };
+                
                 console.log(`  Period ${index}:`, {
-                    id: period.id,
-                    name: period.name,
-                    is_instructional: period.is_instructional,
-                    start_time: period.start_time,
-                    end_time: period.end_time,
-                    type: period.type
+                    original: {
+                        id: period.id,
+                        name: period.name,
+                        is_instructional: period.is_instructional,
+                        start_time: period.start_time,
+                        end_time: period.end_time,
+                        type: period.type
+                    },
+                    processed: {
+                        id: processedPeriod.id,
+                        name: processedPeriod.name,
+                        is_instructional: processedPeriod.is_instructional,
+                        start_time: processedPeriod.start_time,
+                        end_time: processedPeriod.end_time,
+                        type: processedPeriod.type
+                    }
                 });
+                
+                return processedPeriod;
             });
-            return periodsData;
+            
+            console.log('📅 [wwElement] Final processed periods:', processedPeriods);
+            return processedPeriods;
         });
         const courses = computed(() => {
             const coursesData = props.content.courses || [];
@@ -214,17 +244,30 @@ export default {
             return roomsData;
         });
         const schoolDays = computed(() => {
-            const schoolDaysData = props.content.schoolDays || [];
-            console.log('🗓️ [wwElement] schoolDays computed:', schoolDaysData.length, 'days:', schoolDaysData);
-            schoolDaysData.forEach((day, index) => {
+            const rawDaysData = props.content.schoolDays || [];
+            console.log('🗓️ [wwElement] schoolDays computed:', rawDaysData.length, 'days:', rawDaysData);
+            
+            // Create fallback day names if missing
+            const defaultDayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+            
+            const processedDays = rawDaysData.map((day, index) => {
+                const processedDay = {
+                    ...day,
+                    name: day.name || day.day_name || defaultDayNames[index] || `Day ${index + 1}`,
+                    date: day.date || day.day_date || null,
+                    is_active: day.is_active !== undefined ? day.is_active : true
+                };
+                
                 console.log(`  Day ${index}:`, {
-                    id: day.id,
-                    name: day.name,
-                    date: day.date,
-                    is_active: day.is_active
+                    original: { id: day.id, name: day.name, date: day.date, is_active: day.is_active },
+                    processed: { id: processedDay.id, name: processedDay.name, date: processedDay.date, is_active: processedDay.is_active }
                 });
+                
+                return processedDay;
             });
-            return schoolDaysData;
+            
+            console.log('🗓️ [wwElement] Final processed schoolDays:', processedDays);
+            return processedDays;
         });
         const draftSchedules = computed(() => {
             const draftData = props.content.draftSchedules || [];
@@ -569,19 +612,42 @@ export default {
         }
 
         function logCurrentData() {
-            console.log('📋 [wwElement] CURRENT DATA DUMP:');
-            console.log('  Full Props Object:', props);
-            console.log('  Content Object:', props.content);
-            console.log('  School Days:', schoolDays.value);
-            console.log('  Periods:', periods.value);
-            console.log('  Courses:', courses.value);
-            console.log('  Teachers:', teachers.value);
-            console.log('  Classes:', classes.value);
-            console.log('  Rooms:', rooms.value);
-            console.log('  Draft Schedules:', draftSchedules.value);
-            console.log('  Live Schedules:', liveSchedules.value);
-            console.log('  IsReadOnly:', isReadOnly.value);
-            console.log('  AllConflicts:', allConflicts.value);
+            console.log('🐛 [wwElement] === COMPLETE DATA DUMP ===');
+            console.log('Raw content object:', props.content);
+            console.log('School ID:', schoolId.value);
+            console.log('Draft ID:', draftId.value);
+            console.log('Published By:', publishedBy.value);
+            
+            // Detailed periods analysis
+            console.log('📅 PERIODS ANALYSIS:');
+            console.log('  Raw periods:', props.content.periods);
+            console.log('  Processed periods:', periods.value);
+            if (periods.value.length > 0) {
+                const samplePeriod = periods.value[0];
+                console.log('  Sample period object keys:', Object.keys(samplePeriod));
+                console.log('  Sample period values:', samplePeriod);
+            }
+            
+            // Detailed schoolDays analysis
+            console.log('🗓️ SCHOOL DAYS ANALYSIS:');
+            console.log('  Raw schoolDays:', props.content.schoolDays);
+            console.log('  Processed schoolDays:', schoolDays.value);
+            if (schoolDays.value.length > 0) {
+                const sampleDay = schoolDays.value[0];
+                console.log('  Sample day object keys:', Object.keys(sampleDay));
+                console.log('  Sample day values:', sampleDay);
+            }
+            
+            console.log('Courses:', courses.value.length, courses.value.slice(0, 2));
+            console.log('Teachers:', teachers.value.length, teachers.value.slice(0, 2));
+            console.log('Classes:', classes.value.length, classes.value.slice(0, 2));
+            console.log('Rooms:', rooms.value.length, rooms.value.slice(0, 2));
+            console.log('Draft Schedules:', draftSchedules.value.length, draftSchedules.value.slice(0, 2));
+            console.log('Live Schedules:', liveSchedules.value.length, liveSchedules.value.slice(0, 2));
+            console.log('Is Read Only:', isReadOnly.value);
+            console.log('Can Undo:', canUndo.value);
+            console.log('All Conflicts:', allConflicts.value.length, allConflicts.value);
+            console.log('🐛 [wwElement] === END COMPLETE DATA DUMP ===');
         }
 
         // Auto-save functionality
@@ -622,6 +688,20 @@ export default {
                 periodsChanged: newContent?.periods !== oldContent?.periods,
                 schoolDaysChanged: newContent?.schoolDays !== oldContent?.schoolDays
             });
+            
+            // Log available field names for periods
+            if (newContent?.periods?.length > 0) {
+                const firstPeriod = newContent.periods[0];
+                console.log('📅 Available period field names:', Object.keys(firstPeriod));
+                console.log('📅 Sample period data:', firstPeriod);
+            }
+            
+            // Log available field names for school days  
+            if (newContent?.schoolDays?.length > 0) {
+                const firstDay = newContent.schoolDays[0];
+                console.log('🗓️ Available school day field names:', Object.keys(firstDay));
+                console.log('🗓️ Sample school day data:', firstDay);
+            }
         }, { deep: true });
 
         return {
