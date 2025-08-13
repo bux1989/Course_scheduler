@@ -43,6 +43,13 @@
             </div>
 
             <div class="toolbar-section">
+                <select v-model="selectedClassFilter" @change="handleClassFilterChange">
+                    <option value="">All Classes</option>
+                    <option v-for="cls in availableClasses" :key="cls.id" :value="cls.id">{{ cls.name }}</option>
+                </select>
+            </div>
+
+            <div class="toolbar-section">
                 <button 
                     @click="clearPeriodFocus" 
                     v-if="focusedPeriodId"
@@ -157,6 +164,8 @@
                         @keydown.enter="handleCellClick(day.id, period.id, period)"
                         @keydown.space.prevent="handleCellClick(day.id, period.id, period)"
                         :aria-label="getCellAriaLabel(day, period)"
+                        :draggable="false"
+                        data-drag-disabled="true"
                     >
                         <!-- Multiple Assignments Display -->
                         <div v-if="getCellAssignments(day.id, period.id).length > 0" class="assignments-container">
@@ -229,6 +238,9 @@
                             :style="getCourseCardStyle(course)"
                             @click="assignCourseToSlot(course, day.id, focusedPeriodId)"
                             :title="`Click to assign ${course.name || course.course_name} to ${day.name} ${getFocusedPeriodName()}`"
+                            :draggable="true"
+                            data-course-id="course.id"
+                            data-drag-enabled="true"
                         >
                             <div class="course-name">{{ course.name || course.course_name || course.title }}</div>
                             <div class="course-details">
@@ -239,6 +251,30 @@
                         </div>
                         <div v-if="getAvailableCoursesForSlot(day.id, focusedPeriodId).length === 0" class="no-courses">
                             No courses available for this day/period
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- No Preferred Days Courses Panel -->
+            <div v-if="getNoPreferredDaysCourses().length > 0" class="no-preferred-days-panel">
+                <h4>📅 Courses with No Preferred Days</h4>
+                <p class="panel-description">These courses have no time slot restrictions and can be scheduled on any day:</p>
+                <div class="no-preferred-courses-list">
+                    <div 
+                        v-for="course in getNoPreferredDaysCourses()" 
+                        :key="`no-pref-${course.id}`" 
+                        class="course-card"
+                        :style="getCourseCardStyle(course)"
+                        @click="assignCourseToFocusedSlot(course)"
+                        :title="`${course.name || course.course_name} - Can be scheduled on any day`"
+                    >
+                        <div class="course-name">{{ course.name || course.course_name || course.title }}</div>
+                        <div class="course-details">
+                            <small v-if="course.course_code">Code: {{ course.course_code }}</small>
+                            <small v-if="course.max_students">Max: {{ course.max_students }}</small>
+                            <small v-if="course.subject_name">{{ course.subject_name }}</small>
+                            <small class="flexible-tag">📅 Flexible scheduling</small>
                         </div>
                     </div>
                 </div>
@@ -318,6 +354,7 @@ export default {
         const showLessonSchedules = ref(true);
         const isLiveMode = ref(false);
         const selectedYearFilter = ref('');
+        const selectedClassFilter = ref('');
         const focusedPeriodId = ref(null);
         
         // Debug logging for props and state
@@ -387,42 +424,45 @@ export default {
             }
             // Then filter by instructional status
             else if (!showNonInstructional.value) {
-                console.log('📅 [SchedulerGrid] Filtering to ONLY instructional periods');
+                console.log('📅 [SchedulerGrid] Filtering to show periods with flexible or required attendance');
                 filteredPeriods = props.periods.filter(period => {
-                    // More sophisticated instructional detection based on block_type and other fields
-                    let isInstructional = true;
+                    // Show periods where attendance_requirement is 'flexible' or 'required'
+                    // This is the correct interpretation based on user feedback
+                    const shouldShow = period.attendance_requirement === 'flexible' || period.attendance_requirement === 'required';
                     
-                    // Check block_type first (most reliable indicator)
-                    if (period.block_type) {
-                        const nonInstructionalTypes = ['break', 'pause', 'lunch', 'recess', 'assembly', 'flexband', 'frühdienst'];
-                        isInstructional = !nonInstructionalTypes.includes(period.block_type.toLowerCase());
-                    } 
-                    // Fall back to is_instructional field if available
-                    else if (period.is_instructional !== undefined) {
-                        isInstructional = period.is_instructional;
-                    }
-                    // Fall back to attendance_requirement
-                    else if (period.attendance_requirement === 'optional') {
-                        isInstructional = false;
-                    }
-                    // Fall back to label/name content
-                    else if (period.label || period.name) {
-                        const text = (period.label || period.name).toLowerCase();
-                        if (text.includes('break') || text.includes('pause') || text.includes('lunch') || text.includes('flexband') || text.includes('frühdienst')) {
-                            isInstructional = false;
+                    // Alternative checks if attendance_requirement is not available
+                    if (!period.attendance_requirement) {
+                        // Fall back to is_instructional field
+                        if (period.is_instructional !== undefined) {
+                            return period.is_instructional;
                         }
+                        
+                        // Check block_type - exclude known non-instructional types
+                        if (period.block_type) {
+                            const nonInstructionalTypes = ['break', 'pause', 'lunch', 'recess', 'assembly'];
+                            return !nonInstructionalTypes.includes(period.block_type.toLowerCase());
+                        }
+                        
+                        // Fall back to label/name content analysis
+                        if (period.label || period.name) {
+                            const text = (period.label || period.name).toLowerCase();
+                            const isBreakTime = text.includes('break') || text.includes('pause') || text.includes('lunch');
+                            return !isBreakTime;
+                        }
+                        
+                        // Default to showing if we can't determine
+                        return true;
                     }
                     
                     console.log(`  Period "${period.name}" (id: ${period.id}):`, {
+                        attendance_requirement: period.attendance_requirement,
                         block_type: period.block_type,
                         is_instructional: period.is_instructional,
-                        attendance_requirement: period.attendance_requirement,
                         label: period.label,
-                        computed_isInstructional: isInstructional,
-                        included: isInstructional,
+                        shouldShow: shouldShow,
                         type: period.type
                     });
-                    return isInstructional;
+                    return shouldShow;
                 });
             } else {
                 console.log('📅 [SchedulerGrid] Showing ALL periods (including non-instructional)');
@@ -448,6 +488,14 @@ export default {
                 if (cls.year_group) years.add(cls.year_group);
             });
             return Array.from(years).sort();
+        });
+
+        const availableClasses = computed(() => {
+            // Filter classes based on year filter if applied
+            if (selectedYearFilter.value) {
+                return props.classes.filter(cls => cls.year_group === selectedYearFilter.value);
+            }
+            return props.classes.slice().sort((a, b) => a.name.localeCompare(b.name));
         });
 
         const yearGroupStats = computed(() => {
@@ -499,9 +547,31 @@ export default {
             
             let assignments = scheduleData.filter(
                 assignment => {
-                    const dayMatch = assignment.day_id === dayId;
+                    // Enhanced day ID matching - check both day_id and id fields
+                    const currentDay = props.schoolDays.find(d => d.id === dayId || d.day_id === dayId);
+                    const assignmentDayMatch = 
+                        assignment.day_id === dayId || 
+                        assignment.day_id === currentDay?.day_id || 
+                        assignment.day_id === currentDay?.id ||
+                        assignment.day_number === currentDay?.day_number; // Also try day_number matching
+                    
                     const periodMatch = assignment.period_id === periodId;
-                    return dayMatch && periodMatch;
+                    
+                    if (assignments.length === 0) {
+                        console.log('🔍 [SchedulerGrid] Assignment matching debug:', {
+                            assignmentDayId: assignment.day_id,
+                            assignmentDayNumber: assignment.day_number,
+                            assignmentPeriodId: assignment.period_id,
+                            lookingForDayId: dayId,
+                            lookingForPeriodId: periodId,
+                            currentDay: currentDay,
+                            assignmentDayMatch,
+                            periodMatch,
+                            assignment: assignment
+                        });
+                    }
+                    
+                    return assignmentDayMatch && periodMatch;
                 }
             );
             
@@ -510,6 +580,13 @@ export default {
                 assignments = assignments.filter(assignment => {
                     // Keep assignments that have a course_id (not lesson schedules)
                     return assignment.course_id;
+                });
+            }
+            
+            // Filter by selected class if applied
+            if (selectedClassFilter.value) {
+                assignments = assignments.filter(assignment => {
+                    return assignment.class_id === selectedClassFilter.value;
                 });
             }
             
@@ -706,11 +783,15 @@ export default {
             emit('toggle-lesson-schedules', showLessonSchedules.value);
         }
 
+        function handleClassFilterChange() {
+            console.log('🎓 [SchedulerGrid] Class filter changed:', selectedClassFilter.value);
+            // We don't emit this since it's just a UI filter, not an external state change
+        }
+
         function handleModeSwitch() {
             console.log('🔄 [SchedulerGrid] Mode switched:', isLiveMode.value ? 'Live' : 'Planning');
             emit('mode-changed', isLiveMode.value ? 'live' : 'planning');
         }
-
         function togglePeriodFocus(periodId) {
             if (focusedPeriodId.value === periodId) {
                 focusedPeriodId.value = null;
@@ -804,18 +885,39 @@ export default {
             });
         }
 
+        function getNoPreferredDaysCourses() {
+            // Get courses that have no possible_time_slots restrictions for the focused period
+            return props.courses.filter(course => {
+                // Course has no time slot restrictions
+                return !course.possible_time_slots || course.possible_time_slots.length === 0;
+            });
+        }
+
+        function assignCourseToFocusedSlot(course) {
+            if (props.isReadOnly || !focusedPeriodId.value) return;
+            
+            // For no-preferred-days courses, we could assign to any day
+            // Let's just show the assignment modal for the first day
+            const firstDay = visibleDays.value[0];
+            if (firstDay) {
+                assignCourseToSlot(course, firstDay.id, focusedPeriodId.value);
+            }
+        }
+
         return {
             // State
             showNonInstructional,
             showLessonSchedules,
             isLiveMode,
             selectedYearFilter,
+            selectedClassFilter,
             focusedPeriodId,
 
             // Computed
             visibleDays,
             visiblePeriods,
             yearGroups,
+            availableClasses,
             yearGroupStats,
 
             // Methods
@@ -838,6 +940,7 @@ export default {
             openAssignmentModal,
             openAssignmentDetails,
             handleLessonScheduleToggle,
+            handleClassFilterChange,
             handleModeSwitch,
             togglePeriodFocus,
             clearPeriodFocus,
@@ -845,6 +948,8 @@ export default {
             getAvailableCoursesForSlot,
             getCourseCardStyle,
             assignCourseToSlot,
+            getNoPreferredDaysCourses,
+            assignCourseToFocusedSlot,
         };
     },
 };
@@ -1061,10 +1166,13 @@ export default {
 }
 
 .assignment-item.lesson-schedule {
-    opacity: 0.7;
+    opacity: 0.6;
     border-style: dashed;
     background: #f5f5f5 !important;
     font-style: italic;
+    font-size: 0.8em; /* Make text smaller */
+    transform: scale(0.95); /* Make overall size smaller */
+    margin: 1px; /* Add small margin for visual separation */
 }
 
 .assignment-content {
@@ -1263,6 +1371,42 @@ export default {
     background: #f9f9f9;
     border: 1px dashed #ddd;
     border-radius: 4px;
+}
+
+/* No Preferred Days Panel */
+.no-preferred-days-panel {
+    padding: 16px;
+    background: #f0f8e6;
+    border: 1px solid #52c41a;
+    border-radius: 4px;
+    margin-top: 16px;
+}
+
+.no-preferred-days-panel h4 {
+    margin: 0 0 8px 0;
+    color: #52c41a;
+    font-size: 1em;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.panel-description {
+    margin: 0 0 12px 0;
+    color: #666;
+    font-size: 0.9em;
+    font-style: italic;
+}
+
+.no-preferred-courses-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 12px;
+}
+
+.flexible-tag {
+    color: #52c41a !important;
+    font-weight: 500;
 }
 
 /* Responsive Design */

@@ -660,16 +660,34 @@ export default {
         async function saveDraft() {
             isSaving.value = true;
             try {
+                // Emit WeWeb external event
                 emit('trigger-event', {
                     name: 'saveDraft',
                     event: {
                         draftId: draftId.value,
                         schedules: draftSchedules.value,
+                        timestamp: new Date().toISOString(),
+                        action: 'save_draft'
                     },
+                });
+
+                // Also emit direct WeWeb event for external handling
+                emit('save-draft-external', {
+                    draftId: draftId.value,
+                    schedules: draftSchedules.value,
+                    timestamp: new Date().toISOString(),
                 });
 
                 // Simulate save delay
                 await new Promise(resolve => setTimeout(resolve, 1000));
+                
+                console.log('💾 [wwElement] Draft saved successfully:', {
+                    draftId: draftId.value,
+                    schedulesCount: draftSchedules.value.length,
+                    timestamp: new Date().toISOString()
+                });
+            } catch (error) {
+                console.error('❌ [wwElement] Error saving draft:', error);
             } finally {
                 isSaving.value = false;
             }

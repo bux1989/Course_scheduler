@@ -320,12 +320,33 @@ export default {
             if (courseFilter.value) {
                 const searchLower = courseFilter.value.toLowerCase();
                 courses = courses.filter(
-                    course =>
-                        course.name?.toLowerCase().includes(searchLower) ||
-                        course.course_name?.toLowerCase().includes(searchLower) ||
-                        course.title?.toLowerCase().includes(searchLower) ||
-                        course.description?.toLowerCase().includes(searchLower) ||
-                        course.course_code?.toLowerCase().includes(searchLower)
+                    course => {
+                        // Enhanced search across multiple fields
+                        const searchableFields = [
+                            course.name,
+                            course.course_name,
+                            course.title,
+                            course.description,
+                            course.course_code,
+                            course.subject_name, // Add subject_name to search
+                            course.important_information // Add additional info field
+                        ].filter(Boolean); // Remove null/undefined values
+                        
+                        const matches = searchableFields.some(field => 
+                            field?.toLowerCase().includes(searchLower)
+                        );
+                        
+                        if (searchLower === 'archery') {
+                            console.log('🔍 [AssignmentModal] Archery search debug:', {
+                                courseId: course.id,
+                                searchableFields,
+                                matches,
+                                course: course
+                            });
+                        }
+                        
+                        return matches;
+                    }
                 );
                 
                 console.log('📚 [AssignmentModal] Search filtering:', {
