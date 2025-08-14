@@ -713,10 +713,24 @@ export default {
 
         // Test function for manual event emission debugging
         function testEventEmission() {
-            console.log('🧪 [WeWeb Event Test] Manually testing scheduler:drop event emission...');
+            console.log('🧪 [WeWeb Event Test] =================================');
+            console.log('🧪 [WeWeb Event Test] Manual scheduler:drop event test');
+            console.log('🧪 [WeWeb Event Test] =================================');
             
             // Check if emit function is available and working
-            console.log('🔍 [WeWeb Event Test] Emit function type:', typeof emit);
+            console.log('🔍 [WeWeb Event Test] Context analysis:');
+            console.log('  - Emit function type:', typeof emit);
+            console.log('  - Props available:', !!props);
+            console.log('  - Content available:', !!content.value);
+            console.log('  - EmitDropEvents setting:', content.value?.emitDropEvents);
+            
+            // Check WeWeb context indicators
+            console.log('  - Window location:', window?.location?.href);
+            console.log('  - WeWeb indicators present:', {
+                hasWeWebGlobal: !!window.ww,
+                hasWeWebEditor: !!window.wwEditor,
+                userAgent: navigator.userAgent.includes('WeWeb')
+            });
             
             const testData = {
                 schoolId: content.value?.schoolId || null,
@@ -730,17 +744,29 @@ export default {
                 timestamp: new Date().toISOString(),
             };
 
+            console.log('📋 [WeWeb Event Test] Test event data:', testData);
+
             try {
+                console.log('🚀 [WeWeb Event Test] Attempting to emit scheduler:drop...');
                 emit('element-event', {
                     name: 'scheduler:drop',
                     event: 'scheduler:drop',
                     data: testData,
                 });
-                console.log('✅ [WeWeb Event Test] Manual scheduler:drop event emitted successfully!');
-                console.log('📋 [WeWeb Event Test] Event should now appear in "On Element Event" dropdown');
+                console.log('✅ [WeWeb Event Test] ✅ SUCCESS: scheduler:drop event emitted!');
+                console.log('📌 [WeWeb Event Test] Next steps:');
+                console.log('   1. Check WeWeb Workflow UI for "On element event" trigger');
+                console.log('   2. Look for "scheduler:drop" in the event dropdown');
+                console.log('   3. Event data will be available as {{ data.courseName }} etc.');
             } catch (error) {
-                console.error('❌ [WeWeb Event Test] Manual event emission failed:', error);
+                console.error('❌ [WeWeb Event Test] ❌ FAILED: Event emission error:', error);
+                console.log('🔧 [WeWeb Event Test] Troubleshooting:');
+                console.log('   - Ensure component is loaded in WeWeb editor');
+                console.log('   - Check browser console for additional errors');
+                console.log('   - Try refreshing the WeWeb editor page');
             }
+            
+            console.log('🧪 [WeWeb Event Test] =================================');
         }
 
         function updateAssignments(payload) {
