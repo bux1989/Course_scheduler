@@ -394,12 +394,6 @@ import {
     normalizeCourse,
     normalizePossibleSlots,
 } from '../../utils/arrayUtils.js';
-import {
-    emitSchedulerDropEvent,
-    emitSchedulerDragStartEvent,
-    emitSchedulerDragEndEvent,
-    emitSchedulerRemoveEvent,
-} from '../../utils/events.js';
 
 export default {
     name: 'SchedulerGrid',
@@ -1036,36 +1030,34 @@ export default {
                 hasParentEmit: !!props.parentEmit,
             });
 
-            // If emitDropEvents is enabled, try to emit the event first  
-            if (props.emitDropEvents && props.parentEmit) {
-                console.log('📡 [SchedulerGrid] emitDropEvents enabled - attempting to emit scheduler:drop event');
+            // If emitDropEvents is enabled, emit a Vue event to parent component
+            if (props.emitDropEvents) {
+                console.log('📡 [SchedulerGrid] emitDropEvents enabled - emitting scheduler-drop Vue event to parent');
                 
-                const eventSuccess = emitSchedulerDropEvent(props.parentEmit, {
-                    schoolId: props.schoolId,
-                    draftId: props.draftId,
+                const eventData = {
+                    schoolId: props.schoolId || null,
+                    draftId: props.draftId || null,
                     dayId: dayId,
                     periodId: periodId,
                     courseId: course.id,
                     courseName: course.name || course.course_name || '',
-                    courseCode: course.code || course.course_code || '', // Include course code in the event
+                    courseCode: course.code || course.course_code || '',
                     source: 'drag-drop',
+                    timestamp: new Date().toISOString(),
+                };
+
+                // Emit Vue event to parent component (wwElement.vue)
+                emit('scheduler-drop', eventData);
+                
+                // Also emit drag-end event
+                emit('scheduler-drag-end', {
+                    courseId: course.id,
+                    courseName: course.name || course.course_name || '',
+                    success: true,
                 });
-
-                if (eventSuccess) {
-                    console.log('📡 [SchedulerGrid] ✅ Drop event emitted successfully - workflow should handle persistence');
-
-                    // Emit successful drag-end event
-                    emitSchedulerDragEndEvent(props.parentEmit, {
-                        courseId: course.id,
-                        courseName: course.name || course.course_name || '',
-                        success: true,
-                    });
-                    return; // Event emitted successfully, let workflow handle it
-                } else {
-                    console.warn('📡 [SchedulerGrid] ❌ Failed to emit drop event - falling back to modal');
-                }
-            } else if (props.emitDropEvents && !props.parentEmit) {
-                console.warn('📡 [SchedulerGrid] ❌ emitDropEvents enabled but no parentEmit function - falling back to modal');
+                
+                console.log('📡 [SchedulerGrid] ✅ Vue events emitted to parent - parent will handle WeWeb element event emission');
+                return; // Let parent handle the rest
             }
 
             // Default behavior OR fallback when event emission fails: open assignment modal
@@ -1150,13 +1142,11 @@ export default {
             console.log('🎯 [DragDrop] Course drag started:', course.name || course.course_name);
             draggedCourse.value = course;
 
-            // Only emit drag-start event if we have parent emit function
-            if (props.parentEmit) {
-                emitSchedulerDragStartEvent(props.parentEmit, {
-                    courseId: course.id,
-                    courseName: course.name || course.course_name || '',
-                });
-            }
+            // Emit Vue event to parent for drag-start
+            emit('scheduler-drag-start', {
+                courseId: course.id,
+                courseName: course.name || course.course_name || '',
+            });
 
             // Set drag data
             event.dataTransfer.setData(
@@ -1178,14 +1168,12 @@ export default {
             console.log('🎯 [DragDrop] Course drag ended');
             const course = draggedCourse.value;
 
-            // Only emit drag-end event if we have parent emit function
-            if (props.parentEmit) {
-                emitSchedulerDragEndEvent(props.parentEmit, {
-                    courseId: course?.id || null,
-                    courseName: course?.name || course?.course_name || null,
-                    success: false, // Will be updated to true in handleCellDrop if successful
-                });
-            }
+            // Emit Vue event to parent for drag-end
+            emit('scheduler-drag-end', {
+                courseId: course?.id || null,
+                courseName: course?.name || course?.course_name || null,
+                success: false, // Will be updated to true in assignCourseToSlot if successful
+            });
 
             draggedCourse.value = null;
             event.target.style.opacity = '1';

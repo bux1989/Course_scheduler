@@ -48,6 +48,9 @@
                 @mode-changed="handleModeChanged"
                 @period-focus-changed="handlePeriodFocusChanged"
                 @filter-year="handleFilterYear"
+                @scheduler-drop="handleSchedulerDrop"
+                @scheduler-drag-start="handleSchedulerDragStart"
+                @scheduler-drag-end="handleSchedulerDragEnd"
                 @undo-last="undo"
                 @save-draft="saveDraft"
                 @update-assignments="updateAssignments"
@@ -705,6 +708,49 @@ export default {
             });
         }
 
+        // WeWeb Element Event Handlers
+        function handleSchedulerDrop(eventData) {
+            console.log('📡 [wwElement] Received scheduler-drop event from child component:', eventData);
+            try {
+                emit('element-event', {
+                    name: 'scheduler:drop',
+                    event: 'scheduler:drop',
+                    data: eventData,
+                });
+                console.log('✅ [wwElement] WeWeb element event scheduler:drop emitted successfully');
+            } catch (error) {
+                console.error('❌ [wwElement] Failed to emit WeWeb element event:', error);
+            }
+        }
+
+        function handleSchedulerDragStart(eventData) {
+            console.log('📡 [wwElement] Received scheduler-drag-start event from child component:', eventData);
+            try {
+                emit('element-event', {
+                    name: 'scheduler:drag-start',
+                    event: 'scheduler:drag-start',
+                    data: eventData,
+                });
+                console.log('✅ [wwElement] WeWeb element event scheduler:drag-start emitted successfully');
+            } catch (error) {
+                console.error('❌ [wwElement] Failed to emit WeWeb element event:', error);
+            }
+        }
+
+        function handleSchedulerDragEnd(eventData) {
+            console.log('📡 [wwElement] Received scheduler-drag-end event from child component:', eventData);
+            try {
+                emit('element-event', {
+                    name: 'scheduler:drag-end',
+                    event: 'scheduler:drag-end', 
+                    data: eventData,
+                });
+                console.log('✅ [wwElement] WeWeb element event scheduler:drag-end emitted successfully');
+            } catch (error) {
+                console.error('❌ [wwElement] Failed to emit WeWeb element event:', error);
+            }
+        }
+
         function updateAssignments(payload) {
             if (payload.action === 'move' && payload.assignment) {
                 // Handle drag-and-drop assignment move
@@ -788,12 +834,14 @@ export default {
 
         function emitTestEvent() {
             try {
-                emit('trigger-event', {
-                    name: 'testEvent',
-                    event: {
-                        message: 'Comprehensive Course Scheduler is working!',
+                // Test WeWeb element event format
+                emit('element-event', {
+                    name: 'scheduler:drop',
+                    event: 'scheduler:drop', 
+                    data: {
+                        message: 'Test WeWeb element event from Course Scheduler!',
                         timestamp: new Date().toISOString(),
-                        data: {
+                        testData: {
                             periods: safeLength(periods.value),
                             courses: safeLength(courses.value),
                             teachers: safeLength(teachers.value),
@@ -805,10 +853,11 @@ export default {
                         },
                     },
                 });
-                alert('Test event emitted successfully!');
+                console.log('✅ Test WeWeb element event emitted successfully!');
+                alert('Test WeWeb element event emitted successfully!');
             } catch (error) {
-                console.error('Error emitting event:', error);
-                alert('Error emitting event: ' + error.message);
+                console.error('❌ Failed to emit test WeWeb element event:', error);
+                alert('Error emitting WeWeb element event: ' + error.message);
             }
         }
 
@@ -936,6 +985,9 @@ export default {
             handleModeChanged,
             handlePeriodFocusChanged,
             handleFilterYear,
+            handleSchedulerDrop,
+            handleSchedulerDragStart,
+            handleSchedulerDragEnd,
             navigateToConflict,
             applySuggestion,
             ignoreConflict,
