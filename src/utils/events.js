@@ -11,82 +11,48 @@
  * @param {boolean} options.cancelable - Whether the event can be cancelled (default: true)
  */
 export function emitElementEvent(vmOrEmit, name, data, options = {}) {
-    const eventOptions = {
-        bubbles: true,
-        cancelable: true,
-        ...options,
-    };
-
     try {
-        console.log(`📡 [Events] Attempting to emit event: ${name}`, {
+        console.log(`📡 [Events] Attempting to emit WeWeb element event: ${name}`, {
             type: typeof vmOrEmit,
             isFunction: typeof vmOrEmit === 'function',
-            hasEmit: vmOrEmit && typeof vmOrEmit.emit === 'function',
-            hasVue2Emit: vmOrEmit && typeof vmOrEmit.$emit === 'function',
-            functionString: typeof vmOrEmit === 'function' ? vmOrEmit.toString().substring(0, 100) : 'N/A',
+            data: data,
         });
 
-        // WeWeb requires element events to be emitted from the root WeWeb component
-        // Priority: Direct emit function (from WeWeb component) > Vue instance methods
+        // WeWeb element events must be emitted using the main component's emit function
+        // Try the parent emit function first (most reliable for WeWeb workflows)
         if (typeof vmOrEmit === 'function') {
-            // This is the emit function directly - use it for WeWeb element events
-            console.log(`📡 [Events] Using direct emit function for WeWeb element event: ${name}`);
-            console.log(`📡 [Events] Event payload:`, { name, event: name, data });
+            console.log(`📡 [Events] Using parent emit function for WeWeb element event: ${name}`);
             
             try {
+                // Emit proper WeWeb element-event format
                 vmOrEmit('element-event', { name, event: name, data });
                 console.log(`📡 [Events] ✅ WeWeb element event emitted successfully: ${name}`);
                 return true;
             } catch (error) {
-                console.error(`📡 [Events] ❌ Error calling emit function for ${name}:`, error);
-                // Continue to fallback methods
+                console.error(`📡 [Events] ❌ Failed to emit via parent emit function:`, error);
+                return false;
             }
         }
-        
-        // Vue 2 Options API fallback (this.$emit)
+
+        // Fallback: Vue 2 Options API ($emit)
         if (vmOrEmit && typeof vmOrEmit.$emit === 'function') {
-            console.log(`📡 [Events] Using Vue 2 $emit for WeWeb element event: ${name}`);
+            console.log(`📡 [Events] Fallback: Using Vue 2 $emit for element event: ${name}`);
             try {
                 vmOrEmit.$emit('element-event', { name, event: name, data });
                 console.log(`📡 [Events] ✅ WeWeb element event emitted via $emit: ${name}`);
                 return true;
             } catch (error) {
-                console.error(`📡 [Events] ❌ Error calling $emit for ${name}:`, error);
-            }
-        }
-        
-        // Vue 3 Composition API instance fallback
-        if (vmOrEmit && vmOrEmit.emit && typeof vmOrEmit.emit === 'function') {
-            console.log(`📡 [Events] Using Vue 3 instance emit for WeWeb element event: ${name}`);
-            try {
-                vmOrEmit.emit('element-event', { name, event: name, data });
-                console.log(`📡 [Events] ✅ WeWeb element event emitted via instance: ${name}`);
-                return true;
-            } catch (error) {
-                console.error(`📡 [Events] ❌ Error calling instance emit for ${name}:`, error);
+                console.error(`📡 [Events] ❌ Failed to emit via $emit:`, error);
+                return false;
             }
         }
 
-        // Fallback to native DOM custom events (non-WeWeb environments)
-        console.warn(`📡 [Events] No WeWeb emit function available for ${name}, falling back to CustomEvent`);
-        if (typeof window !== 'undefined' && window.CustomEvent) {
-            console.log(`📡 [Events] Emitting CustomEvent fallback: ${name}`, data);
-            const event = new CustomEvent(name, {
-                detail: data,
-                ...eventOptions,
-            });
-
-            // Try to dispatch on the component's root element or window
-            const target = (vmOrEmit && vmOrEmit.$el) || window;
-            target.dispatchEvent(event);
-            console.log(`📡 [Events] ⚠️ CustomEvent fallback used for: ${name}`);
-            return true;
-        }
-
-        console.warn(`📡 [Events] ❌ Could not emit event: ${name} - no event system available`);
+        // If no valid emit function found, this is a failure for WeWeb workflows
+        console.error(`📡 [Events] ❌ No valid emit function found for WeWeb element event: ${name}`);
         return false;
+
     } catch (error) {
-        console.error(`📡 [Events] ❌ Failed to emit event: ${name}`, error);
+        console.error(`📡 [Events] ❌ Fatal error emitting event ${name}:`, error);
         return false;
     }
 }

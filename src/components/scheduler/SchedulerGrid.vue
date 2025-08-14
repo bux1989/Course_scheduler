@@ -1033,15 +1033,14 @@ export default {
                 dayId,
                 periodId,
                 emitDropEvents: props.emitDropEvents,
+                hasParentEmit: !!props.parentEmit,
             });
 
-            // If emitDropEvents is enabled, try to emit the event first
-            if (props.emitDropEvents) {
-                console.log('📡 [SchedulerGrid] emitDropEvents is enabled, attempting to emit scheduler:drop event');
+            // If emitDropEvents is enabled, try to emit the event first  
+            if (props.emitDropEvents && props.parentEmit) {
+                console.log('📡 [SchedulerGrid] emitDropEvents enabled - attempting to emit scheduler:drop event');
                 
-                // Use parent emit function for WeWeb element events, fallback to local emit
-                const emitFunction = props.parentEmit || emit;
-                const success = emitSchedulerDropEvent(emitFunction, {
+                const eventSuccess = emitSchedulerDropEvent(props.parentEmit, {
                     schoolId: props.schoolId,
                     draftId: props.draftId,
                     dayId: dayId,
@@ -1052,20 +1051,21 @@ export default {
                     source: 'drag-drop',
                 });
 
-                if (success) {
-                    console.log('📡 [SchedulerGrid] Drop event emitted successfully - skipping modal');
+                if (eventSuccess) {
+                    console.log('📡 [SchedulerGrid] ✅ Drop event emitted successfully - workflow should handle persistence');
 
                     // Emit successful drag-end event
-                    emitSchedulerDragEndEvent(emitFunction, {
+                    emitSchedulerDragEndEvent(props.parentEmit, {
                         courseId: course.id,
                         courseName: course.name || course.course_name || '',
                         success: true,
                     });
-                    return;
+                    return; // Event emitted successfully, let workflow handle it
                 } else {
-                    console.warn('📡 [SchedulerGrid] Failed to emit drop event - falling back to modal');
-                    // Continue to open modal as fallback when event emission fails
+                    console.warn('📡 [SchedulerGrid] ❌ Failed to emit drop event - falling back to modal');
                 }
+            } else if (props.emitDropEvents && !props.parentEmit) {
+                console.warn('📡 [SchedulerGrid] ❌ emitDropEvents enabled but no parentEmit function - falling back to modal');
             }
 
             // Default behavior OR fallback when event emission fails: open assignment modal
@@ -1150,12 +1150,13 @@ export default {
             console.log('🎯 [DragDrop] Course drag started:', course.name || course.course_name);
             draggedCourse.value = course;
 
-            // Emit drag-start event using parent emit for WeWeb integration
-            const emitFunction = props.parentEmit || emit;
-            emitSchedulerDragStartEvent(emitFunction, {
-                courseId: course.id,
-                courseName: course.name || course.course_name || '',
-            });
+            // Only emit drag-start event if we have parent emit function
+            if (props.parentEmit) {
+                emitSchedulerDragStartEvent(props.parentEmit, {
+                    courseId: course.id,
+                    courseName: course.name || course.course_name || '',
+                });
+            }
 
             // Set drag data
             event.dataTransfer.setData(
@@ -1177,13 +1178,14 @@ export default {
             console.log('🎯 [DragDrop] Course drag ended');
             const course = draggedCourse.value;
 
-            // Emit drag-end event using parent emit for WeWeb integration
-            const emitFunction = props.parentEmit || emit;
-            emitSchedulerDragEndEvent(emitFunction, {
-                courseId: course?.id || null,
-                courseName: course?.name || course?.course_name || null,
-                success: false, // Will be updated to true in handleCellDrop if successful
-            });
+            // Only emit drag-end event if we have parent emit function
+            if (props.parentEmit) {
+                emitSchedulerDragEndEvent(props.parentEmit, {
+                    courseId: course?.id || null,
+                    courseName: course?.name || course?.course_name || null,
+                    success: false, // Will be updated to true in handleCellDrop if successful
+                });
+            }
 
             draggedCourse.value = null;
             event.target.style.opacity = '1';
