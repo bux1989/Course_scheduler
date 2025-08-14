@@ -2,7 +2,7 @@
 // Lightweight event emitter utility for WeWeb element events with fallback to window CustomEvent
 
 /**
- * Emit a WeWeb element event or fallback to CustomEvent
+ * Emit a WeWeb trigger event for workflow integration
  * @param {Vue instance|emit function} vmOrEmit - Vue component instance or emit function
  * @param {string} name - Event name (e.g., 'scheduler:drop')
  * @param {Object} data - Event payload data
@@ -12,16 +12,20 @@
  */
 export function emitElementEvent(vmOrEmit, name, data, options = {}) {
     try {
-        console.log(`🚀 [WeWeb Event] Attempting to emit: ${name}`);
+        console.log(`🚀 [WeWeb Event] Attempting to emit trigger-event: ${name}`);
 
         // WeWeb element events must be emitted using the main component's emit function
         // Try the parent emit function first (most reliable for WeWeb workflows)
         if (typeof vmOrEmit === 'function') {
             console.log(`📡 [WeWeb Event] Using parent emit function for: ${name}`);
-            
+
             try {
-                // Emit proper WeWeb element-event format
-                vmOrEmit('element-event', { name, event: name, data });
+                // Emit proper WeWeb trigger-event format
+                // WeWeb expects: emit('trigger-event', { name: 'event-name', event: { value: data } })
+                vmOrEmit('trigger-event', {
+                    name,
+                    event: { value: data },
+                });
                 console.log(`✅ [WeWeb Event] ${name} emitted successfully via parent emit`);
                 return true;
             } catch (error) {
@@ -34,7 +38,10 @@ export function emitElementEvent(vmOrEmit, name, data, options = {}) {
         if (vmOrEmit && typeof vmOrEmit.$emit === 'function') {
             console.log(`📡 [WeWeb Event] Fallback: Using Vue 2 $emit for: ${name}`);
             try {
-                vmOrEmit.$emit('element-event', { name, event: name, data });
+                vmOrEmit.$emit('trigger-event', {
+                    name,
+                    event: { value: data },
+                });
                 console.log(`✅ [WeWeb Event] ${name} emitted successfully via $emit`);
                 return true;
             } catch (error) {
@@ -46,7 +53,6 @@ export function emitElementEvent(vmOrEmit, name, data, options = {}) {
         // If no valid emit function found, this is a failure for WeWeb workflows
         console.error(`❌ [WeWeb Event] No valid emit function found for: ${name}`);
         return false;
-
     } catch (error) {
         console.error(`❌ [WeWeb Event] Fatal error emitting ${name}:`, error);
         return false;

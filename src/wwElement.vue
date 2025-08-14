@@ -8,7 +8,18 @@
                     {{ isReadOnly ? 'Published Schedule (Read-Only)' : 'Planning Mode' }}
                 </div>
                 <div v-if="!isReadOnly" class="header-actions">
-                    <button @click="testEventEmission" class="test-btn" style="background: #007bff; color: white; border: none; padding: 8px 12px; border-radius: 4px; margin-right: 8px;">
+                    <button
+                        @click="testEventEmission"
+                        class="test-btn"
+                        style="
+                            background: #007bff;
+                            color: white;
+                            border: none;
+                            padding: 8px 12px;
+                            border-radius: 4px;
+                            margin-right: 8px;
+                        "
+                    >
                         🧪 Test Event
                     </button>
                     <button @click="undo" :disabled="!canUndo" class="undo-btn">↶ Undo</button>
@@ -299,7 +310,7 @@ export default {
         const draftSchedules = computed(() => {
             const rawDrafts = props.content.draftSchedules;
             const finalDraftArray = toArray(rawDrafts); // Enhanced toArray handles all WeWeb formats
-            
+
             // Only log if no data available (for debugging data issues)
             if (!nonEmpty(finalDraftArray)) {
                 console.log('📝 [wwElement] Draft Schedules processing: no data available');
@@ -670,12 +681,11 @@ export default {
 
         // WeWeb Element Event Handlers
         function handleSchedulerDrop(eventData) {
-            console.log('🚀 [WeWeb Event] scheduler:drop - Emitting element event with data:', eventData);
+            console.log('🚀 [WeWeb Event] scheduler:drop - Emitting trigger-event with data:', eventData);
             try {
-                emit('element-event', {
+                emit('trigger-event', {
                     name: 'scheduler:drop',
-                    event: 'scheduler:drop',
-                    data: eventData,
+                    event: { value: eventData },
                 });
                 console.log('✅ [WeWeb Event] scheduler:drop emitted successfully');
             } catch (error) {
@@ -684,12 +694,11 @@ export default {
         }
 
         function handleSchedulerDragStart(eventData) {
-            console.log('🚀 [WeWeb Event] scheduler:drag-start - Emitting element event');
+            console.log('🚀 [WeWeb Event] scheduler:drag-start - Emitting trigger-event');
             try {
-                emit('element-event', {
+                emit('trigger-event', {
                     name: 'scheduler:drag-start',
-                    event: 'scheduler:drag-start',
-                    data: eventData,
+                    event: { value: eventData },
                 });
                 console.log('✅ [WeWeb Event] scheduler:drag-start emitted successfully');
             } catch (error) {
@@ -698,12 +707,11 @@ export default {
         }
 
         function handleSchedulerDragEnd(eventData) {
-            console.log('🚀 [WeWeb Event] scheduler:drag-end - Emitting element event');
+            console.log('🚀 [WeWeb Event] scheduler:drag-end - Emitting trigger-event');
             try {
-                emit('element-event', {
+                emit('trigger-event', {
                     name: 'scheduler:drag-end',
-                    event: 'scheduler:drag-end', 
-                    data: eventData,
+                    event: { value: eventData },
                 });
                 console.log('✅ [WeWeb Event] scheduler:drag-end emitted successfully');
             } catch (error) {
@@ -716,31 +724,31 @@ export default {
             console.log('🧪 [WeWeb Event Test] =================================');
             console.log('🧪 [WeWeb Event Test] Manual scheduler:drop event test');
             console.log('🧪 [WeWeb Event Test] =================================');
-            
+
             // Check if emit function is available and working
             console.log('🔍 [WeWeb Event Test] Context analysis:');
             console.log('  - Emit function type:', typeof emit);
             console.log('  - Props available:', !!props);
             console.log('  - Content available:', !!content.value);
             console.log('  - EmitDropEvents setting:', content.value?.emitDropEvents);
-            
+
             // Check WeWeb context indicators
             console.log('  - Window location:', window?.location?.href);
             console.log('  - WeWeb indicators present:', {
                 hasWeWebGlobal: !!window.ww,
                 hasWeWebEditor: !!window.wwEditor,
-                userAgent: navigator.userAgent.includes('WeWeb')
+                userAgent: navigator.userAgent.includes('WeWeb'),
             });
-            
+
             const testData = {
                 schoolId: content.value?.schoolId || null,
                 draftId: content.value?.draftId || null,
                 dayId: 1,
-                periodId: "test-period-id", 
-                courseId: "test-course-id",
-                courseName: "Test Course",
-                courseCode: "TEST101",
-                source: "manual-test",
+                periodId: 'test-period-id',
+                courseId: 'test-course-id',
+                courseName: 'Test Course',
+                courseCode: 'TEST101',
+                source: 'manual-test',
                 timestamp: new Date().toISOString(),
             };
 
@@ -748,16 +756,15 @@ export default {
 
             try {
                 console.log('🚀 [WeWeb Event Test] Attempting to emit scheduler:drop...');
-                emit('element-event', {
+                emit('trigger-event', {
                     name: 'scheduler:drop',
-                    event: 'scheduler:drop',
-                    data: testData,
+                    event: { value: testData },
                 });
-                console.log('✅ [WeWeb Event Test] ✅ SUCCESS: scheduler:drop event emitted!');
+                console.log('✅ [WeWeb Event Test] ✅ SUCCESS: scheduler:drop trigger-event emitted!');
                 console.log('📌 [WeWeb Event Test] Next steps:');
                 console.log('   1. Check WeWeb Workflow UI for "On element event" trigger');
                 console.log('   2. Look for "scheduler:drop" in the event dropdown');
-                console.log('   3. Event data will be available as {{ data.courseName }} etc.');
+                console.log('   3. Event data will be available as {{ event.value.courseName }} etc.');
             } catch (error) {
                 console.error('❌ [WeWeb Event Test] ❌ FAILED: Event emission error:', error);
                 console.log('🔧 [WeWeb Event Test] Troubleshooting:');
@@ -765,7 +772,7 @@ export default {
                 console.log('   - Check browser console for additional errors');
                 console.log('   - Try refreshing the WeWeb editor page');
             }
-            
+
             console.log('🧪 [WeWeb Event Test] =================================');
         }
 
@@ -855,7 +862,7 @@ export default {
                 // Test WeWeb element event format
                 emit('element-event', {
                     name: 'scheduler:drop',
-                    event: 'scheduler:drop', 
+                    event: 'scheduler:drop',
                     data: {
                         message: 'Test WeWeb element event from Course Scheduler!',
                         timestamp: new Date().toISOString(),
