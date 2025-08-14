@@ -684,6 +684,9 @@ export default {
                 courseId: eventData?.courseId || '',
                 courseName: eventData?.courseName || '',
                 courseCode: eventData?.courseCode || '',
+                teacherIds: Array.isArray(eventData?.teacherIds) ? eventData.teacherIds : [],
+                primaryTeacherId: eventData?.primaryTeacherId || null,
+                roomId: eventData?.roomId || null,
                 source: eventData?.source || 'drag-drop',
                 timestamp: eventData?.timestamp || new Date().toISOString(),
             };

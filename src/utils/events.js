@@ -21,10 +21,10 @@ export function emitElementEvent(vmOrEmit, name, data, options = {}) {
 
             try {
                 // Emit proper WeWeb trigger-event format
-                // WeWeb expects: emit('trigger-event', { name: 'event-name', event: { value: data } })
+                // Based on user feedback, WeWeb expects: emit('trigger-event', { name: 'event-name', event: data })
                 vmOrEmit('trigger-event', {
                     name,
-                    event: { value: data },
+                    event: data,
                 });
                 console.log(`✅ [WeWeb Event] ${name} emitted successfully via parent emit`);
                 return true;
@@ -40,7 +40,7 @@ export function emitElementEvent(vmOrEmit, name, data, options = {}) {
             try {
                 vmOrEmit.$emit('trigger-event', {
                     name,
-                    event: { value: data },
+                    event: data,
                 });
                 console.log(`✅ [WeWeb Event] ${name} emitted successfully via $emit`);
                 return true;
@@ -69,6 +69,10 @@ export function emitElementEvent(vmOrEmit, name, data, options = {}) {
  * @param {string} payload.periodId - Period UUID
  * @param {string} payload.courseId - Course ID
  * @param {string} payload.courseName - Course name
+ * @param {string} payload.courseCode - Course code
+ * @param {Array} payload.teacherIds - Array of teacher IDs
+ * @param {string|null} payload.primaryTeacherId - Primary teacher ID
+ * @param {string|null} payload.roomId - Room ID
  * @param {string} payload.source - Event source ('drag-drop')
  */
 export function emitSchedulerDropEvent(emitOrVm, payload) {
@@ -80,6 +84,9 @@ export function emitSchedulerDropEvent(emitOrVm, payload) {
         courseId: String(payload.courseId),
         courseName: String(payload.courseName || ''),
         courseCode: String(payload.courseCode || ''), // Add courseCode to the payload
+        teacherIds: Array.isArray(payload.teacherIds) ? payload.teacherIds : [],
+        primaryTeacherId: payload.primaryTeacherId || null,
+        roomId: payload.roomId || null,
         source: payload.source || 'drag-drop',
         timestamp: new Date().toISOString(),
     };
