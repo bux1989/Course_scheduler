@@ -1029,6 +1029,7 @@ export default {
             console.log('🎯 [SchedulerGrid] Assigning course to slot:', {
                 courseId: course.id,
                 courseName: course.name || course.course_name,
+                courseCode: course.code || course.course_code || '',
                 dayId,
                 periodId,
                 emitDropEvents: props.emitDropEvents,
@@ -1047,6 +1048,7 @@ export default {
                     periodId: periodId,
                     courseId: course.id,
                     courseName: course.name || course.course_name || '',
+                    courseCode: course.code || course.course_code || '', // Include course code in the event
                     source: 'drag-drop',
                 });
 

@@ -23,6 +23,7 @@ export function emitElementEvent(vmOrEmit, name, data, options = {}) {
             isFunction: typeof vmOrEmit === 'function',
             hasEmit: vmOrEmit && typeof vmOrEmit.emit === 'function',
             hasVue2Emit: vmOrEmit && typeof vmOrEmit.$emit === 'function',
+            functionString: typeof vmOrEmit === 'function' ? vmOrEmit.toString().substring(0, 100) : 'N/A',
         });
 
         // WeWeb requires element events to be emitted from the root WeWeb component
@@ -32,25 +33,38 @@ export function emitElementEvent(vmOrEmit, name, data, options = {}) {
             console.log(`📡 [Events] Using direct emit function for WeWeb element event: ${name}`);
             console.log(`📡 [Events] Event payload:`, { name, event: name, data });
             
-            vmOrEmit('element-event', { name, event: name, data });
-            console.log(`📡 [Events] ✅ WeWeb element event emitted: ${name}`);
-            return true;
+            try {
+                vmOrEmit('element-event', { name, event: name, data });
+                console.log(`📡 [Events] ✅ WeWeb element event emitted successfully: ${name}`);
+                return true;
+            } catch (error) {
+                console.error(`📡 [Events] ❌ Error calling emit function for ${name}:`, error);
+                // Continue to fallback methods
+            }
         }
         
         // Vue 2 Options API fallback (this.$emit)
         if (vmOrEmit && typeof vmOrEmit.$emit === 'function') {
             console.log(`📡 [Events] Using Vue 2 $emit for WeWeb element event: ${name}`);
-            vmOrEmit.$emit('element-event', { name, event: name, data });
-            console.log(`📡 [Events] ✅ WeWeb element event emitted via $emit: ${name}`);
-            return true;
+            try {
+                vmOrEmit.$emit('element-event', { name, event: name, data });
+                console.log(`📡 [Events] ✅ WeWeb element event emitted via $emit: ${name}`);
+                return true;
+            } catch (error) {
+                console.error(`📡 [Events] ❌ Error calling $emit for ${name}:`, error);
+            }
         }
         
         // Vue 3 Composition API instance fallback
         if (vmOrEmit && vmOrEmit.emit && typeof vmOrEmit.emit === 'function') {
             console.log(`📡 [Events] Using Vue 3 instance emit for WeWeb element event: ${name}`);
-            vmOrEmit.emit('element-event', { name, event: name, data });
-            console.log(`📡 [Events] ✅ WeWeb element event emitted via instance: ${name}`);
-            return true;
+            try {
+                vmOrEmit.emit('element-event', { name, event: name, data });
+                console.log(`📡 [Events] ✅ WeWeb element event emitted via instance: ${name}`);
+                return true;
+            } catch (error) {
+                console.error(`📡 [Events] ❌ Error calling instance emit for ${name}:`, error);
+            }
         }
 
         // Fallback to native DOM custom events (non-WeWeb environments)
@@ -97,6 +111,7 @@ export function emitSchedulerDropEvent(emitOrVm, payload) {
         periodId: String(payload.periodId), // Ensure it's a string (period UUID)
         courseId: String(payload.courseId),
         courseName: String(payload.courseName || ''),
+        courseCode: String(payload.courseCode || ''), // Add courseCode to the payload
         source: payload.source || 'drag-drop',
         timestamp: new Date().toISOString(),
     };
