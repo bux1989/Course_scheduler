@@ -18,44 +18,43 @@ export function emitElementEvent(vmOrEmit, name, data, options = {}) {
     };
 
     try {
-        // Handle different emit patterns for Vue 3 compatibility
-        let emitFn = null;
-
-        console.log(`📡 [Events] Attempting to emit event: ${name} with vmOrEmit:`, {
+        console.log(`📡 [Events] Attempting to emit event: ${name}`, {
             type: typeof vmOrEmit,
             isFunction: typeof vmOrEmit === 'function',
             hasEmit: vmOrEmit && typeof vmOrEmit.emit === 'function',
             hasVue2Emit: vmOrEmit && typeof vmOrEmit.$emit === 'function',
         });
 
-        // Check if vmOrEmit is the emit function directly (Vue 3 Composition API)
+        // WeWeb requires element events to be emitted from the root WeWeb component
+        // Priority: Direct emit function (from WeWeb component) > Vue instance methods
         if (typeof vmOrEmit === 'function') {
-            emitFn = vmOrEmit;
-            console.log(`📡 [Events] Using direct emit function for ${name}`);
+            // This is the emit function directly - use it for WeWeb element events
+            console.log(`📡 [Events] Using direct emit function for WeWeb element event: ${name}`);
+            console.log(`📡 [Events] Event payload:`, { name, event: name, data });
+            
+            vmOrEmit('element-event', { name, event: name, data });
+            console.log(`📡 [Events] ✅ WeWeb element event emitted: ${name}`);
+            return true;
         }
-        // Check for Vue 3 Composition API instance (getCurrentInstance())
-        else if (vmOrEmit && vmOrEmit.emit && typeof vmOrEmit.emit === 'function') {
-            emitFn = vmOrEmit.emit;
-            console.log(`📡 [Events] Using Vue 3 instance emit for ${name}`);
+        
+        // Vue 2 Options API fallback (this.$emit)
+        if (vmOrEmit && typeof vmOrEmit.$emit === 'function') {
+            console.log(`📡 [Events] Using Vue 2 $emit for WeWeb element event: ${name}`);
+            vmOrEmit.$emit('element-event', { name, event: name, data });
+            console.log(`📡 [Events] ✅ WeWeb element event emitted via $emit: ${name}`);
+            return true;
         }
-        // Check for Vue 2 Options API instance (this.$emit)
-        else if (vmOrEmit && vmOrEmit.$emit && typeof vmOrEmit.$emit === 'function') {
-            emitFn = vmOrEmit.$emit.bind(vmOrEmit);
-            console.log(`📡 [Events] Using Vue 2 $emit for ${name}`);
-        }
-
-        // Try WeWeb's element event system first
-        if (emitFn) {
-            console.log(`📡 [Events] Emitting WeWeb element event: ${name}`, { name, event: name, data });
-
-            // WeWeb expects: this.$emit('element-event', { name, event, data })
-            emitFn('element-event', { name, event: name, data });
-            console.log(`📡 [Events] ✅ Successfully emitted WeWeb element event: ${name}`);
+        
+        // Vue 3 Composition API instance fallback
+        if (vmOrEmit && vmOrEmit.emit && typeof vmOrEmit.emit === 'function') {
+            console.log(`📡 [Events] Using Vue 3 instance emit for WeWeb element event: ${name}`);
+            vmOrEmit.emit('element-event', { name, event: name, data });
+            console.log(`📡 [Events] ✅ WeWeb element event emitted via instance: ${name}`);
             return true;
         }
 
-        // Fallback to native DOM custom events
-        console.warn(`📡 [Events] No emit function available for ${name}, falling back to CustomEvent`);
+        // Fallback to native DOM custom events (non-WeWeb environments)
+        console.warn(`📡 [Events] No WeWeb emit function available for ${name}, falling back to CustomEvent`);
         if (typeof window !== 'undefined' && window.CustomEvent) {
             console.log(`📡 [Events] Emitting CustomEvent fallback: ${name}`, data);
             const event = new CustomEvent(name, {

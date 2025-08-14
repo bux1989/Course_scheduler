@@ -1034,8 +1034,10 @@ export default {
                 emitDropEvents: props.emitDropEvents,
             });
 
-            // If emitDropEvents is enabled, emit the event instead of opening modal
+            // If emitDropEvents is enabled, try to emit the event first
             if (props.emitDropEvents) {
+                console.log('📡 [SchedulerGrid] emitDropEvents is enabled, attempting to emit scheduler:drop event');
+                
                 // Use parent emit function for WeWeb element events, fallback to local emit
                 const emitFunction = props.parentEmit || emit;
                 const success = emitSchedulerDropEvent(emitFunction, {
@@ -1049,7 +1051,7 @@ export default {
                 });
 
                 if (success) {
-                    console.log('📡 [SchedulerGrid] Drop event emitted successfully');
+                    console.log('📡 [SchedulerGrid] Drop event emitted successfully - skipping modal');
 
                     // Emit successful drag-end event
                     emitSchedulerDragEndEvent(emitFunction, {
@@ -1059,11 +1061,13 @@ export default {
                     });
                     return;
                 } else {
-                    console.warn('📡 [SchedulerGrid] Failed to emit drop event');
+                    console.warn('📡 [SchedulerGrid] Failed to emit drop event - falling back to modal');
+                    // Continue to open modal as fallback when event emission fails
                 }
             }
 
-            // Default behavior: open assignment modal
+            // Default behavior OR fallback when event emission fails: open assignment modal
+            console.log('📡 [SchedulerGrid] Opening assignment modal for course assignment');
             emit('cell-click', {
                 dayId,
                 periodId,
