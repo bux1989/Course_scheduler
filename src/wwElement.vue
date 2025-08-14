@@ -675,11 +675,24 @@ export default {
 
         // WeWeb Element Event Handlers
         function handleSchedulerDrop(eventData) {
-            console.log('🚀 [WeWeb Event] scheduler:drop - Emitting trigger-event with data:', eventData);
+            // Ensure eventData has all required fields with proper defaults
+            const safeEventData = {
+                schoolId: eventData?.schoolId || null,
+                draftId: eventData?.draftId || null,
+                dayId: eventData?.dayId || 0,
+                periodId: eventData?.periodId || '',
+                courseId: eventData?.courseId || '',
+                courseName: eventData?.courseName || '',
+                courseCode: eventData?.courseCode || '',
+                source: eventData?.source || 'drag-drop',
+                timestamp: eventData?.timestamp || new Date().toISOString(),
+            };
+
+            console.log('🚀 [WeWeb Event] scheduler:drop - Emitting trigger-event with data:', safeEventData);
             try {
                 emit('trigger-event', {
                     name: 'scheduler:drop',
-                    event: { value: eventData },
+                    event: safeEventData,
                 });
                 console.log('✅ [WeWeb Event] scheduler:drop emitted successfully');
             } catch (error) {
@@ -688,11 +701,20 @@ export default {
         }
 
         function handleSchedulerDragStart(eventData) {
-            console.log('🚀 [WeWeb Event] scheduler:drag-start - Emitting trigger-event');
+            // Ensure eventData has all required fields with proper defaults
+            const safeEventData = {
+                courseId: eventData?.courseId || '',
+                courseName: eventData?.courseName || '',
+                courseCode: eventData?.courseCode || '',
+                source: eventData?.source || 'drag-start',
+                timestamp: eventData?.timestamp || new Date().toISOString(),
+            };
+
+            console.log('🚀 [WeWeb Event] scheduler:drag-start - Emitting trigger-event with data:', safeEventData);
             try {
                 emit('trigger-event', {
                     name: 'scheduler:drag-start',
-                    event: { value: eventData },
+                    event: safeEventData,
                 });
                 console.log('✅ [WeWeb Event] scheduler:drag-start emitted successfully');
             } catch (error) {
@@ -701,11 +723,21 @@ export default {
         }
 
         function handleSchedulerDragEnd(eventData) {
-            console.log('🚀 [WeWeb Event] scheduler:drag-end - Emitting trigger-event');
+            // Ensure eventData has all required fields with proper defaults
+            const safeEventData = {
+                courseId: eventData?.courseId || '',
+                courseName: eventData?.courseName || '',
+                courseCode: eventData?.courseCode || '',
+                success: eventData?.success !== undefined ? eventData.success : false,
+                source: eventData?.source || 'drag-end',
+                timestamp: eventData?.timestamp || new Date().toISOString(),
+            };
+
+            console.log('🚀 [WeWeb Event] scheduler:drag-end - Emitting trigger-event with data:', safeEventData);
             try {
                 emit('trigger-event', {
                     name: 'scheduler:drag-end',
-                    event: { value: eventData },
+                    event: safeEventData,
                 });
                 console.log('✅ [WeWeb Event] scheduler:drag-end emitted successfully');
             } catch (error) {
@@ -718,21 +750,6 @@ export default {
             console.log('🧪 [WeWeb Event Test] =================================');
             console.log('🧪 [WeWeb Event Test] Manual scheduler:drop event test');
             console.log('🧪 [WeWeb Event Test] =================================');
-
-            // Check if emit function is available and working
-            console.log('🔍 [WeWeb Event Test] Context analysis:');
-            console.log('  - Emit function type:', typeof emit);
-            console.log('  - Props available:', !!props);
-            console.log('  - Content available:', !!content.value);
-            console.log('  - EmitDropEvents setting:', content.value?.emitDropEvents);
-
-            // Check WeWeb context indicators
-            console.log('  - Window location:', window?.location?.href);
-            console.log('  - WeWeb indicators present:', {
-                hasWeWebGlobal: !!window.ww,
-                hasWeWebEditor: !!window.wwEditor,
-                userAgent: navigator.userAgent.includes('WeWeb'),
-            });
 
             const testData = {
                 schoolId: content.value?.schoolId || null,
@@ -752,22 +769,13 @@ export default {
                 console.log('🚀 [WeWeb Event Test] Attempting to emit scheduler:drop...');
                 emit('trigger-event', {
                     name: 'scheduler:drop',
-                    event: { value: testData },
+                    event: testData,
                 });
                 console.log('✅ [WeWeb Event Test] ✅ SUCCESS: scheduler:drop trigger-event emitted!');
-                console.log('📌 [WeWeb Event Test] Next steps:');
-                console.log('   1. Check WeWeb Workflow UI for "On element event" trigger');
-                console.log('   2. Look for "scheduler:drop" in the event dropdown');
-                console.log('   3. Event data will be available as {{ event.value.courseName }} etc.');
+                console.log('📌 [WeWeb Event Test] Event data should be accessible directly in workflows');
             } catch (error) {
-                console.error('❌ [WeWeb Event Test] ❌ FAILED: Event emission error:', error);
-                console.log('🔧 [WeWeb Event Test] Troubleshooting:');
-                console.log('   - Ensure component is loaded in WeWeb editor');
-                console.log('   - Check browser console for additional errors');
-                console.log('   - Try refreshing the WeWeb editor page');
+                console.error('❌ [WeWeb Event Test] scheduler:drop test failed:', error);
             }
-
-            console.log('🧪 [WeWeb Event Test] =================================');
         }
 
         function updateAssignments(payload) {

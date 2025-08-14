@@ -1018,7 +1018,14 @@ export default {
         function assignCourseToSlot(course, dayId, periodId) {
             if (props.isReadOnly) return;
 
-            console.log('🎯 [Scheduler] Assigning course:', course.name || course.course_name, 'to day:', dayId, 'period:', periodId);
+            console.log(
+                '🎯 [Scheduler] Assigning course:',
+                course.name || course.course_name,
+                'to day:',
+                dayId,
+                'period:',
+                periodId
+            );
 
             // Always emit drop event to parent component
             const eventData = {
@@ -1035,14 +1042,17 @@ export default {
 
             // Emit Vue event to parent component (wwElement.vue)
             emit('scheduler-drop', eventData);
-            
+
             // Also emit drag-end event
             emit('scheduler-drag-end', {
                 courseId: course.id,
                 courseName: course.name || course.course_name || '',
+                courseCode: course.code || course.course_code || '',
                 success: true,
+                source: 'drag-end',
+                timestamp: new Date().toISOString(),
             });
-            
+
             console.log('✅ [Scheduler] Drop events emitted to parent component');
         }
 
@@ -1122,6 +1132,9 @@ export default {
             emit('scheduler-drag-start', {
                 courseId: course.id,
                 courseName: course.name || course.course_name || '',
+                courseCode: course.code || course.course_code || '',
+                source: 'drag-start',
+                timestamp: new Date().toISOString(),
             });
 
             // Set drag data
@@ -1148,7 +1161,10 @@ export default {
             emit('scheduler-drag-end', {
                 courseId: course?.id || null,
                 courseName: course?.name || course?.course_name || null,
+                courseCode: course?.code || course?.course_code || null,
                 success: false, // Will be updated to true in assignCourseToSlot if successful
+                source: 'drag-end',
+                timestamp: new Date().toISOString(),
             });
 
             draggedCourse.value = null;
