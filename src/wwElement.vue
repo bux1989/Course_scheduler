@@ -119,7 +119,7 @@
 </template>
 
 <script>
-import { ref, computed, watch, onMounted, getCurrentInstance } from 'vue';
+import { ref, computed, watch, onMounted } from 'vue';
 import SchedulerGrid from './components/scheduler/SchedulerGrid.vue';
 import AssignmentModal from './components/scheduler/AssignmentModal.vue';
 import ConflictPanel from './components/scheduler/ConflictPanel.vue';
@@ -169,9 +169,6 @@ export default {
         /* wwEditor:end */
     },
     setup(props, { emit }) {
-        // Get Vue instance for event emission
-        const instance = getCurrentInstance();
-
         // Local state
         const showAssignmentModal = ref(false);
         const showConflicts = ref(false);
@@ -593,7 +590,7 @@ export default {
 
             // Emit scheduler:remove event if configured
             if (props.content.emitDropEvents) {
-                emitSchedulerRemoveEvent(instance, {
+                emitSchedulerRemoveEvent(emit, {
                     schoolId: props.content.schoolId,
                     draftId: props.content.draftId,
                     dayId: assignmentToRemove.day_id,

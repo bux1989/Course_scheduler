@@ -382,7 +382,7 @@
 </template>
 
 <script>
-import { computed, ref, watch, nextTick, getCurrentInstance } from 'vue';
+import { computed, ref, watch, nextTick } from 'vue';
 import InlineAssignmentEditor from './InlineAssignmentEditor.vue';
 import {
     validateAndUnwrapArray,
@@ -448,9 +448,6 @@ export default {
     ],
 
     setup(props, { emit }) {
-        // Get Vue instance for event emission
-        const instance = getCurrentInstance();
-
         // Local state
         const showNonInstructional = ref(true);
         const showLessonSchedules = ref(true);
@@ -1038,7 +1035,7 @@ export default {
 
             // If emitDropEvents is enabled, emit the event instead of opening modal
             if (props.emitDropEvents) {
-                const success = emitSchedulerDropEvent(instance, {
+                const success = emitSchedulerDropEvent(emit, {
                     schoolId: props.schoolId,
                     draftId: props.draftId,
                     dayId: dayId,
@@ -1052,7 +1049,7 @@ export default {
                     console.log('📡 [SchedulerGrid] Drop event emitted successfully');
 
                     // Emit successful drag-end event
-                    emitSchedulerDragEndEvent(instance, {
+                    emitSchedulerDragEndEvent(emit, {
                         courseId: course.id,
                         courseName: course.name || course.course_name || '',
                         success: true,
@@ -1145,7 +1142,7 @@ export default {
             draggedCourse.value = course;
 
             // Emit drag-start event
-            emitSchedulerDragStartEvent(instance, {
+            emitSchedulerDragStartEvent(emit, {
                 courseId: course.id,
                 courseName: course.name || course.course_name || '',
             });
@@ -1171,7 +1168,7 @@ export default {
             const course = draggedCourse.value;
 
             // Emit drag-end event
-            emitSchedulerDragEndEvent(instance, {
+            emitSchedulerDragEndEvent(emit, {
                 courseId: course?.id || null,
                 courseName: course?.name || course?.course_name || null,
                 success: false, // Will be updated to true in handleCellDrop if successful
@@ -1368,7 +1365,7 @@ export default {
 
             // Emit scheduler:remove event if configured
             if (props.emitDropEvents) {
-                emitSchedulerRemoveEvent(instance, {
+                emitSchedulerRemoveEvent(emit, {
                     schoolId: props.schoolId,
                     draftId: props.draftId,
                     dayId: assignment.day_id,

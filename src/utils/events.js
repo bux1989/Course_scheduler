@@ -3,14 +3,14 @@
 
 /**
  * Emit a WeWeb element event or fallback to CustomEvent
- * @param {Vue instance} vm - Vue component instance
+ * @param {Vue instance|emit function} vmOrEmit - Vue component instance or emit function
  * @param {string} name - Event name (e.g., 'scheduler:drop')
  * @param {Object} data - Event payload data
  * @param {Object} options - Additional options
  * @param {boolean} options.bubbles - Whether the event should bubble (default: true)
  * @param {boolean} options.cancelable - Whether the event can be cancelled (default: true)
  */
-export function emitElementEvent(vm, name, data, options = {}) {
+export function emitElementEvent(vmOrEmit, name, data, options = {}) {
     const eventOptions = {
         bubbles: true,
         cancelable: true,
@@ -18,23 +18,39 @@ export function emitElementEvent(vm, name, data, options = {}) {
     };
 
     try {
+        // Handle different emit patterns for Vue 3 compatibility
+        let emitFn = null;
+
+        // Check if vmOrEmit is the emit function directly
+        if (typeof vmOrEmit === 'function') {
+            emitFn = vmOrEmit;
+        }
+        // Check for Vue 3 Composition API instance (getCurrentInstance())
+        else if (vmOrEmit && vmOrEmit.emit && typeof vmOrEmit.emit === 'function') {
+            emitFn = vmOrEmit.emit;
+        }
+        // Check for Vue 2 Options API instance (this.$emit)
+        else if (vmOrEmit && vmOrEmit.$emit && typeof vmOrEmit.$emit === 'function') {
+            emitFn = vmOrEmit.$emit.bind(vmOrEmit);
+        }
+
         // Try WeWeb's element event system first
-        if (vm && vm.$emit && typeof vm.$emit === 'function') {
+        if (emitFn) {
             console.log(`📡 [Events] Emitting WeWeb element event: ${name}`, data);
-            vm.$emit('element-event', { name, event: name, data });
+            emitFn('element-event', { name, event: name, data });
             return true;
         }
 
         // Fallback to native DOM custom events
         if (typeof window !== 'undefined' && window.CustomEvent) {
-            console.log(`📡 [Events] Emitting CustomEvent: ${name}`, data);
+            console.log(`📡 [Events] Emitting CustomEvent fallback: ${name}`, data);
             const event = new CustomEvent(name, {
                 detail: data,
                 ...eventOptions,
             });
 
             // Try to dispatch on the component's root element or window
-            const target = (vm && vm.$el) || window;
+            const target = (vmOrEmit && vmOrEmit.$el) || window;
             target.dispatchEvent(event);
             return true;
         }
@@ -49,7 +65,7 @@ export function emitElementEvent(vm, name, data, options = {}) {
 
 /**
  * Emit scheduler:drop event when a course is successfully assigned
- * @param {Vue instance} vm - Vue component instance
+ * @param {Function|Vue instance} emitOrVm - Emit function or Vue component instance
  * @param {Object} payload - Drop event data
  * @param {string|null} payload.schoolId - School ID
  * @param {string|null} payload.draftId - Draft ID
@@ -59,7 +75,7 @@ export function emitElementEvent(vm, name, data, options = {}) {
  * @param {string} payload.courseName - Course name
  * @param {string} payload.source - Event source ('drag-drop')
  */
-export function emitSchedulerDropEvent(vm, payload) {
+export function emitSchedulerDropEvent(emitOrVm, payload) {
     const eventData = {
         schoolId: payload.schoolId || null,
         draftId: payload.draftId || null,
@@ -71,15 +87,15 @@ export function emitSchedulerDropEvent(vm, payload) {
         timestamp: new Date().toISOString(),
     };
 
-    return emitElementEvent(vm, 'scheduler:drop', eventData);
+    return emitElementEvent(emitOrVm, 'scheduler:drop', eventData);
 }
 
 /**
  * Emit scheduler:drag-start event when dragging begins
- * @param {Vue instance} vm - Vue component instance
+ * @param {Function|Vue instance} emitOrVm - Emit function or Vue component instance
  * @param {Object} payload - Drag start event data
  */
-export function emitSchedulerDragStartEvent(vm, payload) {
+export function emitSchedulerDragStartEvent(emitOrVm, payload) {
     const eventData = {
         courseId: String(payload.courseId),
         courseName: String(payload.courseName || ''),
@@ -87,15 +103,15 @@ export function emitSchedulerDragStartEvent(vm, payload) {
         timestamp: new Date().toISOString(),
     };
 
-    return emitElementEvent(vm, 'scheduler:drag-start', eventData);
+    return emitElementEvent(emitOrVm, 'scheduler:drag-start', eventData);
 }
 
 /**
  * Emit scheduler:drag-end event when dragging ends
- * @param {Vue instance} vm - Vue component instance
+ * @param {Function|Vue instance} emitOrVm - Emit function or Vue component instance
  * @param {Object} payload - Drag end event data
  */
-export function emitSchedulerDragEndEvent(vm, payload) {
+export function emitSchedulerDragEndEvent(emitOrVm, payload) {
     const eventData = {
         courseId: payload.courseId ? String(payload.courseId) : null,
         courseName: payload.courseName ? String(payload.courseName) : null,
@@ -104,15 +120,15 @@ export function emitSchedulerDragEndEvent(vm, payload) {
         timestamp: new Date().toISOString(),
     };
 
-    return emitElementEvent(vm, 'scheduler:drag-end', eventData);
+    return emitElementEvent(emitOrVm, 'scheduler:drag-end', eventData);
 }
 
 /**
  * Emit scheduler:remove event when an assignment is deleted
- * @param {Vue instance} vm - Vue component instance
+ * @param {Function|Vue instance} emitOrVm - Emit function or Vue component instance
  * @param {Object} payload - Remove event data
  */
-export function emitSchedulerRemoveEvent(vm, payload) {
+export function emitSchedulerRemoveEvent(emitOrVm, payload) {
     const eventData = {
         schoolId: payload.schoolId || null,
         draftId: payload.draftId || null,
@@ -125,5 +141,5 @@ export function emitSchedulerRemoveEvent(vm, payload) {
         timestamp: new Date().toISOString(),
     };
 
-    return emitElementEvent(vm, 'scheduler:remove', eventData);
+    return emitElementEvent(emitOrVm, 'scheduler:remove', eventData);
 }
