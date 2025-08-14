@@ -318,4 +318,44 @@ export default {
             },
         },
     },
+    triggerEvents: [
+        {
+            name: 'scheduler:drop',
+            label: { en: 'On Scheduler Drop' },
+            event: {
+                schoolId: null,
+                draftId: null,
+                dayId: 0,
+                periodId: '',
+                courseId: '',
+                courseName: '',
+                courseCode: '',
+                source: 'drag-drop',
+                timestamp: '',
+            },
+        },
+        {
+            name: 'scheduler:drag-start',
+            label: { en: 'On Drag Start' },
+            event: {
+                courseId: '',
+                courseName: '',
+                courseCode: '',
+                source: 'drag-start',
+                timestamp: '',
+            },
+        },
+        {
+            name: 'scheduler:drag-end',
+            label: { en: 'On Drag End' },
+            event: {
+                courseId: '',
+                courseName: '',
+                courseCode: '',
+                source: 'drag-end',
+                success: false,
+                timestamp: '',
+            },
+        },
+    ],
 };
