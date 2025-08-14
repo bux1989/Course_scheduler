@@ -185,7 +185,7 @@
                                 :class="getAssignmentClasses(assignment)"
                                 :style="getAssignmentStyles(assignment)"
                                 @click.stop="handleAssignmentClick(assignment, day.id, period.id)"
-                                :draggable="!isReadOnly && !isEditing(assignment.id)"
+                                :draggable="!isEditing(assignment.id)"
                                 @dragstart="handleAssignmentDragStart($event, assignment, day.id, period.id)"
                                 @dragend="handleAssignmentDragEnd($event)"
                                 :data-assignment-id="assignment.id"
@@ -1037,15 +1037,14 @@ export default {
         }
 
         function assignCourseToSlot(course, dayId, periodId) {
-            if (props.isReadOnly) return;
-
             console.log(
                 '🎯 [Scheduler] Opening teacher/room selection for course:',
                 course.name || course.course_name,
                 'to day:',
                 dayId,
                 'period:',
-                periodId
+                periodId,
+                props.isReadOnly ? '(READ-ONLY MODE - EVENTS ONLY)' : '(EDITABLE MODE)'
             );
 
             // Store the course data for the modal
@@ -1057,7 +1056,7 @@ export default {
                 periodId: periodId,
             };
 
-            // Show the teacher/room selection modal
+            // Show the teacher/room selection modal (works in both read-only and editable modes)
             showTeacherRoomModal.value = true;
 
             // Also emit drag-end event
@@ -1168,12 +1167,7 @@ export default {
 
         // Drag and Drop Methods
         function handleCourseDragStart(event, course) {
-            if (props.isReadOnly) {
-                event.preventDefault();
-                return;
-            }
-
-            console.log('🚀 [Scheduler] Drag started:', course.name || course.course_name);
+            console.log('🚀 [Scheduler] Drag started:', course.name || course.course_name, props.isReadOnly ? '(READ-ONLY MODE)' : '(EDITABLE MODE)');
             draggedCourse.value = course;
 
             // Emit Vue event to parent for drag-start
@@ -1220,12 +1214,7 @@ export default {
         }
 
         function handleAssignmentDragStart(event, assignment, dayId, periodId) {
-            if (props.isReadOnly) {
-                event.preventDefault();
-                return;
-            }
-
-            console.log('🎯 [DragDrop] Assignment drag started:', assignment.course_name || assignment.subject_name);
+            console.log('🎯 [DragDrop] Assignment drag started:', assignment.course_name || assignment.subject_name, props.isReadOnly ? '(READ-ONLY MODE)' : '(EDITABLE MODE)');
             draggedAssignment.value = {
                 assignment,
                 originalDayId: dayId,

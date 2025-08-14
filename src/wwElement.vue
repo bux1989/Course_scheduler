@@ -5,9 +5,10 @@
             <h2>Course Scheduler</h2>
             <div class="scheduler-controls">
                 <div class="mode-indicator" :class="{ 'read-only': isReadOnly }">
-                    {{ isReadOnly ? 'Published Schedule (Read-Only)' : 'Planning Mode' }}
+                    {{ isReadOnly ? 'Published Schedule (Read-Only) - Event Testing Available' : 'Planning Mode' }}
                 </div>
-                <div v-if="!isReadOnly" class="header-actions">
+                <div class="header-actions">
+                    <!-- Always show test button for WeWeb event testing -->
                     <button
                         @click="testEventEmission"
                         class="test-btn"
@@ -19,17 +20,21 @@
                             border-radius: 4px;
                             margin-right: 8px;
                         "
+                        title="Test WeWeb events (always available)"
                     >
                         🧪 Test Event
                     </button>
-                    <button @click="undo" :disabled="!canUndo" class="undo-btn">↶ Undo</button>
-                    <button
-                        @click="showConflicts = !showConflicts"
-                        class="conflicts-btn"
-                        :class="{ active: showConflicts }"
-                    >
-                        ⚠️ Conflicts ({{ safeLength(allConflicts) }})
-                    </button>
+                    <!-- Only show editing controls when not read-only -->
+                    <div v-if="!isReadOnly" class="editing-controls">
+                        <button @click="undo" :disabled="!canUndo" class="undo-btn">↶ Undo</button>
+                        <button
+                            @click="showConflicts = !showConflicts"
+                            class="conflicts-btn"
+                            :class="{ active: showConflicts }"
+                        >
+                            ⚠️ Conflicts ({{ safeLength(allConflicts) }})
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1078,6 +1083,12 @@ export default {
     }
 
     .header-actions {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+    }
+
+    .editing-controls {
         display: flex;
         gap: 8px;
     }
