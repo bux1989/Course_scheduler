@@ -21,7 +21,7 @@ export function emitElementEvent(vm, name, data, options = {}) {
         // Try WeWeb's element event system first
         if (vm && vm.$emit && typeof vm.$emit === 'function') {
             console.log(`📡 [Events] Emitting WeWeb element event: ${name}`, data);
-            vm.$emit('ww-event', { name, data });
+            vm.$emit('element-event', { name, event: name, data });
             return true;
         }
 

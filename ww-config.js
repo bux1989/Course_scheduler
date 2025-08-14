@@ -276,4 +276,46 @@ export default {
             /* wwEditor:end */
         },
     },
+    events: {
+        'scheduler:drop': {
+            label: {
+                en: 'On course dropped',
+                fr: 'Lors du dépôt de cours',
+            },
+            tooltip: {
+                en: 'Triggered when a course is dropped onto the schedule grid',
+                fr: 'Déclenché quand un cours est déposé sur la grille horaire',
+            },
+        },
+        'scheduler:drag-start': {
+            label: {
+                en: 'On drag start',
+                fr: 'Début du glissement',
+            },
+            tooltip: {
+                en: 'Triggered when dragging a course begins',
+                fr: 'Déclenché quand le glissement d\'un cours commence',
+            },
+        },
+        'scheduler:drag-end': {
+            label: {
+                en: 'On drag end',
+                fr: 'Fin du glissement',
+            },
+            tooltip: {
+                en: 'Triggered when dragging ends (success or failure)',
+                fr: 'Déclenché quand le glissement se termine (succès ou échec)',
+            },
+        },
+        'scheduler:remove': {
+            label: {
+                en: 'On assignment removed',
+                fr: 'Assignation supprimée',
+            },
+            tooltip: {
+                en: 'Triggered when a course assignment is deleted',
+                fr: 'Déclenché quand une assignation de cours est supprimée',
+            },
+        },
+    },
 };
