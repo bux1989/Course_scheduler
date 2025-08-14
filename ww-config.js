@@ -315,6 +315,10 @@ export default {
                 roomId: null,
                 source: 'modal-assignment',
                 timestamp: '',
+                // Additional fields for assignment moves
+                fromDayId: null,
+                fromPeriodId: null,
+                action: null,
             },
         },
         {

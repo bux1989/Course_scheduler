@@ -1318,7 +1318,27 @@ export default {
 
                     // Check if it's actually moving to a different cell
                     if (originalDayId !== dayId || originalPeriodId !== periodId) {
-                        // Emit update to move the assignment
+                        // Emit scheduler-drop event for WeWeb workflows (assignment move)
+                        emit('scheduler-drop', {
+                            schoolId: props.schoolId || null,
+                            draftId: props.draftId || null,
+                            dayId: dayId,
+                            periodId: periodId,
+                            courseId: assignment.course_id || '',
+                            courseName: assignment.course_name || assignment.display_cell || '',
+                            courseCode: assignment.course_code || '',
+                            teacherIds: assignment.teacher_ids || [],
+                            primaryTeacherId: assignment.primary_teacher_id || null,
+                            roomId: assignment.room_id || null,
+                            source: 'assignment-move',
+                            timestamp: new Date().toISOString(),
+                            // Additional fields for move operation
+                            fromDayId: originalDayId,
+                            fromPeriodId: originalPeriodId,
+                            action: 'move'
+                        });
+
+                        // Emit update to move the assignment in the data
                         emit('update-assignments', {
                             action: 'move',
                             assignment: assignment,
