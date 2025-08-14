@@ -51,10 +51,8 @@
                 :is-saving="isSaving"
                 :is-read-only="isReadOnly"
                 :show-statistics="true"
-                :emit-drop-events="content.emitDropEvents"
                 :school-id="content.schoolId"
                 :draft-id="content.draftId"
-                :parent-emit="emit"
                 @cell-click="handleCellClick"
                 @assignment-details="handleAssignmentDetails"
                 @toggle-non-instructional="handleToggleNonInstructional"
@@ -139,8 +137,6 @@
 <script>
 import { ref, computed, watch, onMounted } from 'vue';
 import SchedulerGrid from './components/scheduler/SchedulerGrid.vue';
-import AssignmentModal from './components/scheduler/AssignmentModal.vue';
-import ConflictPanel from './components/scheduler/ConflictPanel.vue';
 import {
     validateAndUnwrapArray,
     safeLength,
@@ -158,8 +154,6 @@ export default {
     name: 'CourseScheduler',
     components: {
         SchedulerGrid,
-        AssignmentModal,
-        ConflictPanel,
     },
     props: {
         content: {

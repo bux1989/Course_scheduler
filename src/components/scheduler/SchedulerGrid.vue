@@ -418,10 +418,8 @@ export default {
         isReadOnly: { type: Boolean, default: false },
         showStatistics: { type: Boolean, default: true },
         maxDays: { type: Number, default: 6 }, // Monday-Saturday
-        emitDropEvents: { type: Boolean, default: false },
         schoolId: { type: String, default: null },
         draftId: { type: String, default: null },
-        parentEmit: { type: Function, default: null }, // Parent component's emit function for WeWeb events
 
         // State
         conflicts: { type: Array, default: () => [] },
@@ -1022,44 +1020,30 @@ export default {
 
             console.log('🎯 [Scheduler] Assigning course:', course.name || course.course_name, 'to day:', dayId, 'period:', periodId);
 
-            // If emitDropEvents is enabled, emit a Vue event to parent component
-            if (props.emitDropEvents) {
-                console.log('🚀 [Scheduler] Emitting drop event for course:', course.name || course.course_name);
-                
-                const eventData = {
-                    schoolId: props.schoolId || null,
-                    draftId: props.draftId || null,
-                    dayId: dayId,
-                    periodId: periodId,
-                    courseId: course.id,
-                    courseName: course.name || course.course_name || '',
-                    courseCode: course.code || course.course_code || '',
-                    source: 'drag-drop',
-                    timestamp: new Date().toISOString(),
-                };
+            // Always emit drop event to parent component 
+            const eventData = {
+                schoolId: props.schoolId || null,
+                draftId: props.draftId || null,
+                dayId: dayId,
+                periodId: periodId,
+                courseId: course.id,
+                courseName: course.name || course.course_name || '',
+                courseCode: course.code || course.course_code || '',
+                source: 'drag-drop',
+                timestamp: new Date().toISOString(),
+            };
 
-                // Emit Vue event to parent component (wwElement.vue)
-                emit('scheduler-drop', eventData);
-                
-                // Also emit drag-end event
-                emit('scheduler-drag-end', {
-                    courseId: course.id,
-                    courseName: course.name || course.course_name || '',
-                    success: true,
-                });
-                
-                console.log('✅ [Scheduler] Drop events emitted to parent component');
-                return; // Let parent handle the rest
-            }
-
-            // Default behavior: open assignment modal
-            console.log('📋 [Scheduler] Opening assignment modal for course assignment');
-            emit('cell-click', {
-                dayId,
-                periodId,
-                period: props.periods.find(p => p.id === periodId),
-                preSelectedCourse: course,
+            // Emit Vue event to parent component (wwElement.vue)
+            emit('scheduler-drop', eventData);
+            
+            // Also emit drag-end event
+            emit('scheduler-drag-end', {
+                courseId: course.id,
+                courseName: course.name || course.course_name || '',
+                success: true,
             });
+            
+            console.log('✅ [Scheduler] Drop events emitted to parent component');
         }
 
         function getNoPreferredDaysCourses() {
@@ -1356,20 +1340,6 @@ export default {
 
         function deleteInlineAssignment(assignment) {
             console.log('🗑️ [InlineEdit] Deleting assignment:', assignment.id);
-
-            // Emit scheduler:remove event if configured
-            if (props.emitDropEvents) {
-                const emitFunction = props.parentEmit || emit;
-                emitSchedulerRemoveEvent(emitFunction, {
-                    schoolId: props.schoolId,
-                    draftId: props.draftId,
-                    dayId: assignment.day_id,
-                    periodId: assignment.period_id,
-                    assignmentId: assignment.id,
-                    courseId: assignment.course_id,
-                    courseName: assignment.course_name || assignment.display_cell || '',
-                });
-            }
 
             // Create updated assignments array without this assignment
             const currentSchedules = isLiveMode.value ? props.liveSchedules : props.draftSchedules;
