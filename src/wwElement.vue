@@ -694,6 +694,10 @@ export default {
                 roomId: eventData?.roomId || null,
                 source: eventData?.source || 'drag-drop',
                 timestamp: eventData?.timestamp || new Date().toISOString(),
+                // Include assignment move fields when present
+                ...(eventData?.fromDayId !== undefined && { fromDayId: eventData.fromDayId }),
+                ...(eventData?.fromPeriodId !== undefined && { fromPeriodId: eventData.fromPeriodId }),
+                ...(eventData?.action !== undefined && { action: eventData.action }),
             };
 
             console.log('🚀 [WeWeb Event] scheduler:drop - Emitting trigger-event with data:', safeEventData);
