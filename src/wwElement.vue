@@ -8,6 +8,9 @@
                     {{ isReadOnly ? 'Published Schedule (Read-Only)' : 'Planning Mode' }}
                 </div>
                 <div v-if="!isReadOnly" class="header-actions">
+                    <button @click="testEventEmission" class="test-btn" style="background: #007bff; color: white; border: none; padding: 8px 12px; border-radius: 4px; margin-right: 8px;">
+                        🧪 Test Event
+                    </button>
                     <button @click="undo" :disabled="!canUndo" class="undo-btn">↶ Undo</button>
                     <button
                         @click="showConflicts = !showConflicts"
@@ -206,29 +209,12 @@ export default {
         // Safe array computed properties with enhanced WeWeb collection support
         const periods = computed(() => {
             const rawPeriodsData = props.content.periods;
-
-            // Use the enhanced normalizePeriods function to handle both plain arrays
-            // and WeWeb numeric-key objects like {"0": {...}, "1": {...}}
             const normalizedPeriods = normalizePeriods(rawPeriodsData);
 
             if (!nonEmpty(normalizedPeriods)) {
                 console.log('📋 [Periods] No periods data available');
                 return [];
             }
-
-            console.log('📋 [Periods] Processed periods with canonical IDs:', {
-                count: len(normalizedPeriods),
-                sample: normalizedPeriods[0],
-                instructionalCount: normalizedPeriods.filter(p => p.is_instructional).length,
-                nonInstructionalCount: normalizedPeriods.filter(p => !p.is_instructional).length,
-                // Show canonical ID structure for assignment matching
-                canonicalIds: normalizedPeriods.slice(0, 5).map(p => ({
-                    id: p.id, // This is now the original UUID for assignment matching
-                    blockNumber: p.blockNumber,
-                    label: p.label,
-                    type: p.type,
-                })),
-            });
 
             return normalizedPeriods;
         });
@@ -237,12 +223,9 @@ export default {
             const rawCourses = props.content.courses;
             const coursesArray = toArray(rawCourses);
 
-            console.log('🎯 [wwElement] Courses processing:', {
-                rawType: typeof rawCourses,
-                rawIsArray: Array.isArray(rawCourses),
-                toArrayLength: safeLength(coursesArray),
-                rawKeys: typeof rawCourses === 'object' && rawCourses ? Object.keys(rawCourses).slice(0, 5) : 'N/A',
-            });
+            if (!nonEmpty(coursesArray)) {
+                console.log('🎯 [wwElement] Courses processing: no data available');
+            }
 
             // CRITICAL FIX: Apply normalizeCourse to handle possible_time_slots dayId parsing
             return coursesArray.map((course, idx) => normalizeCourse(course, idx));
@@ -252,12 +235,9 @@ export default {
             const rawTeachers = props.content.teachers;
             const teachersArray = toArray(rawTeachers);
 
-            console.log('👥 [wwElement] Teachers processing:', {
-                rawType: typeof rawTeachers,
-                rawIsArray: Array.isArray(rawTeachers),
-                toArrayLength: safeLength(teachersArray),
-                rawKeys: typeof rawTeachers === 'object' && rawTeachers ? Object.keys(rawTeachers).slice(0, 5) : 'N/A',
-            });
+            if (!nonEmpty(teachersArray)) {
+                console.log('👥 [wwElement] Teachers processing: no data available');
+            }
 
             return teachersArray;
         });
@@ -266,12 +246,9 @@ export default {
             const rawClasses = props.content.classes;
             const classesArray = toArray(rawClasses);
 
-            console.log('🏫 [wwElement] Classes processing:', {
-                rawType: typeof rawClasses,
-                rawIsArray: Array.isArray(rawClasses),
-                toArrayLength: safeLength(classesArray),
-                rawKeys: typeof rawClasses === 'object' && rawClasses ? Object.keys(rawClasses).slice(0, 5) : 'N/A',
-            });
+            if (!nonEmpty(classesArray)) {
+                console.log('🏫 [wwElement] Classes processing: no data available');
+            }
 
             return classesArray;
         });
@@ -280,12 +257,9 @@ export default {
             const rawRooms = props.content.rooms;
             const roomsArray = toArray(rawRooms);
 
-            console.log('🏠 [wwElement] Rooms processing:', {
-                rawType: typeof rawRooms,
-                rawIsArray: Array.isArray(rawRooms),
-                toArrayLength: safeLength(roomsArray),
-                rawKeys: typeof rawRooms === 'object' && rawRooms ? Object.keys(rawRooms).slice(0, 5) : 'N/A',
-            });
+            if (!nonEmpty(roomsArray)) {
+                console.log('🏠 [wwElement] Rooms processing: no data available');
+            }
 
             return roomsArray;
         });
@@ -294,14 +268,8 @@ export default {
             const rawDaysData = props.content.schoolDays;
             const validatedDays = toArray(rawDaysData); // Enhanced toArray handles all cases
 
-            console.log('📅 [wwElement] SchoolDays processing:', {
-                rawType: typeof rawDaysData,
-                rawIsArray: Array.isArray(rawDaysData),
-                toArrayLength: safeLength(validatedDays),
-                rawKeys: typeof rawDaysData === 'object' && rawDaysData ? Object.keys(rawDaysData).slice(0, 5) : 'N/A',
-            });
-
             if (!nonEmpty(validatedDays)) {
+                console.log('📅 [wwElement] SchoolDays processing: no data available');
                 return [];
             }
 
@@ -331,15 +299,11 @@ export default {
         const draftSchedules = computed(() => {
             const rawDrafts = props.content.draftSchedules;
             const finalDraftArray = toArray(rawDrafts); // Enhanced toArray handles all WeWeb formats
-
-            console.log('📝 [wwElement] Draft Schedules processing:', {
-                rawType: typeof rawDrafts,
-                rawIsArray: Array.isArray(rawDrafts),
-                toArrayLength: safeLength(finalDraftArray),
-                rawKeys: typeof rawDrafts === 'object' && rawDrafts ? Object.keys(rawDrafts).slice(0, 5) : 'N/A',
-                sampleDraft: finalDraftArray[0],
-                firstFewDrafts: finalDraftArray.slice(0, 2),
-            });
+            
+            // Only log if no data available (for debugging data issues)
+            if (!nonEmpty(finalDraftArray)) {
+                console.log('📝 [wwElement] Draft Schedules processing: no data available');
+            }
 
             return finalDraftArray;
         });
@@ -348,14 +312,10 @@ export default {
             const rawLive = props.content.liveSchedules;
             const finalLiveArray = toArray(rawLive); // Enhanced toArray handles all WeWeb formats
 
-            console.log('📺 [wwElement] Live Schedules processing:', {
-                rawType: typeof rawLive,
-                rawIsArray: Array.isArray(rawLive),
-                toArrayLength: safeLength(finalLiveArray),
-                rawKeys: typeof rawLive === 'object' && rawLive ? Object.keys(rawLive).slice(0, 5) : 'N/A',
-                sampleLive: finalLiveArray[0],
-                firstFewLive: finalLiveArray.slice(0, 2),
-            });
+            // Only log if no data available (for debugging data issues)
+            if (!nonEmpty(finalLiveArray)) {
+                console.log('📺 [wwElement] Live Schedules processing: no data available');
+            }
 
             return finalLiveArray;
         });
@@ -364,12 +324,9 @@ export default {
             const rawSubjects = props.content.subjects;
             const subjectsArray = toArray(rawSubjects);
 
-            console.log('📚 [wwElement] Subjects processing:', {
-                rawType: typeof rawSubjects,
-                rawIsArray: Array.isArray(rawSubjects),
-                toArrayLength: safeLength(subjectsArray),
-                rawKeys: typeof rawSubjects === 'object' && rawSubjects ? Object.keys(rawSubjects).slice(0, 5) : 'N/A',
-            });
+            if (!nonEmpty(subjectsArray)) {
+                console.log('📚 [wwElement] Subjects processing: no data available');
+            }
 
             return subjectsArray;
         });
@@ -393,11 +350,14 @@ export default {
             const currentDayId = selectedCell.value.dayId;
             const currentPeriodId = selectedCell.value.periodId;
 
-            console.log('🎯 [wwElement] availableCoursesForSlot filtering:', {
-                currentDayId,
-                currentPeriodId,
-                totalCourses: safeLength(courses.value),
-            });
+            // Only log if we have debug context
+            if (currentDayId && currentPeriodId) {
+                console.log('🎯 [wwElement] availableCoursesForSlot filtering:', {
+                    currentDayId,
+                    currentPeriodId,
+                    totalCourses: safeLength(courses.value),
+                });
+            }
 
             // Filter courses based on normalized possibleSlots (using dayId + periodId)
             const filteredCourses = courses.value.filter(course => {
@@ -710,44 +670,76 @@ export default {
 
         // WeWeb Element Event Handlers
         function handleSchedulerDrop(eventData) {
-            console.log('📡 [wwElement] Received scheduler-drop event from child component:', eventData);
+            console.log('🚀 [WeWeb Event] scheduler:drop - Emitting element event with data:', eventData);
             try {
                 emit('element-event', {
                     name: 'scheduler:drop',
                     event: 'scheduler:drop',
                     data: eventData,
                 });
-                console.log('✅ [wwElement] WeWeb element event scheduler:drop emitted successfully');
+                console.log('✅ [WeWeb Event] scheduler:drop emitted successfully');
             } catch (error) {
-                console.error('❌ [wwElement] Failed to emit WeWeb element event:', error);
+                console.error('❌ [WeWeb Event] scheduler:drop emission failed:', error);
             }
         }
 
         function handleSchedulerDragStart(eventData) {
-            console.log('📡 [wwElement] Received scheduler-drag-start event from child component:', eventData);
+            console.log('🚀 [WeWeb Event] scheduler:drag-start - Emitting element event');
             try {
                 emit('element-event', {
                     name: 'scheduler:drag-start',
                     event: 'scheduler:drag-start',
                     data: eventData,
                 });
-                console.log('✅ [wwElement] WeWeb element event scheduler:drag-start emitted successfully');
+                console.log('✅ [WeWeb Event] scheduler:drag-start emitted successfully');
             } catch (error) {
-                console.error('❌ [wwElement] Failed to emit WeWeb element event:', error);
+                console.error('❌ [WeWeb Event] scheduler:drag-start emission failed:', error);
             }
         }
 
         function handleSchedulerDragEnd(eventData) {
-            console.log('📡 [wwElement] Received scheduler-drag-end event from child component:', eventData);
+            console.log('🚀 [WeWeb Event] scheduler:drag-end - Emitting element event');
             try {
                 emit('element-event', {
                     name: 'scheduler:drag-end',
                     event: 'scheduler:drag-end', 
                     data: eventData,
                 });
-                console.log('✅ [wwElement] WeWeb element event scheduler:drag-end emitted successfully');
+                console.log('✅ [WeWeb Event] scheduler:drag-end emitted successfully');
             } catch (error) {
-                console.error('❌ [wwElement] Failed to emit WeWeb element event:', error);
+                console.error('❌ [WeWeb Event] scheduler:drag-end emission failed:', error);
+            }
+        }
+
+        // Test function for manual event emission debugging
+        function testEventEmission() {
+            console.log('🧪 [WeWeb Event Test] Manually testing scheduler:drop event emission...');
+            
+            // Check if emit function is available and working
+            console.log('🔍 [WeWeb Event Test] Emit function type:', typeof emit);
+            
+            const testData = {
+                schoolId: content.value?.schoolId || null,
+                draftId: content.value?.draftId || null,
+                dayId: 1,
+                periodId: "test-period-id", 
+                courseId: "test-course-id",
+                courseName: "Test Course",
+                courseCode: "TEST101",
+                source: "manual-test",
+                timestamp: new Date().toISOString(),
+            };
+
+            try {
+                emit('element-event', {
+                    name: 'scheduler:drop',
+                    event: 'scheduler:drop',
+                    data: testData,
+                });
+                console.log('✅ [WeWeb Event Test] Manual scheduler:drop event emitted successfully!');
+                console.log('📋 [WeWeb Event Test] Event should now appear in "On Element Event" dropdown');
+            } catch (error) {
+                console.error('❌ [WeWeb Event Test] Manual event emission failed:', error);
             }
         }
 
@@ -988,6 +980,7 @@ export default {
             handleSchedulerDrop,
             handleSchedulerDragStart,
             handleSchedulerDragEnd,
+            testEventEmission,
             navigateToConflict,
             applySuggestion,
             ignoreConflict,

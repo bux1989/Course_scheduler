@@ -1020,19 +1020,11 @@ export default {
         function assignCourseToSlot(course, dayId, periodId) {
             if (props.isReadOnly) return;
 
-            console.log('🎯 [SchedulerGrid] Assigning course to slot:', {
-                courseId: course.id,
-                courseName: course.name || course.course_name,
-                courseCode: course.code || course.course_code || '',
-                dayId,
-                periodId,
-                emitDropEvents: props.emitDropEvents,
-                hasParentEmit: !!props.parentEmit,
-            });
+            console.log('🎯 [Scheduler] Assigning course:', course.name || course.course_name, 'to day:', dayId, 'period:', periodId);
 
             // If emitDropEvents is enabled, emit a Vue event to parent component
             if (props.emitDropEvents) {
-                console.log('📡 [SchedulerGrid] emitDropEvents enabled - emitting scheduler-drop Vue event to parent');
+                console.log('🚀 [Scheduler] Emitting drop event for course:', course.name || course.course_name);
                 
                 const eventData = {
                     schoolId: props.schoolId || null,
@@ -1056,12 +1048,12 @@ export default {
                     success: true,
                 });
                 
-                console.log('📡 [SchedulerGrid] ✅ Vue events emitted to parent - parent will handle WeWeb element event emission');
+                console.log('✅ [Scheduler] Drop events emitted to parent component');
                 return; // Let parent handle the rest
             }
 
-            // Default behavior OR fallback when event emission fails: open assignment modal
-            console.log('📡 [SchedulerGrid] Opening assignment modal for course assignment');
+            // Default behavior: open assignment modal
+            console.log('📋 [Scheduler] Opening assignment modal for course assignment');
             emit('cell-click', {
                 dayId,
                 periodId,
@@ -1139,7 +1131,7 @@ export default {
                 return;
             }
 
-            console.log('🎯 [DragDrop] Course drag started:', course.name || course.course_name);
+            console.log('🚀 [Scheduler] Drag started:', course.name || course.course_name);
             draggedCourse.value = course;
 
             // Emit Vue event to parent for drag-start
@@ -1263,10 +1255,11 @@ export default {
                     // Assign new course to cell
                     const course = dragData.course;
                     console.log(
-                        '🎯 [DragDrop] Dropping course:',
+                        '🎯 [Scheduler] Dropping:',
                         course.name || course.course_name,
-                        'to cell:',
+                        'to day:',
                         dayId,
+                        'period:',
                         periodId
                     );
 
