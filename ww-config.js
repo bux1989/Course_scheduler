@@ -294,7 +294,7 @@ export default {
             },
             tooltip: {
                 en: 'Triggered when dragging a course begins',
-                fr: 'Déclenché quand le glissement d\'un cours commence',
+                fr: "Déclenché quand le glissement d'un cours commence",
             },
         },
         'scheduler:drag-end': {

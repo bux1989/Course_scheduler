@@ -427,6 +427,7 @@ export default {
         emitDropEvents: { type: Boolean, default: false },
         schoolId: { type: String, default: null },
         draftId: { type: String, default: null },
+        parentEmit: { type: Function, default: null }, // Parent component's emit function for WeWeb events
 
         // State
         conflicts: { type: Array, default: () => [] },
@@ -1035,7 +1036,9 @@ export default {
 
             // If emitDropEvents is enabled, emit the event instead of opening modal
             if (props.emitDropEvents) {
-                const success = emitSchedulerDropEvent(emit, {
+                // Use parent emit function for WeWeb element events, fallback to local emit
+                const emitFunction = props.parentEmit || emit;
+                const success = emitSchedulerDropEvent(emitFunction, {
                     schoolId: props.schoolId,
                     draftId: props.draftId,
                     dayId: dayId,
@@ -1049,7 +1052,7 @@ export default {
                     console.log('📡 [SchedulerGrid] Drop event emitted successfully');
 
                     // Emit successful drag-end event
-                    emitSchedulerDragEndEvent(emit, {
+                    emitSchedulerDragEndEvent(emitFunction, {
                         courseId: course.id,
                         courseName: course.name || course.course_name || '',
                         success: true,
@@ -1141,8 +1144,9 @@ export default {
             console.log('🎯 [DragDrop] Course drag started:', course.name || course.course_name);
             draggedCourse.value = course;
 
-            // Emit drag-start event
-            emitSchedulerDragStartEvent(emit, {
+            // Emit drag-start event using parent emit for WeWeb integration
+            const emitFunction = props.parentEmit || emit;
+            emitSchedulerDragStartEvent(emitFunction, {
                 courseId: course.id,
                 courseName: course.name || course.course_name || '',
             });
@@ -1167,8 +1171,9 @@ export default {
             console.log('🎯 [DragDrop] Course drag ended');
             const course = draggedCourse.value;
 
-            // Emit drag-end event
-            emitSchedulerDragEndEvent(emit, {
+            // Emit drag-end event using parent emit for WeWeb integration
+            const emitFunction = props.parentEmit || emit;
+            emitSchedulerDragEndEvent(emitFunction, {
                 courseId: course?.id || null,
                 courseName: course?.name || course?.course_name || null,
                 success: false, // Will be updated to true in handleCellDrop if successful
@@ -1365,7 +1370,8 @@ export default {
 
             // Emit scheduler:remove event if configured
             if (props.emitDropEvents) {
-                emitSchedulerRemoveEvent(emit, {
+                const emitFunction = props.parentEmit || emit;
+                emitSchedulerRemoveEvent(emitFunction, {
                     schoolId: props.schoolId,
                     draftId: props.draftId,
                     dayId: assignment.day_id,
