@@ -1020,7 +1020,7 @@ export default {
 
             console.log('🎯 [Scheduler] Assigning course:', course.name || course.course_name, 'to day:', dayId, 'period:', periodId);
 
-            // Always emit drop event to parent component 
+            // Always emit drop event to parent component
             const eventData = {
                 schoolId: props.schoolId || null,
                 draftId: props.draftId || null,
@@ -1340,6 +1340,20 @@ export default {
 
         function deleteInlineAssignment(assignment) {
             console.log('🗑️ [InlineEdit] Deleting assignment:', assignment.id);
+
+            // Emit scheduler:remove event if configured
+            if (props.emitDropEvents) {
+                const emitFunction = props.parentEmit || emit;
+                emitSchedulerRemoveEvent(emitFunction, {
+                    schoolId: props.schoolId,
+                    draftId: props.draftId,
+                    dayId: assignment.day_id,
+                    periodId: assignment.period_id,
+                    assignmentId: assignment.id,
+                    courseId: assignment.course_id,
+                    courseName: assignment.course_name || assignment.display_cell || '',
+                });
+            }
 
             // Create updated assignments array without this assignment
             const currentSchedules = isLiveMode.value ? props.liveSchedules : props.draftSchedules;
