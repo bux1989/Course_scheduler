@@ -379,11 +379,27 @@
             </div>
         </div>
     </div>
+
+    <!-- Teacher/Room Selection Modal -->
+    <TeacherRoomSelectionModal
+        v-if="showTeacherRoomModal && modalCourseData"
+        :courseId="modalCourseData.courseId"
+        :courseName="modalCourseData.courseName"
+        :dayId="modalCourseData.dayId"
+        :periodId="modalCourseData.periodId"
+        :draftId="draftId"
+        :schoolId="schoolId"
+        :teachers="teachers"
+        :rooms="rooms"
+        @submit="handleTeacherRoomSubmit"
+        @cancel="handleTeacherRoomCancel"
+    />
 </template>
 
 <script>
 import { computed, ref, watch, nextTick } from 'vue';
 import InlineAssignmentEditor from './InlineAssignmentEditor.vue';
+import TeacherRoomSelectionModal from './TeacherRoomSelectionModal.vue';
 import {
     validateAndUnwrapArray,
     safeLength,
@@ -399,6 +415,7 @@ export default {
     name: 'SchedulerGrid',
     components: {
         InlineAssignmentEditor,
+        TeacherRoomSelectionModal,
     },
     props: {
         // Data props
@@ -452,6 +469,10 @@ export default {
         // Inline editing state
         const editingAssignment = ref(null);
         const editingCell = ref(null);
+
+        // Teacher/Room selection modal state
+        const showTeacherRoomModal = ref(false);
+        const modalCourseData = ref(null);
 
         // Watch for unexpected focusedPeriodId changes (simplified logging)
         watch(focusedPeriodId, (newValue, oldValue) => {
@@ -1019,7 +1040,7 @@ export default {
             if (props.isReadOnly) return;
 
             console.log(
-                '🎯 [Scheduler] Assigning course:',
+                '🎯 [Scheduler] Opening teacher/room selection for course:',
                 course.name || course.course_name,
                 'to day:',
                 dayId,
@@ -1027,21 +1048,17 @@ export default {
                 periodId
             );
 
-            // Always emit drop event to parent component
-            const eventData = {
-                schoolId: props.schoolId || null,
-                draftId: props.draftId || null,
-                dayId: dayId,
-                periodId: periodId,
+            // Store the course data for the modal
+            modalCourseData.value = {
                 courseId: course.id,
                 courseName: course.name || course.course_name || '',
                 courseCode: course.code || course.course_code || '',
-                source: 'drag-drop',
-                timestamp: new Date().toISOString(),
+                dayId: dayId,
+                periodId: periodId,
             };
 
-            // Emit Vue event to parent component (wwElement.vue)
-            emit('scheduler-drop', eventData);
+            // Show the teacher/room selection modal
+            showTeacherRoomModal.value = true;
 
             // Also emit drag-end event
             emit('scheduler-drag-end', {
@@ -1054,6 +1071,37 @@ export default {
             });
 
             console.log('✅ [Scheduler] Drop events emitted to parent component');
+        }
+
+        // Modal handler functions
+        function handleTeacherRoomSubmit(payload) {
+            console.log('🎯 [Modal] Teacher/room assignment submitted:', payload);
+
+            // Emit the scheduled assignment event to parent component (wwElement.vue)
+            emit('scheduler-drop', {
+                schoolId: props.schoolId || null,
+                draftId: props.draftId || null,
+                dayId: payload.dayId,
+                periodId: payload.periodId,
+                courseId: payload.courseId,
+                courseName: payload.courseName,
+                courseCode: modalCourseData.value?.courseCode || '',
+                teacherIds: payload.teacherIds,
+                primaryTeacherId: payload.primaryTeacherId,
+                roomId: payload.roomId,
+                source: 'modal-assignment',
+                timestamp: payload.timestamp,
+            });
+
+            // Close the modal
+            showTeacherRoomModal.value = false;
+            modalCourseData.value = null;
+        }
+
+        function handleTeacherRoomCancel() {
+            console.log('❌ [Modal] Teacher/room assignment cancelled');
+            showTeacherRoomModal.value = false;
+            modalCourseData.value = null;
         }
 
         function getNoPreferredDaysCourses() {
@@ -1396,6 +1444,8 @@ export default {
             dragOverCell,
             editingAssignment,
             editingCell,
+            showTeacherRoomModal,
+            modalCourseData,
             searchTerm,
             debouncedSearchTerm,
 
@@ -1455,6 +1505,10 @@ export default {
             saveInlineEdit,
             cancelInlineEdit,
             deleteInlineAssignment,
+
+            // Modal handlers
+            handleTeacherRoomSubmit,
+            handleTeacherRoomCancel,
 
             // Utility functions
             safeLength,
