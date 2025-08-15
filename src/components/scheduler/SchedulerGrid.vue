@@ -19,14 +19,6 @@
             </div>
 
             <div class="toolbar-section">
-                <label class="mode-switcher">
-                    <span>Planning Mode</span>
-                    <input type="checkbox" v-model="isLiveMode" @change="handleModeSwitch" class="mode-toggle" />
-                    <span>Live Mode</span>
-                </label>
-            </div>
-
-            <div class="toolbar-section">
                 <select v-model="selectedYearFilter" @change="$emit('filter-year', selectedYearFilter)">
                     <option value="">All Years</option>
                     <option v-for="year in yearGroups" :key="year" :value="year">{{ year }}</option>
@@ -471,6 +463,7 @@ export default {
 
         // Configuration
         isReadOnly: { type: Boolean, default: false },
+        isLiveMode: { type: Boolean, default: false },
         showStatistics: { type: Boolean, default: true },
         maxDays: { type: Number, default: 6 }, // Monday-Saturday
         schoolId: { type: String, default: null },
@@ -493,7 +486,6 @@ export default {
         'undo-last',
         'save-draft',
         'update-assignments',
-        'mode-changed',
         'period-focus-changed',
     ],
 
@@ -501,11 +493,10 @@ export default {
         // Local state
         const showNonInstructional = ref(true);
         const showLessonSchedules = ref(true);
-        const isLiveMode = ref(false);
         const selectedYearFilter = ref('');
         const selectedClassFilter = ref('');
         const focusedPeriodId = ref(null);
-        
+
         // Performance monitoring
         const performanceMetrics = ref({
             lastProcessedCount: 0,
@@ -513,19 +504,19 @@ export default {
             cacheHits: 0,
             cacheMisses: 0,
         });
-        
+
         // Performance optimization refs
         const lastLoggedPeriodsCount = ref(0);
-        
+
         // Monitor performance improvements
-        watch(filteredEntries, (newEntries) => {
+        watch(filteredEntries, newEntries => {
             const startTime = performance.now();
             performanceMetrics.value.lastProcessedCount = safeLength(newEntries);
-            
+
             // After processing completes
             nextTick(() => {
                 performanceMetrics.value.processingTime = performance.now() - startTime;
-                
+
                 // Log performance summary for large datasets
                 if (safeLength(newEntries) > 100) {
                     console.log('📊 [Performance] Schedule processing completed:', {
@@ -708,13 +699,13 @@ export default {
 
         // Performance-optimized filtered entries with caching
         const filteredEntriesCache = ref(new Map());
-        
+
         const filteredEntries = computed(() => {
-            let entries = isLiveMode.value ? props.liveSchedules : props.draftSchedules;
-            
+            let entries = props.isLiveMode ? props.liveSchedules : props.draftSchedules;
+
             // Create cache key based on filter state
-            const cacheKey = `${isLiveMode.value}-${debouncedSearchTerm.value}-${selectedClassFilter.value}-${showLessonSchedules.value}`;
-            
+            const cacheKey = `${props.isLiveMode}-${debouncedSearchTerm.value}-${selectedClassFilter.value}-${showLessonSchedules.value}`;
+
             // Check cache first for performance
             if (filteredEntriesCache.value.has(cacheKey)) {
                 return filteredEntriesCache.value.get(cacheKey);
@@ -724,7 +715,7 @@ export default {
             if (safeLength(entries) > 100) {
                 console.log('🔍 [SchedulerGrid] Processing large schedule set:', {
                     count: safeLength(entries),
-                    mode: isLiveMode.value ? 'live' : 'draft',
+                    mode: props.isLiveMode ? 'live' : 'draft',
                     hasSearch: !!debouncedSearchTerm.value,
                     hasClassFilter: !!selectedClassFilter.value,
                 });
@@ -793,81 +784,86 @@ export default {
         // Performance-optimized cell assignments with indexed lookup
         const cellAssignmentsCache = ref(new Map());
         const assignmentsByDayPeriod = ref(new Map());
-        
+
         // Debounced functions for performance optimization
         let getCellAssignmentsDebounce = null;
-        
+
         // Watch for changes in filtered entries with debouncing to prevent excessive re-computations
         const debouncedFilteredEntries = ref([]);
-        watch(filteredEntries, (newEntries) => {
-            clearTimeout(getCellAssignmentsDebounce);
-            getCellAssignmentsDebounce = setTimeout(() => {
-                debouncedFilteredEntries.value = newEntries;
-                
-                // Clear caches when data changes
-                cellAssignmentsCache.value.clear();
-                assignmentsByDayPeriod.value.clear();
-                
-                // Build index for O(1) lookups instead of O(n) filtering
-                newEntries.forEach(assignment => {
-                    // Try multiple day matching strategies
-                    const dayMatches = [];
-                    
-                    // Collect all possible day matches
-                    props.schoolDays.forEach(day => {
-                        const dayMatch = 
-                            assignment.day_id === day.id ||
-                            assignment.day_id === day.day_id ||
-                            assignment.day_number === day.day_number ||
-                            assignment.day_number === day.id ||
-                            (day.name && assignment.day_name_en === day.name) ||
-                            (day.name_en && assignment.day_name_en === day.name_en);
-                        
-                        if (dayMatch) {
-                            dayMatches.push(day.id);
-                        }
-                    });
-                    
-                    // Try multiple period matching strategies
-                    const periodMatches = [];
-                    
-                    props.periods.forEach(period => {
-                        const periodMatch = 
-                            assignment.period_id === period.id ||
-                            (assignment.block_number && period.blockNumber && 
-                             assignment.block_number === period.blockNumber);
-                        
-                        if (periodMatch) {
-                            periodMatches.push(period.id);
-                        }
-                    });
-                    
-                    // Create index entries for all day-period combinations
-                    dayMatches.forEach(dayId => {
-                        periodMatches.forEach(periodId => {
-                            const key = `${dayId}-${periodId}`;
-                            if (!assignmentsByDayPeriod.value.has(key)) {
-                                assignmentsByDayPeriod.value.set(key, []);
+        watch(
+            filteredEntries,
+            newEntries => {
+                clearTimeout(getCellAssignmentsDebounce);
+                getCellAssignmentsDebounce = setTimeout(() => {
+                    debouncedFilteredEntries.value = newEntries;
+
+                    // Clear caches when data changes
+                    cellAssignmentsCache.value.clear();
+                    assignmentsByDayPeriod.value.clear();
+
+                    // Build index for O(1) lookups instead of O(n) filtering
+                    newEntries.forEach(assignment => {
+                        // Try multiple day matching strategies
+                        const dayMatches = [];
+
+                        // Collect all possible day matches
+                        props.schoolDays.forEach(day => {
+                            const dayMatch =
+                                assignment.day_id === day.id ||
+                                assignment.day_id === day.day_id ||
+                                assignment.day_number === day.day_number ||
+                                assignment.day_number === day.id ||
+                                (day.name && assignment.day_name_en === day.name) ||
+                                (day.name_en && assignment.day_name_en === day.name_en);
+
+                            if (dayMatch) {
+                                dayMatches.push(day.id);
                             }
-                            assignmentsByDayPeriod.value.get(key).push(assignment);
+                        });
+
+                        // Try multiple period matching strategies
+                        const periodMatches = [];
+
+                        props.periods.forEach(period => {
+                            const periodMatch =
+                                assignment.period_id === period.id ||
+                                (assignment.block_number &&
+                                    period.blockNumber &&
+                                    assignment.block_number === period.blockNumber);
+
+                            if (periodMatch) {
+                                periodMatches.push(period.id);
+                            }
+                        });
+
+                        // Create index entries for all day-period combinations
+                        dayMatches.forEach(dayId => {
+                            periodMatches.forEach(periodId => {
+                                const key = `${dayId}-${periodId}`;
+                                if (!assignmentsByDayPeriod.value.has(key)) {
+                                    assignmentsByDayPeriod.value.set(key, []);
+                                }
+                                assignmentsByDayPeriod.value.get(key).push(assignment);
+                            });
                         });
                     });
-                });
-            }, 100); // 100ms debounce
-        }, { immediate: true });
+                }, 100); // 100ms debounce
+            },
+            { immediate: true }
+        );
 
         function getCellAssignments(dayId, periodId) {
             // Use indexed lookup for O(1) performance instead of O(n) filtering
             const cacheKey = `${dayId}-${periodId}`;
-            
+
             // Check cache first
             if (cellAssignmentsCache.value.has(cacheKey)) {
                 performanceMetrics.value.cacheHits++;
                 return cellAssignmentsCache.value.get(cacheKey);
             }
-            
+
             performanceMetrics.value.cacheMisses++;
-            
+
             // Get assignments from index
             const assignments = assignmentsByDayPeriod.value.get(cacheKey) || [];
 
@@ -885,7 +881,7 @@ export default {
                 const courseB = getCourseName(b.course_id) || getSubjectName(b.subject_id);
                 return courseA.localeCompare(courseB);
             });
-            
+
             // Cache the result with size limit
             if (cellAssignmentsCache.value.size > 1000) {
                 cellAssignmentsCache.value.clear(); // Prevent memory leaks
@@ -956,20 +952,20 @@ export default {
 
         function getClassName(classId) {
             if (!classId) return '';
-            
+
             if (classNameCache.value.has(classId)) {
                 return classNameCache.value.get(classId);
             }
-            
+
             const cls = props.classes.find(c => c.id === classId);
             const name = cls?.name || 'No Class';
-            
+
             // Limit cache size
             if (classNameCache.value.size > 200) {
                 classNameCache.value.clear();
             }
             classNameCache.value.set(classId, name);
-            
+
             return name;
         }
 
@@ -977,11 +973,11 @@ export default {
             if (!courseId) {
                 return null; // Return null instead of "No Course" to allow fallback to subject
             }
-            
+
             if (courseNameCache.value.has(courseId)) {
                 return courseNameCache.value.get(courseId);
             }
-            
+
             const course = props.courses.find(c => c.id === courseId);
             const courseName = course?.name || course?.course_name || course?.title;
 
@@ -991,55 +987,55 @@ export default {
             }
 
             const name = courseName || null;
-            
+
             // Limit cache size
             if (courseNameCache.value.size > 200) {
                 courseNameCache.value.clear();
             }
             courseNameCache.value.set(courseId, name);
-            
+
             return name;
         }
 
         function getRoomName(roomId) {
             if (!roomId) return 'No Room';
-            
+
             if (roomNameCache.value.has(roomId)) {
                 return roomNameCache.value.get(roomId);
             }
-            
+
             const room = props.rooms.find(r => r.id === roomId);
             const name = room?.name || 'Unknown Room';
-            
+
             // Limit cache size
             if (roomNameCache.value.size > 200) {
                 roomNameCache.value.clear();
             }
             roomNameCache.value.set(roomId, name);
-            
+
             return name;
         }
 
         function getTeacherNames(teacherIds) {
             if (!teacherIds?.length) return 'No Teacher';
-            
+
             const cacheKey = teacherIds.join(',');
             if (teacherNameCache.value.has(cacheKey)) {
                 return teacherNameCache.value.get(cacheKey);
             }
-            
+
             const names = teacherIds.map(id => {
                 const teacher = props.teachers.find(t => t.id === id);
                 return teacher?.name || 'Unknown Teacher';
             });
             const result = names.join(', ');
-            
+
             // Limit cache size
             if (teacherNameCache.value.size > 500) {
                 teacherNameCache.value.clear();
             }
             teacherNameCache.value.set(cacheKey, result);
-            
+
             return result;
         }
 
@@ -1087,7 +1083,7 @@ export default {
             teacherNameCache.value.clear();
             gradeStatsCache.value.clear();
         });
-        
+
         // Get all unique grades from all courses (cached)
         const allGrades = computed(() => {
             const gradesSet = new Set();
@@ -1125,8 +1121,13 @@ export default {
 
         // Event handlers
         function handleCellClick(dayId, periodId, period) {
-            console.log('🖱️ [SchedulerGrid] Cell clicked:', { dayId, periodId, period: period?.name, isReadOnly: props.isReadOnly });
-            
+            console.log('🖱️ [SchedulerGrid] Cell clicked:', {
+                dayId,
+                periodId,
+                period: period?.name,
+                isReadOnly: props.isReadOnly,
+            });
+
             if (props.isReadOnly) {
                 console.log('📖 [SchedulerGrid] Read-only mode - ignoring cell click');
                 return;
@@ -1146,11 +1147,15 @@ export default {
         function openAssignmentModal(dayId, periodId, period) {
             if (props.isReadOnly) return;
 
-            console.log('🎯 [SchedulerGrid] Opening course selection modal for:', { dayId, periodId, period: period.name });
+            console.log('🎯 [SchedulerGrid] Opening course selection modal for:', {
+                dayId,
+                periodId,
+                period: period.name,
+            });
 
             // Get available courses for this time slot
             const availableCourses = getAvailableCoursesForSlot(dayId, periodId);
-            
+
             // Find day and period names for the modal
             const day = props.schoolDays.find(d => d.id === dayId);
             const dayName = day ? day.name : `Day ${dayId}`;
@@ -1191,9 +1196,6 @@ export default {
             // Class filter is handled locally - no need to emit
         }
 
-        function handleModeSwitch() {
-            emit('mode-changed', isLiveMode.value ? 'live' : 'planning');
-        }
         function togglePeriodFocus(periodId) {
             if (focusedPeriodId.value === periodId) {
                 focusedPeriodId.value = null;
@@ -1775,7 +1777,7 @@ export default {
             console.log('💾 [InlineEdit] Saving changes for assignment:', updatedAssignment.id);
 
             // Create updated assignments array
-            const currentSchedules = isLiveMode.value ? props.liveSchedules : props.draftSchedules;
+            const currentSchedules = props.isLiveMode ? props.liveSchedules : props.draftSchedules;
             const updatedSchedules = currentSchedules.map(schedule =>
                 schedule.id === updatedAssignment.id ? updatedAssignment : schedule
             );
@@ -1812,7 +1814,7 @@ export default {
             }
 
             // Create updated assignments array without this assignment
-            const currentSchedules = isLiveMode.value ? props.liveSchedules : props.draftSchedules;
+            const currentSchedules = props.isLiveMode ? props.liveSchedules : props.draftSchedules;
             const updatedSchedules = currentSchedules.filter(schedule => schedule.id !== assignment.id);
 
             // Emit update
@@ -1861,7 +1863,7 @@ export default {
 
         // Performance-optimized grade statistics with caching
         const gradeStatsCache = ref(new Map());
-        
+
         // Get scheduled courses for a specific day and period from draft schedules (optimized)
         function getScheduledCoursesForSlot(dayId, periodId) {
             // Use the indexed assignments instead of filtering all schedules
@@ -1893,9 +1895,9 @@ export default {
         // Calculate daily grade statistics for a specific day using draft schedules (cached)
         function getDailyGradeStats(dayId, periodId) {
             if (!periodId) return [];
-            
+
             const cacheKey = `${dayId}-${periodId}`;
-            
+
             // Check cache first
             if (gradeStatsCache.value.has(cacheKey)) {
                 return gradeStatsCache.value.get(cacheKey);
@@ -1938,7 +1940,7 @@ export default {
                     });
                 }
             });
-            
+
             // Cache the result with size limit
             if (gradeStatsCache.value.size > 100) {
                 gradeStatsCache.value.clear();
@@ -1952,7 +1954,6 @@ export default {
             // State
             showNonInstructional,
             showLessonSchedules,
-            isLiveMode,
             selectedYearFilter,
             selectedClassFilter,
             focusedPeriodId,
@@ -1997,7 +1998,6 @@ export default {
             openAssignmentDetails,
             handleLessonScheduleToggle,
             handleClassFilterChange,
-            handleModeSwitch,
             togglePeriodFocus,
             clearPeriodFocus,
             getFocusedPeriodName,

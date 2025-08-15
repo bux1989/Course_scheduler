@@ -55,6 +55,7 @@
                 :can-undo="canUndo"
                 :is-saving="isSaving"
                 :is-read-only="isReadOnly"
+                :is-live-mode="isLiveMode"
                 :show-statistics="true"
                 :school-id="content.schoolId"
                 :draft-id="content.draftId"
@@ -65,7 +66,6 @@
                 @course-edit="handleCourseEdit"
                 @toggle-non-instructional="handleToggleNonInstructional"
                 @toggle-lesson-schedules="handleToggleLessonSchedules"
-                @mode-changed="handleModeChanged"
                 @period-focus-changed="handlePeriodFocusChanged"
                 @filter-year="handleFilterYear"
                 @scheduler-drop="handleSchedulerDrop"
@@ -181,6 +181,7 @@ export default {
                 liveSchedules: [],
                 subjects: [],
                 emitDropEvents: false,
+                isLiveMode: false,
             }),
         },
         wwElementState: { type: Object, required: true },
@@ -342,6 +343,10 @@ export default {
             }
 
             return subjectsArray;
+        });
+
+        const isLiveMode = computed(() => {
+            return !!props.content.isLiveMode;
         });
 
         // Computed state
@@ -684,13 +689,6 @@ export default {
             });
         }
 
-        function handleModeChanged(mode) {
-            emit('trigger-event', {
-                name: 'modeChanged',
-                event: { mode: mode },
-            });
-        }
-
         function handlePeriodFocusChanged(periodId) {
             emit('trigger-event', {
                 name: 'periodFocusChanged',
@@ -1022,6 +1020,7 @@ export default {
             draftSchedules,
             liveSchedules,
             subjects,
+            isLiveMode,
 
             // State
             showAssignmentModal,
@@ -1049,7 +1048,6 @@ export default {
             handleCourseEdit,
             handleToggleNonInstructional,
             handleToggleLessonSchedules,
-            handleModeChanged,
             handlePeriodFocusChanged,
             handleFilterYear,
             handleSchedulerDrop,
