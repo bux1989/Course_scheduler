@@ -7,7 +7,7 @@
             <div class="stat-header" title="⚖️ Average spots available">⚖️</div>
             <div class="stat-header" title="📚 Amount of courses available">📚</div>
         </div>
-        
+
         <div class="compact-stats-container">
             <div v-for="day in visibleDays" :key="day.id" class="day-compact-stats">
                 <h4 class="day-title">{{ day.name }}</h4>
