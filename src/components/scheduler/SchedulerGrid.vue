@@ -207,20 +207,7 @@
                                     }}</span>
                                 </div>
 
-                                <!-- Inline Editor -->
-                                <InlineAssignmentEditor
-                                    v-if="isEditing(assignment.id)"
-                                    :assignment="assignment"
-                                    :courses="courses"
-                                    :teachers="teachers"
-                                    :classes="classes"
-                                    :rooms="rooms"
-                                    :subjects="subjects"
-                                    @save="saveInlineEdit"
-                                    @cancel="cancelInlineEdit"
-                                    @delete="deleteInlineAssignment"
-                                    @edit-course="handleCourseEdit"
-                                />
+
 
                                 <!-- Conflict Indicators -->
                                 <div v-if="hasConflicts(assignment)" class="conflict-indicator" title="Has conflicts">
@@ -425,6 +412,21 @@
 
     <!-- Context Menu Backdrop -->
     <div v-if="contextMenu.show" class="context-menu-backdrop" @click="closeContextMenu"></div>
+
+    <!-- Inline Assignment Editor (rendered at top level to avoid positioning conflicts) -->
+    <InlineAssignmentEditor
+        v-if="editingAssignment"
+        :assignment="editingAssignment"
+        :courses="courses"
+        :teachers="teachers"
+        :classes="classes"
+        :rooms="rooms"
+        :subjects="subjects"
+        @save="saveInlineEdit"
+        @cancel="cancelInlineEdit"
+        @delete="deleteInlineAssignment"
+        @edit-course="handleCourseEdit"
+    />
 </template>
 
 <script>
