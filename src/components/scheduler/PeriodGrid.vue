@@ -71,14 +71,47 @@
             </div>
         </div>
     </div>
+
+    <!-- Course Selection Modal -->
+    <CourseSelectionModal
+        v-if="showCourseSelectionModal && modalSlotData"
+        :dayId="modalSlotData.dayId"
+        :dayName="modalSlotData.dayName"
+        :periodId="modalSlotData.periodId"
+        :periodName="modalSlotData.periodName"
+        :availableCourses="modalSlotData.availableCourses"
+        @submit="handleCourseSelection"
+        @cancel="handleCourseSelectionCancel"
+    />
+
+    <!-- Teacher/Room Selection Modal -->
+    <TeacherRoomSelectionModal
+        v-if="showTeacherRoomModal && modalCourseData"
+        :courseId="modalCourseData.courseId"
+        :courseName="modalCourseData.courseName"
+        :dayId="modalCourseData.dayId"
+        :periodId="modalCourseData.periodId"
+        :draftId="draftId"
+        :schoolId="schoolId"
+        :teachers="teachers"
+        :rooms="rooms"
+        @submit="handleTeacherRoomSubmit"
+        @cancel="handleTeacherRoomCancel"
+    />
 </template>
 
 <script>
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import { useSchedulerStore } from '../../pinia/scheduler';
+import CourseSelectionModal from './CourseSelectionModal.vue';
+import TeacherRoomSelectionModal from './TeacherRoomSelectionModal.vue';
 
 export default {
     name: 'PeriodGrid',
+    components: {
+        CourseSelectionModal,
+        TeacherRoomSelectionModal,
+    },
     props: {
         days: {
             type: Array,
@@ -100,10 +133,24 @@ export default {
             type: Array,
             default: () => [],
         },
+        schoolId: {
+            type: String,
+            required: true,
+        },
+        draftId: {
+            type: String,
+            required: true,
+        },
     },
     emits: ['add-entry', 'show-period-details'],
     setup(props, { emit }) {
         const store = useSchedulerStore();
+
+        // Modal state
+        const showCourseSelectionModal = ref(false);
+        const showTeacherRoomModal = ref(false);
+        const modalCourseData = ref(null);
+        const modalSlotData = ref(null);
 
         const periods = computed(() => store.periods);
         const entries = computed(() => store.filteredEntries);
@@ -174,32 +221,15 @@ export default {
             const existingEntry = getEntry(dayId, periodId);
 
             if (existingEntry) {
-                // If entry exists, emit event to edit it
+                // If entry exists, emit event to edit it (keep existing behavior)
                 emit('add-entry', {
                     isEdit: true,
                     entry: existingEntry,
                     period,
                 });
             } else {
-                // Check if slot is available
-                const checkData = {
-                    schedule_type: 'period',
-                    day_id: dayId,
-                    period_id: periodId,
-                    start_time: period.start_time,
-                    end_time: period.end_time,
-                };
-
-                const result = await store.checkPlacement(checkData);
-
-                // Emit event to add new entry
-                emit('add-entry', {
-                    isEdit: false,
-                    conflicts: result.conflicts || [],
-                    period,
-                    dayId,
-                    periodId,
-                });
+                // Open course selection modal for empty cells
+                openCourseSelectionModal(dayId, periodId, period);
             }
         }
 
@@ -225,6 +255,97 @@ export default {
             emit('show-period-details', { dayId, periodId });
         }
 
+        // Course availability function (adapted from SchedulerGrid.vue)
+        function normalizeCourse(course, index) {
+            return {
+                id: course.id || `course-${index}`,
+                name: course.name || course.course_name || course.title,
+                course_name: course.course_name || course.name || course.title,
+                course_code: course.course_code,
+                subject_name: course.subject_name,
+                description: course.description,
+                color: course.color || course.subject_color,
+                possibleSlots: course.possibleSlots || course.possible_slots || [],
+                is_for_year_groups: course.is_for_year_groups || course.isForYearGroups || [],
+            };
+        }
+
+        function getAvailableCoursesForSlot(dayId, periodId) {
+            // Normalize courses to use possibleSlots with dayId parsing
+            const normalizedCourses = props.courses.map((course, idx) => normalizeCourse(course, idx));
+
+            // Filter courses that are available for this specific day/period using dayId
+            let availableCourses = normalizedCourses.filter(course => {
+                // If course has no time slot restrictions, it's available anywhere
+                if (!course.possibleSlots || course.possibleSlots.length === 0) {
+                    return true;
+                }
+
+                // Check if this day/period combination is in the course's possible slots
+                const isAvailable = course.possibleSlots.some(slot => {
+                    return slot.dayId === dayId && slot.periodId === periodId;
+                });
+
+                return isAvailable;
+            });
+
+            return availableCourses;
+        }
+
+        // Modal handlers
+        function openCourseSelectionModal(dayId, periodId, period) {
+            const day = props.days.find(d => d.id === dayId);
+            const availableCourses = getAvailableCoursesForSlot(dayId, periodId);
+
+            modalSlotData.value = {
+                dayId,
+                periodId,
+                dayName: day ? day.name : `Day ${dayId}`,
+                periodName: period.name,
+                period,
+                availableCourses,
+            };
+
+            showCourseSelectionModal.value = true;
+        }
+
+        function handleCourseSelection(courseData) {
+            showCourseSelectionModal.value = false;
+
+            // Store the course data and open teacher/room selection
+            modalCourseData.value = {
+                courseId: courseData.courseId,
+                courseName: courseData.courseName,
+                courseCode: courseData.courseCode,
+                dayId: courseData.dayId,
+                periodId: courseData.periodId,
+            };
+
+            showTeacherRoomModal.value = true;
+        }
+
+        function handleCourseSelectionCancel() {
+            showCourseSelectionModal.value = false;
+            modalSlotData.value = null;
+        }
+
+        function handleTeacherRoomSubmit(data) {
+            showTeacherRoomModal.value = false;
+            modalCourseData.value = null;
+
+            // Emit the final assignment data to be added to the schedule
+            emit('add-entry', {
+                isEdit: false,
+                assignmentData: data,
+                conflicts: [],
+            });
+        }
+
+        function handleTeacherRoomCancel() {
+            showTeacherRoomModal.value = false;
+            modalCourseData.value = null;
+        }
+
         return {
             periods,
             formatTime,
@@ -237,6 +358,16 @@ export default {
             handleCellClick,
             removeEntry,
             showPeriodDetails,
+            // Modal state
+            showCourseSelectionModal,
+            showTeacherRoomModal,
+            modalCourseData,
+            modalSlotData,
+            // Modal handlers
+            handleCourseSelection,
+            handleCourseSelectionCancel,
+            handleTeacherRoomSubmit,
+            handleTeacherRoomCancel,
         };
     },
 };

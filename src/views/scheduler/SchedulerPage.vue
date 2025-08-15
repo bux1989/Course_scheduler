@@ -19,6 +19,8 @@
                     :rooms="rooms"
                     :teachers="teachers"
                     :classes="classes"
+                    :schoolId="schoolId"
+                    :draftId="draftId"
                     @add-entry="openEntryForm"
                     @show-period-details="showPeriodDetail"
                 />
@@ -509,7 +511,17 @@ export default {
         }
 
         async function openEntryForm(options) {
-            const { isEdit, entry, conflicts: entryConflicts, period, dayId, periodId, startTime, endTime } = options;
+            const {
+                isEdit,
+                entry,
+                conflicts: entryConflicts,
+                period,
+                dayId,
+                periodId,
+                startTime,
+                endTime,
+                assignmentData,
+            } = options;
 
             isEditingEntry.value = isEdit;
             conflicts.value = entryConflicts || [];
@@ -517,8 +529,44 @@ export default {
             if (isEdit && entry) {
                 // Edit existing entry
                 entryForm.value = { ...entry };
+            } else if (assignmentData) {
+                // Handle assignment data from modal workflow
+                const newEntry = createEmptyEntry();
+
+                // Set basic schedule data
+                newEntry.day_id = assignmentData.dayId;
+                newEntry.period_id = assignmentData.periodId;
+                newEntry.schedule_type = 'period';
+
+                // Set course data
+                newEntry.course_id = assignmentData.courseId;
+                newEntry.course_name = assignmentData.courseName;
+
+                // Set teacher data
+                newEntry.teacher_ids = assignmentData.teacherIds;
+                if (assignmentData.primaryTeacherId) {
+                    newEntry.primary_teacher_id = assignmentData.primaryTeacherId;
+                }
+
+                // Set room data
+                if (assignmentData.roomId) {
+                    newEntry.room_id = assignmentData.roomId;
+                }
+
+                // Generate unique draft ID
+                newEntry.id =
+                    assignmentData.draftId || `draft-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+
+                // Add to entries directly without showing form
+                if (store.addEntry) {
+                    store.addEntry(newEntry);
+                } else {
+                    entries.value.push(newEntry);
+                }
+
+                return; // Don't show the form
             } else {
-                // Create new entry
+                // Create new entry (for old workflow)
                 entryForm.value = createEmptyEntry();
 
                 if (dayId !== undefined) {
