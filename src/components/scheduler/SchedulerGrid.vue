@@ -199,8 +199,8 @@
                                     <span class="class-name" v-if="assignment.class_id">{{
                                         getClassName(assignment.class_id)
                                     }}</span>
-                                    <span class="teacher-names" v-if="safeLength(assignment.teacher_ids) > 0">
-                                        {{ getTeacherNames(assignment.teacher_ids) }}
+                                    <span class="teacher-names" v-if="getAssignmentTeachers(assignment)">
+                                        {{ getAssignmentTeachers(assignment) }}
                                     </span>
                                     <span class="room-name" v-if="assignment.room_id">{{
                                         getRoomName(assignment.room_id)
@@ -875,6 +875,21 @@ export default {
                 return teacher?.name || 'Unknown Teacher';
             });
             return names.join(', ');
+        }
+
+        function getAssignmentTeachers(assignment) {
+            // First try to use direct teacher_names if available
+            if (assignment.teacher_names && Array.isArray(assignment.teacher_names) && assignment.teacher_names.length > 0) {
+                return assignment.teacher_names.join(', ');
+            }
+            
+            // Fallback to looking up teacher names by IDs
+            const teacherIds = assignment.staff_ids || assignment.teacher_ids;
+            if (teacherIds && teacherIds.length > 0) {
+                return getTeacherNames(teacherIds);
+            }
+            
+            return '';
         }
 
         function getRoomName(roomId) {
@@ -1699,6 +1714,7 @@ export default {
             getDisplayName,
             getClassName,
             getTeacherNames,
+            getAssignmentTeachers,
             getRoomName,
             hasConflicts,
             hasDeletedEntities,

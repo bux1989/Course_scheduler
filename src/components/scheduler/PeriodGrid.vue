@@ -149,9 +149,18 @@ export default {
 
         function getEntryTeacherNames(dayId, periodId) {
             const entry = getEntry(dayId, periodId);
-            if (!entry || !entry.teacher_ids || !entry.teacher_ids.length) return '';
+            if (!entry) return '';
 
-            const teacherNames = entry.teacher_ids
+            // First try to use direct teacher_names if available
+            if (entry.teacher_names && Array.isArray(entry.teacher_names) && entry.teacher_names.length > 0) {
+                return entry.teacher_names.join(', ');
+            }
+
+            // Fallback to looking up teacher names by IDs (handle both staff_ids and teacher_ids)
+            const teacherIds = entry.staff_ids || entry.teacher_ids;
+            if (!teacherIds || !teacherIds.length) return '';
+
+            const teacherNames = teacherIds
                 .map(id => {
                     const teacher = props.teachers.find(t => t.id === id);
                     return teacher ? teacher.name : '';
