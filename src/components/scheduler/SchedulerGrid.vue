@@ -505,6 +505,38 @@ export default {
         const selectedYearFilter = ref('');
         const selectedClassFilter = ref('');
         const focusedPeriodId = ref(null);
+        
+        // Performance monitoring
+        const performanceMetrics = ref({
+            lastProcessedCount: 0,
+            processingTime: 0,
+            cacheHits: 0,
+            cacheMisses: 0,
+        });
+        
+        // Performance optimization refs
+        const lastLoggedPeriodsCount = ref(0);
+        
+        // Monitor performance improvements
+        watch(filteredEntries, (newEntries) => {
+            const startTime = performance.now();
+            performanceMetrics.value.lastProcessedCount = safeLength(newEntries);
+            
+            // After processing completes
+            nextTick(() => {
+                performanceMetrics.value.processingTime = performance.now() - startTime;
+                
+                // Log performance summary for large datasets
+                if (safeLength(newEntries) > 100) {
+                    console.log('📊 [Performance] Schedule processing completed:', {
+                        scheduleCount: safeLength(newEntries),
+                        processingTimeMs: performanceMetrics.value.processingTime.toFixed(2),
+                        cellCacheSize: cellAssignmentsCache.value.size,
+                        indexSize: assignmentsByDayPeriod.value.size,
+                    });
+                }
+            });
+        });
 
         // Inline editing state
         const editingAssignment = ref(null);
@@ -563,14 +595,17 @@ export default {
                 return [];
             }
 
-            // Debug info only when periods change
+            // Reduced logging - only when periods count changes significantly
             if (safeLength(validatedPeriods) > 0) {
-                console.log('🔍 [SchedulerGrid] Period processing summary:', {
-                    totalPeriods: safeLength(validatedPeriods),
-                    focusedPeriodId: focusedPeriodId.value,
-                    showNonInstructional: showNonInstructional.value,
-                    stableIds: validatedPeriods.slice(0, 3).map(p => p.id), // Show stable IDs generated
-                });
+                const periodsCount = safeLength(validatedPeriods);
+                if (periodsCount !== lastLoggedPeriodsCount.value || periodsCount > 20) {
+                    console.log('🔍 [SchedulerGrid] Period processing summary:', {
+                        totalPeriods: periodsCount,
+                        focusedPeriodId: focusedPeriodId.value,
+                        showNonInstructional: showNonInstructional.value,
+                    });
+                    lastLoggedPeriodsCount.value = periodsCount;
+                }
             }
 
             let filteredPeriods = validatedPeriods;
@@ -671,21 +706,29 @@ export default {
             }, 300); // 300ms debounce
         });
 
-        // Optimized filtered entries computed property
+        // Performance-optimized filtered entries with caching
+        const filteredEntriesCache = ref(new Map());
+        
         const filteredEntries = computed(() => {
             let entries = isLiveMode.value ? props.liveSchedules : props.draftSchedules;
+            
+            // Create cache key based on filter state
+            const cacheKey = `${isLiveMode.value}-${debouncedSearchTerm.value}-${selectedClassFilter.value}-${showLessonSchedules.value}`;
+            
+            // Check cache first for performance
+            if (filteredEntriesCache.value.has(cacheKey)) {
+                return filteredEntriesCache.value.get(cacheKey);
+            }
 
-            // Debug: Log schedule data to understand the issue
-            console.log('🔍 [SchedulerGrid] filteredEntries - Schedule debugging:', {
-                isLiveMode: isLiveMode.value,
-                draftSchedulesCount: safeLength(props.draftSchedules),
-                liveSchedulesCount: safeLength(props.liveSchedules),
-                rawDraftSchedules: props.draftSchedules,
-                rawLiveSchedules: props.liveSchedules,
-                selectedEntries: entries,
-                selectedEntriesCount: safeLength(entries),
-                sampleEntry: safeLength(entries) > 0 ? entries[0] : null,
-            });
+            // Only log when count is significant to reduce console spam
+            if (safeLength(entries) > 100) {
+                console.log('🔍 [SchedulerGrid] Processing large schedule set:', {
+                    count: safeLength(entries),
+                    mode: isLiveMode.value ? 'live' : 'draft',
+                    hasSearch: !!debouncedSearchTerm.value,
+                    hasClassFilter: !!selectedClassFilter.value,
+                });
+            }
 
             // Apply debounced search filter
             if (debouncedSearchTerm.value) {
@@ -709,6 +752,12 @@ export default {
             if (!showLessonSchedules.value) {
                 entries = entries.filter(entry => entry.course_id);
             }
+
+            // Cache the result and limit cache size
+            if (filteredEntriesCache.value.size > 50) {
+                filteredEntriesCache.value.clear(); // Clear cache if too large
+            }
+            filteredEntriesCache.value.set(cacheKey, entries);
 
             return entries;
         });
@@ -741,35 +790,88 @@ export default {
             return new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
         }
 
+        // Performance-optimized cell assignments with indexed lookup
+        const cellAssignmentsCache = ref(new Map());
+        const assignmentsByDayPeriod = ref(new Map());
+        
+        // Debounced functions for performance optimization
+        let getCellAssignmentsDebounce = null;
+        
+        // Watch for changes in filtered entries with debouncing to prevent excessive re-computations
+        const debouncedFilteredEntries = ref([]);
+        watch(filteredEntries, (newEntries) => {
+            clearTimeout(getCellAssignmentsDebounce);
+            getCellAssignmentsDebounce = setTimeout(() => {
+                debouncedFilteredEntries.value = newEntries;
+                
+                // Clear caches when data changes
+                cellAssignmentsCache.value.clear();
+                assignmentsByDayPeriod.value.clear();
+                
+                // Build index for O(1) lookups instead of O(n) filtering
+                newEntries.forEach(assignment => {
+                    // Try multiple day matching strategies
+                    const dayMatches = [];
+                    
+                    // Collect all possible day matches
+                    props.schoolDays.forEach(day => {
+                        const dayMatch = 
+                            assignment.day_id === day.id ||
+                            assignment.day_id === day.day_id ||
+                            assignment.day_number === day.day_number ||
+                            assignment.day_number === day.id ||
+                            (day.name && assignment.day_name_en === day.name) ||
+                            (day.name_en && assignment.day_name_en === day.name_en);
+                        
+                        if (dayMatch) {
+                            dayMatches.push(day.id);
+                        }
+                    });
+                    
+                    // Try multiple period matching strategies
+                    const periodMatches = [];
+                    
+                    props.periods.forEach(period => {
+                        const periodMatch = 
+                            assignment.period_id === period.id ||
+                            (assignment.block_number && period.blockNumber && 
+                             assignment.block_number === period.blockNumber);
+                        
+                        if (periodMatch) {
+                            periodMatches.push(period.id);
+                        }
+                    });
+                    
+                    // Create index entries for all day-period combinations
+                    dayMatches.forEach(dayId => {
+                        periodMatches.forEach(periodId => {
+                            const key = `${dayId}-${periodId}`;
+                            if (!assignmentsByDayPeriod.value.has(key)) {
+                                assignmentsByDayPeriod.value.set(key, []);
+                            }
+                            assignmentsByDayPeriod.value.get(key).push(assignment);
+                        });
+                    });
+                });
+            }, 100); // 100ms debounce
+        }, { immediate: true });
+
         function getCellAssignments(dayId, periodId) {
-            // Use optimized filtered entries for better performance
-            let assignments = filteredEntries.value.filter(assignment => {
-                // Enhanced day ID matching - handle multiple day ID formats robustly
-                const currentDay = props.schoolDays.find(d => d.id === dayId || d.day_id === dayId);
+            // Use indexed lookup for O(1) performance instead of O(n) filtering
+            const cacheKey = `${dayId}-${periodId}`;
+            
+            // Check cache first
+            if (cellAssignmentsCache.value.has(cacheKey)) {
+                performanceMetrics.value.cacheHits++;
+                return cellAssignmentsCache.value.get(cacheKey);
+            }
+            
+            performanceMetrics.value.cacheMisses++;
+            
+            // Get assignments from index
+            const assignments = assignmentsByDayPeriod.value.get(cacheKey) || [];
 
-                // Try multiple approaches for day matching to handle different data structures
-                const assignmentDayMatch =
-                    assignment.day_id === dayId || // Direct day_id match
-                    assignment.day_id === currentDay?.day_id || // Match via current day's day_id
-                    assignment.day_id === currentDay?.id || // Match via current day's id
-                    assignment.day_number === currentDay?.day_number || // Match via day number
-                    assignment.day_number === currentDay?.id || // Sometimes day_number matches id
-                    (currentDay?.name && assignment.day_name_en === currentDay.name) || // Match by day name
-                    (currentDay?.name_en && assignment.day_name_en === currentDay.name_en); // Match by English name
-
-                // SIMPLIFIED PERIOD MATCHING: Since we now use canonical UUID IDs,
-                // assignment.period_id should directly match periodId
-                const currentPeriod = props.periods.find(p => p.id === periodId);
-                const periodMatch =
-                    assignment.period_id === periodId || // Primary: Direct UUID match
-                    (assignment.block_number &&
-                        currentPeriod?.blockNumber &&
-                        assignment.block_number === currentPeriod.blockNumber); // Fallback: block number match
-
-                return assignmentDayMatch && periodMatch;
-            });
-
-            // Sort assignments by class name, then by course/subject name (already filtered by filteredEntries)
+            // Sort assignments by class name, then by course/subject name
             const sortedAssignments = assignments.sort((a, b) => {
                 const classA = getClassName(a.class_id);
                 const classB = getClassName(b.class_id);
@@ -783,6 +885,14 @@ export default {
                 const courseB = getCourseName(b.course_id) || getSubjectName(b.subject_id);
                 return courseA.localeCompare(courseB);
             });
+            
+            // Cache the result with size limit
+            if (cellAssignmentsCache.value.size > 1000) {
+                cellAssignmentsCache.value.clear(); // Prevent memory leaks
+                performanceMetrics.value.cacheHits = 0; // Reset cache metrics
+                performanceMetrics.value.cacheMisses = 0;
+            }
+            cellAssignmentsCache.value.set(cacheKey, sortedAssignments);
 
             return sortedAssignments;
         }
@@ -838,18 +948,99 @@ export default {
             };
         }
 
+        // Performance caches for frequently called functions
+        const classNameCache = ref(new Map());
+        const courseNameCache = ref(new Map());
+        const roomNameCache = ref(new Map());
+        const teacherNameCache = ref(new Map());
+
+        function getClassName(classId) {
+            if (!classId) return '';
+            
+            if (classNameCache.value.has(classId)) {
+                return classNameCache.value.get(classId);
+            }
+            
+            const cls = props.classes.find(c => c.id === classId);
+            const name = cls?.name || 'No Class';
+            
+            // Limit cache size
+            if (classNameCache.value.size > 200) {
+                classNameCache.value.clear();
+            }
+            classNameCache.value.set(classId, name);
+            
+            return name;
+        }
+
         function getCourseName(courseId) {
             if (!courseId) {
                 return null; // Return null instead of "No Course" to allow fallback to subject
             }
+            
+            if (courseNameCache.value.has(courseId)) {
+                return courseNameCache.value.get(courseId);
+            }
+            
             const course = props.courses.find(c => c.id === courseId);
             const courseName = course?.name || course?.course_name || course?.title;
 
             if (!course) {
+                courseNameCache.value.set(courseId, null);
                 return null; // Return null to allow fallback to subject
             }
 
-            return courseName || null;
+            const name = courseName || null;
+            
+            // Limit cache size
+            if (courseNameCache.value.size > 200) {
+                courseNameCache.value.clear();
+            }
+            courseNameCache.value.set(courseId, name);
+            
+            return name;
+        }
+
+        function getRoomName(roomId) {
+            if (!roomId) return 'No Room';
+            
+            if (roomNameCache.value.has(roomId)) {
+                return roomNameCache.value.get(roomId);
+            }
+            
+            const room = props.rooms.find(r => r.id === roomId);
+            const name = room?.name || 'Unknown Room';
+            
+            // Limit cache size
+            if (roomNameCache.value.size > 200) {
+                roomNameCache.value.clear();
+            }
+            roomNameCache.value.set(roomId, name);
+            
+            return name;
+        }
+
+        function getTeacherNames(teacherIds) {
+            if (!teacherIds?.length) return 'No Teacher';
+            
+            const cacheKey = teacherIds.join(',');
+            if (teacherNameCache.value.has(cacheKey)) {
+                return teacherNameCache.value.get(cacheKey);
+            }
+            
+            const names = teacherIds.map(id => {
+                const teacher = props.teachers.find(t => t.id === id);
+                return teacher?.name || 'Unknown Teacher';
+            });
+            const result = names.join(', ');
+            
+            // Limit cache size
+            if (teacherNameCache.value.size > 500) {
+                teacherNameCache.value.clear();
+            }
+            teacherNameCache.value.set(cacheKey, result);
+            
+            return result;
         }
 
         function getSubjectName(subjectId) {
@@ -867,21 +1058,6 @@ export default {
             if (subjectName) return subjectName;
 
             return 'No Course';
-        }
-
-        function getClassName(classId) {
-            if (!classId) return '';
-            const cls = props.classes.find(c => c.id === classId);
-            return cls?.name || 'No Class';
-        }
-
-        function getTeacherNames(teacherIds) {
-            if (!teacherIds?.length) return 'No Teacher';
-            const names = teacherIds.map(id => {
-                const teacher = props.teachers.find(t => t.id === id);
-                return teacher?.name || 'Unknown Teacher';
-            });
-            return names.join(', ');
         }
 
         function getAssignmentTeachers(assignment) {
@@ -903,11 +1079,26 @@ export default {
             return '';
         }
 
-        function getRoomName(roomId) {
-            if (!roomId) return 'No Room';
-            const room = props.rooms.find(r => r.id === roomId);
-            return room?.name || 'Unknown Room';
-        }
+        // Clear all caches when props change to prevent stale data
+        watch([() => props.classes, () => props.courses, () => props.rooms, () => props.teachers], () => {
+            classNameCache.value.clear();
+            courseNameCache.value.clear();
+            roomNameCache.value.clear();
+            teacherNameCache.value.clear();
+            gradeStatsCache.value.clear();
+        });
+        
+        // Get all unique grades from all courses (cached)
+        const allGrades = computed(() => {
+            const gradesSet = new Set();
+
+            safeArray(props.courses).forEach(course => {
+                const courseGrades = parseGrades(course);
+                courseGrades.forEach(grade => gradesSet.add(grade));
+            });
+
+            return Array.from(gradesSet).sort((a, b) => a - b);
+        });
 
         function hasConflicts(assignment) {
             return props.conflicts.some(
@@ -1070,14 +1261,16 @@ export default {
                 }
             }
 
-            console.log('🎯 [SchedulerGrid] Available courses for slot (after filtering):', {
-                dayId,
-                periodId,
-                availableCount: safeLength(availableCourses),
-                searchTerm: debouncedSearchTerm.value,
-                classFilter: selectedClassFilter.value,
-                courses: availableCourses.map(c => ({ id: c.id, name: c.name || c.course_name })),
-            });
+            // Reduced logging - only when significant data
+            if (safeLength(availableCourses) > 50 || debouncedSearchTerm.value) {
+                console.log('🎯 [SchedulerGrid] Available courses for slot:', {
+                    dayId,
+                    periodId,
+                    availableCount: safeLength(availableCourses),
+                    searchTerm: debouncedSearchTerm.value,
+                    classFilter: selectedClassFilter.value,
+                });
+            }
 
             return availableCourses;
         }
@@ -1666,14 +1859,16 @@ export default {
             return safeArray(props.courses).find(course => course.id === courseId);
         }
 
-        // Get scheduled courses for a specific day and period from draft schedules
+        // Performance-optimized grade statistics with caching
+        const gradeStatsCache = ref(new Map());
+        
+        // Get scheduled courses for a specific day and period from draft schedules (optimized)
         function getScheduledCoursesForSlot(dayId, periodId) {
-            const scheduledCourses = [];
+            // Use the indexed assignments instead of filtering all schedules
+            const key = `${dayId}-${periodId}`;
+            const scheduledEntries = assignmentsByDayPeriod.value.get(key) || [];
 
-            // Find all draft schedule entries for this specific day and period
-            const scheduledEntries = safeArray(props.draftSchedules).filter(
-                entry => entry.day_id === dayId && entry.period_id === periodId
-            );
+            const scheduledCourses = [];
 
             // For each scheduled entry, find the corresponding course and calculate remaining spots
             scheduledEntries.forEach(entry => {
@@ -1681,7 +1876,6 @@ export default {
                 if (course) {
                     // Calculate remaining spots (free_spaces if available, otherwise max_students)
                     const totalSpots = course.max_students || course.capacity || 0;
-                    const usedSpots = 0; // For now, assume all spots are available as we're looking at free_spaces
                     const freeSpots = entry.free_spaces !== undefined ? entry.free_spaces : totalSpots;
 
                     scheduledCourses.push({
@@ -1696,21 +1890,16 @@ export default {
             return scheduledCourses;
         }
 
-        // Get all unique grades from all courses
-        const allGrades = computed(() => {
-            const gradesSet = new Set();
-
-            safeArray(props.courses).forEach(course => {
-                const courseGrades = parseGrades(course);
-                courseGrades.forEach(grade => gradesSet.add(grade));
-            });
-
-            return Array.from(gradesSet).sort((a, b) => a - b);
-        });
-
-        // Calculate daily grade statistics for a specific day using draft schedules
+        // Calculate daily grade statistics for a specific day using draft schedules (cached)
         function getDailyGradeStats(dayId, periodId) {
             if (!periodId) return [];
+            
+            const cacheKey = `${dayId}-${periodId}`;
+            
+            // Check cache first
+            if (gradeStatsCache.value.has(cacheKey)) {
+                return gradeStatsCache.value.get(cacheKey);
+            }
 
             // Get courses that are actually scheduled in this day/period from draft schedules
             const scheduledCourses = getScheduledCoursesForSlot(dayId, periodId);
@@ -1749,6 +1938,12 @@ export default {
                     });
                 }
             });
+            
+            // Cache the result with size limit
+            if (gradeStatsCache.value.size > 100) {
+                gradeStatsCache.value.clear();
+            }
+            gradeStatsCache.value.set(cacheKey, gradeStats);
 
             return gradeStats;
         }
