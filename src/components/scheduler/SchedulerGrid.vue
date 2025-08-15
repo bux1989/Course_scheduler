@@ -1370,7 +1370,15 @@ export default {
         }
 
         function handleAssignmentClick(assignment, dayId, periodId) {
+            console.log('👆 [Left-Click] Assignment clicked:', {
+                assignment: assignment.display_cell || assignment.course_name,
+                dayId,
+                periodId,
+                isReadOnly: props.isReadOnly
+            });
+            
             if (props.isReadOnly) {
+                console.log('📖 [Left-Click] Read-only mode - emitting assignment details');
                 // In read-only mode, just emit the assignment details event for external handling
                 emit('assignment-details', assignment);
                 return;
@@ -1384,7 +1392,16 @@ export default {
         }
 
         function handleAssignmentRightClick(event, assignment, dayId, periodId) {
+            console.log('🖱️ [Right-Click] Assignment right-click detected:', {
+                assignment: assignment.display_cell || assignment.course_name,
+                dayId,
+                periodId,
+                isReadOnly: props.isReadOnly,
+                event: event.type
+            });
+            
             if (props.isReadOnly) {
+                console.log('📖 [Right-Click] Read-only mode - emitting assignment details');
                 // In read-only mode, just emit the assignment details event
                 emit('assignment-details', assignment);
                 return;
@@ -1392,10 +1409,12 @@ export default {
 
             // Close any existing inline edit first
             if (editingAssignment.value) {
+                console.log('📝 [Right-Click] Canceling existing inline edit');
                 cancelInlineEdit();
             }
 
             // Show context menu
+            console.log('📋 [Right-Click] Showing context menu at:', { x: event.clientX, y: event.clientY });
             contextMenu.value = {
                 show: true,
                 x: event.clientX,
@@ -1407,10 +1426,12 @@ export default {
         }
 
         function closeContextMenu() {
+            console.log('❌ [Context Menu] Closing context menu');
             contextMenu.value.show = false;
         }
 
         function editAssignmentFromContext() {
+            console.log('✏️ [Context Menu] Edit assignment selected');
             if (contextMenu.value.assignment) {
                 startInlineEdit(contextMenu.value.assignment, contextMenu.value.dayId, contextMenu.value.periodId);
             }
@@ -1418,6 +1439,7 @@ export default {
         }
 
         function deleteAssignmentFromContext() {
+            console.log('🗑️ [Context Menu] Delete assignment selected');
             if (contextMenu.value.assignment) {
                 deleteInlineAssignment(contextMenu.value.assignment);
             }
