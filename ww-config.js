@@ -382,5 +382,20 @@ export default {
                 timestamp: '',
             },
         },
+        {
+            name: 'scheduler:remove',
+            label: { en: 'On Assignment Remove' },
+            event: {
+                schoolId: null,
+                draftId: null,
+                dayId: 0,
+                periodId: '',
+                assignmentId: '',
+                courseId: '',
+                courseName: '',
+                source: 'remove',
+                timestamp: '',
+            },
+        },
     ],
 };

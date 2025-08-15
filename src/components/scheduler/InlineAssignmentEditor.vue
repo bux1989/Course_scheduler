@@ -1,14 +1,9 @@
 <template>
     <div class="inline-editor" @click.stop>
-        <!-- Course Selection -->
-        <div class="editor-field">
+        <!-- Assignment Info (Read-only) -->
+        <div class="editor-field info-field">
             <label>Course:</label>
-            <select v-model="editableAssignment.course_id" class="editor-select">
-                <option value="">Select Course</option>
-                <option v-for="course in availableCourses" :key="course.id" :value="course.id">
-                    {{ course.name || course.course_name || course.title }}
-                </option>
-            </select>
+            <span class="course-info">{{ assignment.course_name || assignment.display_cell || 'Unknown Course' }}</span>
         </div>
 
         <!-- Teacher Selection -->
@@ -29,17 +24,6 @@
                 <option value="">Select Room</option>
                 <option v-for="room in rooms" :key="room.id" :value="room.id">
                     {{ room.name || room.room_name }}
-                </option>
-            </select>
-        </div>
-
-        <!-- Class Selection -->
-        <div class="editor-field">
-            <label>Class:</label>
-            <select v-model="editableAssignment.class_id" class="editor-select">
-                <option value="">Select Class</option>
-                <option v-for="cls in classes" :key="cls.id" :value="cls.id">
-                    {{ cls.name || cls.class_name }}
                 </option>
             </select>
         </div>
@@ -82,18 +66,10 @@ export default {
             editableAssignment.value.teacher_ids = newTeacherId ? [newTeacherId] : [];
         });
 
-        // Available courses (could be filtered based on context)
-        const availableCourses = computed(() => {
-            return props.courses.filter(course => {
-                // Filter courses based on current context if needed
-                return true;
-            });
-        });
-
-        // Validation
+        // Validation - Always valid since we're just editing teacher/room assignments
         const isValid = computed(() => {
-            // At minimum, we need either a course_id or subject_id
-            return editableAssignment.value.course_id || editableAssignment.value.subject_id;
+            // Assignment is always valid since we're not changing the core course assignment
+            return true;
         });
 
         function saveChanges() {
@@ -118,13 +94,11 @@ export default {
         }
 
         function editCourse() {
-            // Find the course details for the current assignment
-            const course = props.courses.find(c => c.id === editableAssignment.value.course_id);
-
+            // Use the assignment's existing course information
             emit('edit-course', {
-                courseId: editableAssignment.value.course_id,
-                courseName: course?.name || course?.course_name || '',
-                courseCode: course?.course_code || course?.code || '',
+                courseId: props.assignment.course_id,
+                courseName: props.assignment.course_name || props.assignment.display_cell || '',
+                courseCode: props.assignment.course_code || '',
                 source: 'inline-editor',
             });
         }
@@ -132,7 +106,6 @@ export default {
         return {
             editableAssignment,
             selectedTeacherId,
-            availableCourses,
             isValid,
             saveChanges,
             cancelEdit,
@@ -150,12 +123,13 @@ export default {
     left: 0;
     right: 0;
     bottom: 0;
-    background: white;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(2px);
     border: 2px solid #007cba;
     border-radius: 6px;
     padding: 8px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    z-index: 100;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25), 0 0 0 1000px rgba(0, 0, 0, 0.1);
+    z-index: 1000;
     display: flex;
     flex-direction: column;
     gap: 4px;
@@ -166,6 +140,20 @@ export default {
     display: flex;
     align-items: center;
     gap: 4px;
+}
+
+.editor-field.info-field {
+    background: rgba(0, 124, 186, 0.1);
+    padding: 4px;
+    border-radius: 3px;
+    border: 1px solid rgba(0, 124, 186, 0.2);
+}
+
+.course-info {
+    font-weight: bold;
+    color: #007cba;
+    flex: 1;
+    font-size: 11px;
 }
 
 .editor-field label {
