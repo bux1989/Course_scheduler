@@ -1443,7 +1443,7 @@ export default {
                     const emitFunction = props.parentEmit || emit;
                     emitSchedulerRemoveEvent(emitFunction, {
                         schoolId: props.schoolId,
-                        draftId: props.draftId,
+                        draftId: assignment.id, // Use assignment's unique draft ID instead of overall draft schedule ID
                         dayId: assignment.day_id,
                         periodId: assignment.period_id,
                         assignmentId: assignment.id,
@@ -1515,7 +1515,7 @@ export default {
                 const emitFunction = props.parentEmit || emit;
                 emitSchedulerRemoveEvent(emitFunction, {
                     schoolId: props.schoolId,
-                    draftId: props.draftId,
+                    draftId: assignment.id, // Use assignment's unique draft ID instead of overall draft schedule ID
                     dayId: assignment.day_id,
                     periodId: assignment.period_id,
                     assignmentId: assignment.id,
