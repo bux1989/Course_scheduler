@@ -220,7 +220,7 @@
                         </div>
 
                         <!-- Empty Cell -->
-                        <div v-else class="empty-cell" @click="openAssignmentModal(day.id, period.id, period)">
+                        <div v-else class="empty-cell">
                             <span class="add-icon">+</span>
                             <span class="add-text">Add Course</span>
                         </div>
@@ -381,6 +381,18 @@
         @cancel="handleTeacherRoomCancel"
     />
 
+    <!-- Course Selection Modal -->
+    <CourseSelectionModal
+        v-if="showCourseSelectionModal && courseSelectionData"
+        :dayId="courseSelectionData.dayId"
+        :dayName="courseSelectionData.dayName"
+        :periodId="courseSelectionData.periodId"
+        :periodName="courseSelectionData.periodName"
+        :availableCourses="courseSelectionData.availableCourses"
+        @submit="handleCourseSelectionSubmit"
+        @cancel="handleCourseSelectionCancel"
+    />
+
     <!-- Assignment Context Menu -->
     <div
         v-if="contextMenu.show"
@@ -422,6 +434,7 @@
 import { computed, ref, watch, nextTick } from 'vue';
 import InlineAssignmentEditor from './InlineAssignmentEditor.vue';
 import TeacherRoomSelectionModal from './TeacherRoomSelectionModal.vue';
+import CourseSelectionModal from './CourseSelectionModal.vue';
 import { generateUniqueDraftId } from '../../utils/idGenerator.js';
 import { emitSchedulerRemoveEvent } from '../../utils/events.js';
 import {
@@ -440,6 +453,7 @@ export default {
     components: {
         InlineAssignmentEditor,
         TeacherRoomSelectionModal,
+        CourseSelectionModal,
     },
     props: {
         // Data props
@@ -499,6 +513,10 @@ export default {
         // Teacher/Room selection modal state
         const showTeacherRoomModal = ref(false);
         const modalCourseData = ref(null);
+
+        // Course selection modal state
+        const showCourseSelectionModal = ref(false);
+        const courseSelectionData = ref(null);
 
         // Context menu state
         const contextMenu = ref({
@@ -916,14 +934,51 @@ export default {
 
         // Event handlers
         function handleCellClick(dayId, periodId, period) {
-            if (props.isReadOnly) return;
+            console.log('🖱️ [SchedulerGrid] Cell clicked:', { dayId, periodId, period: period?.name, isReadOnly: props.isReadOnly });
+            
+            if (props.isReadOnly) {
+                console.log('📖 [SchedulerGrid] Read-only mode - ignoring cell click');
+                return;
+            }
 
-            emit('cell-click', { dayId, periodId, period });
+            // Check if cell has assignments
+            const assignments = getCellAssignments(dayId, periodId);
+            if (assignments.length === 0) {
+                console.log('📋 [SchedulerGrid] Empty cell clicked - opening course selection modal');
+                openAssignmentModal(dayId, periodId, period);
+            } else {
+                console.log('📋 [SchedulerGrid] Cell with assignments clicked - emitting cell-click event');
+                emit('cell-click', { dayId, periodId, period });
+            }
         }
 
         function openAssignmentModal(dayId, periodId, period) {
             if (props.isReadOnly) return;
 
+            console.log('🎯 [SchedulerGrid] Opening course selection modal for:', { dayId, periodId, period: period.name });
+
+            // Get available courses for this time slot
+            const availableCourses = getAvailableCoursesForSlot(dayId, periodId);
+            
+            // Find day and period names for the modal
+            const day = props.schoolDays.find(d => d.id === dayId);
+            const dayName = day ? day.name : `Day ${dayId}`;
+            const periodName = period ? period.name : `Period ${periodId}`;
+
+            // Set course selection data
+            courseSelectionData.value = {
+                dayId,
+                periodId,
+                dayName,
+                periodName,
+                period,
+                availableCourses,
+            };
+
+            // Show the course selection modal
+            showCourseSelectionModal.value = true;
+
+            // Also emit the original event for backward compatibility
             emit('cell-click', {
                 dayId,
                 periodId,
@@ -1103,6 +1158,35 @@ export default {
             console.log('❌ [Modal] Teacher/room assignment cancelled');
             showTeacherRoomModal.value = false;
             modalCourseData.value = null;
+        }
+
+        // Course Selection Modal handlers
+        function handleCourseSelectionSubmit(payload) {
+            console.log('🎯 [CourseSelection] Course selected:', payload);
+
+            // Close course selection modal
+            showCourseSelectionModal.value = false;
+
+            // Set up teacher/room selection modal data
+            modalCourseData.value = {
+                courseId: payload.courseId,
+                courseName: payload.courseName,
+                courseCode: payload.courseCode,
+                dayId: payload.dayId,
+                periodId: payload.periodId,
+            };
+
+            // Show teacher/room selection modal
+            showTeacherRoomModal.value = true;
+
+            // Clear course selection data
+            courseSelectionData.value = null;
+        }
+
+        function handleCourseSelectionCancel() {
+            console.log('❌ [CourseSelection] Course selection cancelled');
+            showCourseSelectionModal.value = false;
+            courseSelectionData.value = null;
         }
 
         function getNoPreferredDaysCourses() {
@@ -1684,6 +1768,8 @@ export default {
             editingCell,
             showTeacherRoomModal,
             modalCourseData,
+            showCourseSelectionModal,
+            courseSelectionData,
             searchTerm,
             debouncedSearchTerm,
 
@@ -1756,6 +1842,8 @@ export default {
             // Modal handlers
             handleTeacherRoomSubmit,
             handleTeacherRoomCancel,
+            handleCourseSelectionSubmit,
+            handleCourseSelectionCancel,
 
             // Utility functions
             safeLength,
