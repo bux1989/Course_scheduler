@@ -60,6 +60,7 @@
                 :draft-id="content.draftId"
                 @cell-click="handleCellClick"
                 @assignment-details="handleAssignmentDetails"
+                @course-edit="handleCourseEdit"
                 @toggle-non-instructional="handleToggleNonInstructional"
                 @toggle-lesson-schedules="handleToggleLessonSchedules"
                 @mode-changed="handleModeChanged"
@@ -638,8 +639,32 @@ export default {
         function handleAssignmentDetails(assignment) {
             // Open assignment details or edit mode
             emit('trigger-event', {
-                name: 'assignmentDetails',
-                event: { assignment },
+                name: 'scheduler:assignment-details',
+                event: {
+                    assignment,
+                    courseId: assignment.course_id || '',
+                    courseName: assignment.course_name || assignment.display_cell || '',
+                    courseCode: assignment.course_code || '',
+                    teacherIds: assignment.teacher_ids || [],
+                    roomId: assignment.room_id || null,
+                    dayId: assignment.day_id || 0,
+                    periodId: assignment.period_id || '',
+                    timestamp: new Date().toISOString(),
+                },
+            });
+        }
+
+        function handleCourseEdit(courseData) {
+            // Emit course edit event for external navigation
+            emit('trigger-event', {
+                name: 'scheduler:course-edit',
+                event: {
+                    courseId: courseData.courseId || '',
+                    courseName: courseData.courseName || '',
+                    courseCode: courseData.courseCode || '',
+                    source: courseData.source || 'inline-editor',
+                    timestamp: new Date().toISOString(),
+                },
             });
         }
 
@@ -1019,6 +1044,7 @@ export default {
             undo,
             saveDraft,
             handleAssignmentDetails,
+            handleCourseEdit,
             handleToggleNonInstructional,
             handleToggleLessonSchedules,
             handleModeChanged,

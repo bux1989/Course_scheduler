@@ -228,6 +228,7 @@
                                     @save="saveInlineEdit"
                                     @cancel="cancelInlineEdit"
                                     @delete="deleteInlineAssignment"
+                                    @edit-course="handleCourseEdit"
                                 />
 
                                 <!-- Conflict Indicators -->
@@ -1345,7 +1346,11 @@ export default {
         }
 
         function handleAssignmentClick(assignment, dayId, periodId) {
-            if (props.isReadOnly) return;
+            if (props.isReadOnly) {
+                // In read-only mode, just emit the assignment details event for external handling
+                emit('assignment-details', assignment);
+                return;
+            }
 
             // If already editing this assignment, do nothing
             if (isEditing(assignment.id)) return;
@@ -1355,8 +1360,8 @@ export default {
                 cancelInlineEdit();
             }
 
-            // For now, just show details (can be changed to start inline edit)
-            openAssignmentDetails(assignment);
+            // Start inline editing directly when clicking on assignment
+            startInlineEdit(assignment, dayId, periodId);
         }
 
         function startInlineEdit(assignment, dayId, periodId) {
@@ -1423,6 +1428,13 @@ export default {
             // Clear editing state
             editingAssignment.value = null;
             editingCell.value = null;
+        }
+
+        function handleCourseEdit(courseData) {
+            console.log('📝 [CourseEdit] Emitting course edit event:', courseData);
+
+            // Emit the course edit event for external navigation
+            emit('course-edit', courseData);
         }
 
         // Grade Statistics Functions (moved from GradeStatistics component)
@@ -1614,6 +1626,7 @@ export default {
             saveInlineEdit,
             cancelInlineEdit,
             deleteInlineAssignment,
+            handleCourseEdit,
 
             // Modal handlers
             handleTeacherRoomSubmit,
@@ -2531,7 +2544,7 @@ export default {
 
 .stats-headers {
     display: flex;
-    justify-content: space-around;
+    justify-content: space-between;
     align-items: center;
     gap: 2px;
     margin-bottom: 4px;

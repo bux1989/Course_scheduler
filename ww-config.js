@@ -356,5 +356,31 @@ export default {
                 timestamp: '',
             },
         },
+        {
+            name: 'scheduler:assignment-details',
+            label: { en: 'On Assignment Details' },
+            event: {
+                assignment: {},
+                courseId: '',
+                courseName: '',
+                courseCode: '',
+                teacherIds: [],
+                roomId: null,
+                dayId: 0,
+                periodId: '',
+                timestamp: '',
+            },
+        },
+        {
+            name: 'scheduler:course-edit',
+            label: { en: 'On Course Edit' },
+            event: {
+                courseId: '',
+                courseName: '',
+                courseCode: '',
+                source: 'inline-editor',
+                timestamp: '',
+            },
+        },
     ],
 };

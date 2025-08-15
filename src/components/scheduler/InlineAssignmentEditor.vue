@@ -49,6 +49,7 @@
             <button @click="saveChanges" class="save-btn" :disabled="!isValid">✅ Save</button>
             <button @click="cancelEdit" class="cancel-btn">❌ Cancel</button>
             <button @click="deleteAssignment" class="delete-btn" title="Delete assignment">🗑️ Delete</button>
+            <button @click="editCourse" class="edit-course-btn" title="Edit full course details">📝 Edit Course</button>
         </div>
     </div>
 </template>
@@ -66,7 +67,7 @@ export default {
         rooms: { type: Array, default: () => [] },
         subjects: { type: Array, default: () => [] },
     },
-    emits: ['save', 'cancel', 'delete'],
+    emits: ['save', 'cancel', 'delete', 'edit-course'],
     setup(props, { emit }) {
         // Create editable copy of assignment
         const editableAssignment = ref({ ...props.assignment });
@@ -116,6 +117,18 @@ export default {
             }
         }
 
+        function editCourse() {
+            // Find the course details for the current assignment
+            const course = props.courses.find(c => c.id === editableAssignment.value.course_id);
+
+            emit('edit-course', {
+                courseId: editableAssignment.value.course_id,
+                courseName: course?.name || course?.course_name || '',
+                courseCode: course?.course_code || course?.code || '',
+                source: 'inline-editor',
+            });
+        }
+
         return {
             editableAssignment,
             selectedTeacherId,
@@ -124,6 +137,7 @@ export default {
             saveChanges,
             cancelEdit,
             deleteAssignment,
+            editCourse,
         };
     },
 };
@@ -218,5 +232,14 @@ export default {
 
 .delete-btn:hover {
     background: #f57c00;
+}
+
+.edit-course-btn {
+    background: #2196f3;
+    color: white;
+}
+
+.edit-course-btn:hover {
+    background: #1976d2;
 }
 </style>
