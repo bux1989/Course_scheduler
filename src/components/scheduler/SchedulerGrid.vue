@@ -90,15 +90,6 @@
 
         <!-- Main Grid -->
         <div v-if="safeLength(visibleDays) > 0 && safeLength(visiblePeriods) > 0" class="main-grid-container">
-            <!-- Debug info for main grid with visibility status -->
-            <div class="debug-grid-info">
-                <small>
-                    ✅ NORMAL MODE - Days: {{ safeLength(visibleDays) }}, Periods: {{ safeLength(visiblePeriods) }} |
-                    Drafts: {{ safeLength(draftSchedules) }}, Live: {{ safeLength(liveSchedules) }} | Mode:
-                    {{ isLiveMode ? 'Live' : 'Planning' }}
-                </small>
-            </div>
-
             <!-- Grid Header with Days -->
             <div class="grid-header" role="row">
                 <div class="period-header-cell" role="columnheader">
@@ -206,8 +197,6 @@
                                         getRoomName(assignment.room_id)
                                     }}</span>
                                 </div>
-
-
 
                                 <!-- Conflict Indicators -->
                                 <div v-if="hasConflicts(assignment)" class="conflict-indicator" title="Has conflicts">
@@ -879,16 +868,20 @@ export default {
 
         function getAssignmentTeachers(assignment) {
             // First try to use direct teacher_names if available
-            if (assignment.teacher_names && Array.isArray(assignment.teacher_names) && assignment.teacher_names.length > 0) {
+            if (
+                assignment.teacher_names &&
+                Array.isArray(assignment.teacher_names) &&
+                assignment.teacher_names.length > 0
+            ) {
                 return assignment.teacher_names.join(', ');
             }
-            
+
             // Fallback to looking up teacher names by IDs
             const teacherIds = assignment.staff_ids || assignment.teacher_ids;
             if (teacherIds && teacherIds.length > 0) {
                 return getTeacherNames(teacherIds);
             }
-            
+
             return '';
         }
 

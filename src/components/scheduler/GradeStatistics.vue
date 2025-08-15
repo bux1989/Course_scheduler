@@ -19,7 +19,7 @@
                     >
                         <div class="grade-number">{{ gradeStats.grade }}</div>
                         <div class="stat-value">{{ gradeStats.totalSpots }}</div>
-                        <div class="stat-value">{{ gradeStats.averageSpots.toFixed(1) }}</div>
+                        <div class="stat-value">{{ Math.round(gradeStats.averageSpots) }}</div>
                         <div class="stat-value">{{ gradeStats.coursesCount }}</div>
                     </div>
                 </div>
