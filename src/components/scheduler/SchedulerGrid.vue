@@ -357,27 +357,17 @@
             </div>
         </div>
 
-        <!-- Statistics Panel (if enabled) -->
-        <div v-if="showStatistics" class="statistics-panel">
-            <h3>Schedule Statistics</h3>
-            <div class="stats-grid">
-                <div v-for="yearStats in yearGroupStats" :key="yearStats.year" class="year-stats">
-                    <h4>{{ yearStats.year }}</h4>
-                    <div class="stat-item">
-                        <span class="stat-label">Scheduled Courses:</span>
-                        <span class="stat-value">{{ yearStats.scheduledCourses }}/day</span>
-                    </div>
-                    <div class="stat-item">
-                        <span class="stat-label">Available Slots:</span>
-                        <span class="stat-value">{{ yearStats.availableSlots }}</span>
-                    </div>
-                    <div class="stat-item">
-                        <span class="stat-label">Utilization:</span>
-                        <span class="stat-value">{{ Math.round(yearStats.utilization) }}%</span>
-                    </div>
-                </div>
-            </div>
-        </div>
+        <!-- Grade Statistics Component -->
+        <GradeStatistics
+            v-if="showStatistics && focusedPeriodId"
+            :courses="courses"
+            :visible-days="visibleDays"
+            :periods="periods"
+            :focused-period-id="focusedPeriodId"
+            :show-statistics="showStatistics"
+            :get-available-courses-for-slot="getAvailableCoursesForSlot"
+            :get-focused-period-name="getFocusedPeriodName"
+        />
     </div>
 
     <!-- Teacher/Room Selection Modal -->
@@ -400,6 +390,7 @@
 import { computed, ref, watch, nextTick } from 'vue';
 import InlineAssignmentEditor from './InlineAssignmentEditor.vue';
 import TeacherRoomSelectionModal from './TeacherRoomSelectionModal.vue';
+import GradeStatistics from './GradeStatistics.vue';
 import {
     validateAndUnwrapArray,
     safeLength,
@@ -416,6 +407,7 @@ export default {
     components: {
         InlineAssignmentEditor,
         TeacherRoomSelectionModal,
+        GradeStatistics,
     },
     props: {
         // Data props
@@ -675,28 +667,6 @@ export default {
             return props.classes.slice().sort((a, b) => a.name.localeCompare(b.name));
         });
 
-        const yearGroupStats = computed(() => {
-            return yearGroups.value.map(year => {
-                const yearClasses = props.classes.filter(cls => cls.year_group === year);
-                const yearAssignments = props.draftSchedules.filter(assignment =>
-                    yearClasses.some(cls => cls.id === assignment.class_id)
-                );
-
-                const totalSlots =
-                    safeLength(visiblePeriods.value) * safeLength(visibleDays.value) * safeLength(yearClasses);
-                const scheduledCourses = yearAssignments.length;
-                const averagePerDay = scheduledCourses / safeLength(visibleDays.value);
-                const utilization = totalSlots > 0 ? (scheduledCourses / totalSlots) * 100 : 0;
-
-                return {
-                    year,
-                    scheduledCourses: Math.round(averagePerDay),
-                    availableSlots: totalSlots,
-                    utilization,
-                };
-            });
-        });
-
         // Helper functions
         function formatTime(timeString) {
             if (!timeString) return '';
@@ -734,24 +704,7 @@ export default {
                         currentPeriod?.blockNumber &&
                         assignment.block_number === currentPeriod.blockNumber); // Fallback: block number match
 
-                // Enhanced debug logging for assignment matching issues
-                if (assignment && (assignment.period_id === periodId || Math.random() < 0.02)) {
-                    console.log('🔍 [SchedulerGrid] Assignment matching:', {
-                        requestedPeriod: periodId,
-                        assignmentPeriodId: assignment.period_id,
-                        assignmentBlockNumber: assignment.block_number,
-                        currentPeriod: {
-                            id: currentPeriod?.id,
-                            blockNumber: currentPeriod?.blockNumber,
-                            label: currentPeriod?.label,
-                        },
-                        periodMatch: periodMatch,
-                        assignmentDayMatch: assignmentDayMatch,
-                        finalMatch: assignmentDayMatch && periodMatch,
-                        displayCell: assignment.display_cell,
-                        className: assignment.class_name,
-                    });
-                }
+
 
                 return assignmentDayMatch && periodMatch;
             });
@@ -1464,7 +1417,6 @@ export default {
             filteredEntries,
             yearGroups,
             availableClasses,
-            yearGroupStats,
 
             // Methods
             formatTime,
@@ -1902,53 +1854,6 @@ export default {
 
 .add-text {
     opacity: 0.8;
-}
-
-.statistics-panel {
-    padding: 16px;
-    background: #f8f9fa;
-    border-top: 1px solid #ddd;
-}
-
-.statistics-panel h3 {
-    margin: 0 0 12px 0;
-    color: #333;
-    font-size: 1em;
-}
-
-.stats-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 16px;
-}
-
-.year-stats {
-    background: white;
-    padding: 12px;
-    border-radius: 4px;
-    border: 1px solid #e0e0e0;
-}
-
-.year-stats h4 {
-    margin: 0 0 8px 0;
-    color: #333;
-    font-size: 0.9em;
-}
-
-.stat-item {
-    display: flex;
-    justify-content: space-between;
-    font-size: 0.85em;
-    margin-bottom: 4px;
-}
-
-.stat-label {
-    color: #666;
-}
-
-.stat-value {
-    font-weight: 500;
-    color: #333;
 }
 
 /* Available Courses Panel */
