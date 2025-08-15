@@ -55,15 +55,18 @@ export default {
     setup(props, { emit }) {
         // Create editable copy of assignment
         const editableAssignment = ref({ ...props.assignment });
+        
+        // Handle both teacher_ids and staff_ids field names for compatibility
+        const teacherIds = props.assignment.teacher_ids || props.assignment.staff_ids || [];
         const selectedTeacherId = ref(
-            props.assignment.teacher_ids && props.assignment.teacher_ids.length > 0
-                ? props.assignment.teacher_ids[0]
-                : ''
+            teacherIds && teacherIds.length > 0 ? teacherIds[0] : ''
         );
 
         // Watch for teacher selection changes
         watch(selectedTeacherId, newTeacherId => {
+            // Update both possible field names for compatibility
             editableAssignment.value.teacher_ids = newTeacherId ? [newTeacherId] : [];
+            editableAssignment.value.staff_ids = newTeacherId ? [newTeacherId] : [];
         });
 
         // Validation - Always valid since we're just editing teacher/room assignments
@@ -75,9 +78,13 @@ export default {
         function saveChanges() {
             if (!isValid.value) return;
 
-            // Ensure teacher_ids is properly set
-            if (selectedTeacherId.value && !editableAssignment.value.teacher_ids.includes(selectedTeacherId.value)) {
+            // Ensure both teacher field names are properly set for compatibility
+            if (selectedTeacherId.value) {
                 editableAssignment.value.teacher_ids = [selectedTeacherId.value];
+                editableAssignment.value.staff_ids = [selectedTeacherId.value];
+            } else {
+                editableAssignment.value.teacher_ids = [];
+                editableAssignment.value.staff_ids = [];
             }
 
             emit('save', editableAssignment.value);
@@ -123,19 +130,22 @@ export default {
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(255, 255, 255, 0.95);
-    backdrop-filter: blur(2px);
-    border: 2px solid #007cba;
-    border-radius: 6px;
-    padding: 8px;
+    background: rgba(255, 255, 255, 0.98);
+    backdrop-filter: blur(8px);
+    border: 3px solid #007cba;
+    border-radius: 8px;
+    padding: 10px;
     box-shadow:
-        0 8px 24px rgba(0, 0, 0, 0.25),
-        0 0 0 1000px rgba(0, 0, 0, 0.1);
+        0 12px 32px rgba(0, 0, 0, 0.35),
+        0 0 0 2000px rgba(0, 0, 0, 0.15);
     z-index: 1000;
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 6px;
     font-size: 12px;
+    /* Additional styling to ensure the background is solid */
+    background-clip: padding-box;
+    isolation: isolate;
 }
 
 .editor-field {
