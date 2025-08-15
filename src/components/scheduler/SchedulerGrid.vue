@@ -701,10 +701,12 @@ export default {
         const filteredEntriesCache = ref(new Map());
 
         const filteredEntries = computed(() => {
-            let entries = props.isLiveMode ? props.liveSchedules : props.draftSchedules;
+            // Ensure proper boolean evaluation of isLiveMode prop
+            const isLive = props.isLiveMode === true || props.isLiveMode === 'true';
+            let entries = isLive ? props.liveSchedules : props.draftSchedules;
 
             // Create cache key based on filter state
-            const cacheKey = `${props.isLiveMode}-${debouncedSearchTerm.value}-${selectedClassFilter.value}-${showLessonSchedules.value}`;
+            const cacheKey = `${isLive}-${debouncedSearchTerm.value}-${selectedClassFilter.value}-${showLessonSchedules.value}`;
 
             // Check cache first for performance
             if (filteredEntriesCache.value.has(cacheKey)) {
@@ -715,7 +717,7 @@ export default {
             if (safeLength(entries) > 100) {
                 console.log('🔍 [SchedulerGrid] Processing large schedule set:', {
                     count: safeLength(entries),
-                    mode: props.isLiveMode ? 'live' : 'draft',
+                    mode: isLive ? 'live' : 'draft',
                     hasSearch: !!debouncedSearchTerm.value,
                     hasClassFilter: !!selectedClassFilter.value,
                 });
@@ -1777,7 +1779,8 @@ export default {
             console.log('💾 [InlineEdit] Saving changes for assignment:', updatedAssignment.id);
 
             // Create updated assignments array
-            const currentSchedules = props.isLiveMode ? props.liveSchedules : props.draftSchedules;
+            const isLive = props.isLiveMode === true || props.isLiveMode === 'true';
+            const currentSchedules = isLive ? props.liveSchedules : props.draftSchedules;
             const updatedSchedules = currentSchedules.map(schedule =>
                 schedule.id === updatedAssignment.id ? updatedAssignment : schedule
             );
@@ -1814,7 +1817,8 @@ export default {
             }
 
             // Create updated assignments array without this assignment
-            const currentSchedules = props.isLiveMode ? props.liveSchedules : props.draftSchedules;
+            const isLive = props.isLiveMode === true || props.isLiveMode === 'true';
+            const currentSchedules = isLive ? props.liveSchedules : props.draftSchedules;
             const updatedSchedules = currentSchedules.filter(schedule => schedule.id !== assignment.id);
 
             // Emit update

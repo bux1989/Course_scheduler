@@ -354,16 +354,6 @@ export default {
             // Ensure we have a proper boolean value, defaulting to false for planning mode
             const rawValue = props.content.isLiveMode;
             const mode = rawValue === true || rawValue === 'true';
-            
-            // Debug logging to help identify the issue
-            console.log('🔄 [wwElement] isLiveMode evaluation:', {
-                rawValue,
-                type: typeof rawValue,
-                computed: mode,
-                hasContent: !!props.content,
-                contentIsLiveMode: props.content?.isLiveMode
-            });
-            
             return mode;
         });
 
