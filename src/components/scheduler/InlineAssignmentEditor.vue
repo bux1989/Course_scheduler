@@ -1,4 +1,7 @@
 <template>
+    <!-- Modal Backdrop -->
+    <div class="modal-backdrop" @click="cancelEdit"></div>
+
     <div class="inline-editor" @click.stop>
         <!-- Assignment Info (Read-only) -->
         <div class="editor-field info-field">
@@ -207,25 +210,35 @@ export default {
 </script>
 
 <style scoped>
-.inline-editor {
-    position: absolute;
+.modal-backdrop {
+    position: fixed;
     top: 0;
     left: 0;
     right: 0;
     bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 999;
+}
+
+.inline-editor {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
     background: white;
     border: 2px solid #007cba;
-    border-radius: 6px;
-    padding: 12px;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
     z-index: 1000;
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    font-size: 12px;
-    /* Ensure complete coverage */
-    width: 100%;
-    height: 100%;
+    gap: 16px;
+    font-size: 14px;
+    /* Modal sizing */
+    width: 450px;
+    max-width: 90vw;
+    max-height: 90vh;
     box-sizing: border-box;
     overflow-y: auto;
 }
@@ -233,7 +246,7 @@ export default {
 .editor-field {
     display: flex;
     align-items: flex-start;
-    gap: 6px;
+    gap: 12px;
 }
 
 .editor-field.teacher-selection {
@@ -245,27 +258,27 @@ export default {
     flex: 1;
     display: flex;
     flex-direction: column;
-    gap: 3px;
+    gap: 8px;
 }
 
 .teacher-search {
-    margin-bottom: 3px;
+    margin-bottom: 4px;
 }
 
 .search-input {
     width: 100%;
-    padding: 2px 4px;
+    padding: 8px 12px;
     border: 1px solid #ddd;
-    border-radius: 3px;
-    font-size: 10px;
+    border-radius: 4px;
+    font-size: 13px;
     background: white;
 }
 
 .teacher-list {
-    max-height: 80px;
+    max-height: 120px;
     overflow-y: auto;
     border: 1px solid #ddd;
-    border-radius: 3px;
+    border-radius: 4px;
     background: white;
 }
 
@@ -273,10 +286,10 @@ export default {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 3px 6px;
+    padding: 8px 12px;
     cursor: pointer;
     border-bottom: 1px solid #f0f0f0;
-    font-size: 10px;
+    font-size: 13px;
     transition: background-color 0.2s;
 }
 
@@ -299,22 +312,22 @@ export default {
 }
 
 .teacher-name {
-    font-size: 10px;
+    font-size: 13px;
 }
 
 .teacher-controls {
     display: flex;
-    gap: 2px;
+    gap: 4px;
 }
 
 .primary-btn {
     background: none;
     border: none;
     cursor: pointer;
-    font-size: 12px;
+    font-size: 14px;
     color: #999;
-    padding: 1px 3px;
-    border-radius: 2px;
+    padding: 4px 6px;
+    border-radius: 3px;
     transition: color 0.2s;
 }
 
@@ -328,8 +341,8 @@ export default {
 
 .editor-field.info-field {
     background: rgba(0, 124, 186, 0.1);
-    padding: 4px;
-    border-radius: 3px;
+    padding: 12px;
+    border-radius: 6px;
     border: 1px solid rgba(0, 124, 186, 0.2);
 }
 
@@ -337,38 +350,39 @@ export default {
     font-weight: bold;
     color: #007cba;
     flex: 1;
-    font-size: 11px;
+    font-size: 14px;
 }
 
 .editor-field label {
     font-weight: bold;
-    min-width: 50px;
-    font-size: 11px;
+    min-width: 60px;
+    font-size: 14px;
 }
 
 .editor-select {
     flex: 1;
-    padding: 2px 4px;
+    padding: 8px 12px;
     border: 1px solid #ddd;
-    border-radius: 3px;
-    font-size: 11px;
+    border-radius: 4px;
+    font-size: 13px;
     background: white;
 }
 
 .editor-actions {
     display: flex;
-    gap: 6px;
+    gap: 12px;
     margin-top: 8px;
     justify-content: space-between;
 }
 
 .save-btn,
 .cancel-btn,
-.delete-btn {
-    padding: 4px 8px;
+.delete-btn,
+.edit-course-btn {
+    padding: 8px 16px;
     border: none;
-    border-radius: 3px;
-    font-size: 11px;
+    border-radius: 4px;
+    font-size: 13px;
     cursor: pointer;
     font-weight: bold;
     transition: all 0.2s;
