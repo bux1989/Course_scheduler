@@ -1,53 +1,29 @@
 <template>
     <div v-if="showStatistics && focusedPeriodId" class="grade-statistics">
-        <div class="statistics-header">
-            <h3>📊 Grade Statistics for {{ getFocusedPeriodName() }}</h3>
-        </div>
-        
-        <!-- Daily Grade Statistics -->
-        <div class="daily-stats-container">
-            <div v-for="day in visibleDays" :key="day.id" class="day-stats">
+        <!-- Compact Statistics Display -->
+        <div class="compact-stats-container">
+            <div v-for="day in visibleDays" :key="day.id" class="day-compact-stats">
                 <h4 class="day-title">{{ day.name }}</h4>
-                <div class="grade-stats-grid">
-                    <div v-for="gradeStats in getDailyGradeStats(day.id)" :key="`${day.id}-${gradeStats.grade}`" class="grade-stat-card">
-                        <div class="grade-label">Grade {{ gradeStats.grade }}</div>
-                        <div class="stat-row">
-                            <span class="stat-label">Total Spots:</span>
-                            <span class="stat-value">{{ gradeStats.totalSpots }}</span>
+                <div class="stats-row">
+                    <div
+                        v-for="gradeStats in getDailyGradeStats(day.id)"
+                        :key="`${day.id}-${gradeStats.grade}`"
+                        class="grade-compact-stat"
+                    >
+                        <div class="grade-number">{{ gradeStats.grade }}:</div>
+                        <div class="stats-icons">
+                            <span class="stat-icon" :title="`📊 Total free spots: ${gradeStats.totalSpots}`">{{
+                                gradeStats.totalSpots
+                            }}</span>
+                            <span
+                                class="stat-icon"
+                                :title="`⚖️ Average spots available: ${gradeStats.averageSpots.toFixed(1)}`"
+                                >{{ gradeStats.averageSpots.toFixed(1) }}</span
+                            >
+                            <span class="stat-icon" :title="`📚 Amount of courses: ${gradeStats.coursesCount}`">{{
+                                gradeStats.coursesCount
+                            }}</span>
                         </div>
-                        <div class="stat-row" v-if="gradeStats.averageSpots !== gradeStats.totalSpots">
-                            <span class="stat-label">Avg Spots:</span>
-                            <span class="stat-value">{{ gradeStats.averageSpots.toFixed(1) }}</span>
-                        </div>
-                        <div class="stat-row">
-                            <span class="stat-label">Courses:</span>
-                            <span class="stat-value">{{ gradeStats.coursesCount }}</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Weekly Summary -->
-        <div class="weekly-summary">
-            <h4>📅 Weekly Summary</h4>
-            <div class="weekly-stats-grid">
-                <div v-for="weeklyStats in getWeeklySummary()" :key="`weekly-${weeklyStats.grade}`" class="weekly-stat-card">
-                    <div class="grade-label">Grade {{ weeklyStats.grade }}</div>
-                    <div class="stat-row">
-                        <span class="stat-label">Total Spots (Week):</span>
-                        <span class="stat-value">{{ weeklyStats.totalWeeklySpots }}</span>
-                    </div>
-                    <div class="stat-row">
-                        <span class="stat-label">Total Courses (Week):</span>
-                        <span class="stat-value">{{ weeklyStats.totalWeeklyCourses }}</span>
-                    </div>
-                </div>
-                <div class="overall-summary">
-                    <div class="grade-label">All Grades Combined</div>
-                    <div class="stat-row">
-                        <span class="stat-label">Grand Total Spots:</span>
-                        <span class="stat-value bold">{{ getGrandTotalSpots() }}</span>
                     </div>
                 </div>
             </div>
@@ -64,21 +40,22 @@ export default {
     props: {
         // Data props
         courses: { type: Array, default: () => [] },
+        draftSchedules: { type: Array, default: () => [] },
         visibleDays: { type: Array, default: () => [] },
         periods: { type: Array, default: () => [] },
         focusedPeriodId: { type: String, default: null },
         showStatistics: { type: Boolean, default: true },
-        
+
         // Functions passed from parent
         getAvailableCoursesForSlot: { type: Function, required: true },
         getFocusedPeriodName: { type: Function, required: true },
     },
 
     setup(props) {
-        // Parse grade from is_for_year_g object 
+        // Parse grade from is_for_year_g object
         function parseGrades(course) {
             const grades = [];
-            
+
             if (course.is_for_year_g && typeof course.is_for_year_g === 'object') {
                 // Handle format like { 0: 6, 1: 5, 2: 4 } where keys are indices and values are grades
                 for (const [index, grade] of Object.entries(course.is_for_year_g)) {
@@ -93,27 +70,63 @@ export default {
                 // Handle alternative year_groups format
                 grades.push(...course.year_groups.map(g => Number(g)).filter(g => g > 0));
             }
-            
+
             return [...new Set(grades)].sort((a, b) => a - b); // Remove duplicates and sort
+        }
+
+        // Find course by courseId in courses array
+        function findCourseById(courseId) {
+            return safeArray(props.courses).find(course => course.id === courseId);
+        }
+
+        // Get scheduled courses for a specific day and period from draft schedules
+        function getScheduledCoursesForSlot(dayId, periodId) {
+            const scheduledCourses = [];
+
+            // Find all draft schedule entries for this specific day and period
+            const scheduledEntries = safeArray(props.draftSchedules).filter(
+                entry => entry.day_id === dayId && entry.period_id === periodId
+            );
+
+            // For each scheduled entry, find the corresponding course and calculate remaining spots
+            scheduledEntries.forEach(entry => {
+                const course = findCourseById(entry.course_id);
+                if (course) {
+                    // Calculate remaining spots (free_spaces if available, otherwise max_students)
+                    const totalSpots = course.max_students || course.capacity || 0;
+                    const usedSpots = 0; // For now, assume all spots are available as we're looking at free_spaces
+                    const freeSpots = entry.free_spaces !== undefined ? entry.free_spaces : totalSpots;
+
+                    scheduledCourses.push({
+                        ...course,
+                        scheduledEntry: entry,
+                        freeSpots: freeSpots,
+                        totalSpots: totalSpots,
+                    });
+                }
+            });
+
+            return scheduledCourses;
         }
 
         // Get all unique grades from all courses
         const allGrades = computed(() => {
             const gradesSet = new Set();
-            
+
             safeArray(props.courses).forEach(course => {
                 const courseGrades = parseGrades(course);
                 courseGrades.forEach(grade => gradesSet.add(grade));
             });
-            
+
             return Array.from(gradesSet).sort((a, b) => a - b);
         });
 
-        // Calculate daily grade statistics for a specific day
+        // Calculate daily grade statistics for a specific day using draft schedules
         function getDailyGradeStats(dayId) {
             if (!props.focusedPeriodId) return [];
-            
-            const availableCourses = props.getAvailableCoursesForSlot(dayId, props.focusedPeriodId);
+
+            // Get courses that are actually scheduled in this day/period from draft schedules
+            const scheduledCourses = getScheduledCoursesForSlot(dayId, props.focusedPeriodId);
             const gradeStats = [];
 
             allGrades.value.forEach(grade => {
@@ -121,26 +134,26 @@ export default {
                 let coursesCount = 0;
                 let totalGradeAllocation = 0; // For calculating average
 
-                availableCourses.forEach(course => {
+                scheduledCourses.forEach(course => {
                     const courseGrades = parseGrades(course);
                     if (courseGrades.includes(grade)) {
                         coursesCount++;
-                        const maxStudents = course.max_students || course.capacity || 0;
-                        
+                        const freeSpots = course.freeSpots || 0;
+
                         if (courseGrades.length === 1) {
                             // Course is exclusively for this grade
-                            totalSpots += maxStudents;
-                            totalGradeAllocation += maxStudents;
+                            totalSpots += freeSpots;
+                            totalGradeAllocation += freeSpots;
                         } else {
                             // Course is shared between multiple grades
-                            const spotsPerGrade = maxStudents / courseGrades.length;
-                            totalSpots += maxStudents; // Total spots available for this grade
+                            const spotsPerGrade = freeSpots / courseGrades.length;
+                            totalSpots += freeSpots; // Total spots available for this grade
                             totalGradeAllocation += spotsPerGrade; // Average spots allocated to this grade
                         }
                     }
                 });
 
-                if (coursesCount > 0) {
+                if (coursesCount > 0 || totalSpots > 0) {
                     gradeStats.push({
                         grade,
                         totalSpots,
@@ -153,45 +166,9 @@ export default {
             return gradeStats;
         }
 
-        // Calculate weekly summary across all days
-        function getWeeklySummary() {
-            const weeklyStats = [];
-
-            allGrades.value.forEach(grade => {
-                let totalWeeklySpots = 0;
-                let totalWeeklyCourses = 0;
-                
-                props.visibleDays.forEach(day => {
-                    const dailyStats = getDailyGradeStats(day.id);
-                    const gradeDaily = dailyStats.find(s => s.grade === grade);
-                    if (gradeDaily) {
-                        totalWeeklySpots += gradeDaily.totalSpots;
-                        totalWeeklyCourses += gradeDaily.coursesCount;
-                    }
-                });
-
-                if (totalWeeklyCourses > 0) {
-                    weeklyStats.push({
-                        grade,
-                        totalWeeklySpots,
-                        totalWeeklyCourses,
-                    });
-                }
-            });
-
-            return weeklyStats;
-        }
-
-        // Calculate grand total spots across all grades
-        function getGrandTotalSpots() {
-            return getWeeklySummary().reduce((total, stats) => total + stats.totalWeeklySpots, 0);
-        }
-
         return {
             allGrades,
             getDailyGradeStats,
-            getWeeklySummary,
-            getGrandTotalSpots,
             safeLength,
         };
     },
@@ -200,133 +177,92 @@ export default {
 
 <style scoped>
 .grade-statistics {
-    padding: 16px;
+    padding: 8px 16px;
     background: #f0f8ff;
     border-top: 2px solid #007cba;
     border-radius: 0 0 6px 6px;
     margin-top: 8px;
 }
 
-.statistics-header h3 {
-    margin: 0 0 16px 0;
-    color: #007cba;
-    font-size: 1.1em;
-    text-align: center;
+.compact-stats-container {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
 }
 
-.daily-stats-container {
-    margin-bottom: 24px;
-}
-
-.day-stats {
-    margin-bottom: 20px;
+.day-compact-stats {
+    display: flex;
+    flex-direction: column;
 }
 
 .day-title {
-    margin: 0 0 12px 0;
-    padding: 8px 16px;
+    margin: 0 0 4px 0;
+    padding: 4px 12px;
     background: #007cba;
     color: white;
-    border-radius: 4px;
+    border-radius: 3px;
     text-align: center;
-    font-size: 0.95em;
+    font-size: 0.85em;
+    font-weight: 500;
 }
 
-.grade-stats-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 12px;
+.stats-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
 }
 
-.grade-stat-card,
-.weekly-stat-card {
+.grade-compact-stat {
+    display: flex;
+    align-items: center;
+    gap: 4px;
     background: white;
     border: 1px solid #e0e0e0;
-    border-radius: 6px;
-    padding: 12px;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-size: 0.8em;
 }
 
-.grade-label {
-    font-weight: bold;
+.grade-number {
+    font-weight: 600;
     color: #333;
-    margin-bottom: 8px;
-    padding-bottom: 4px;
-    border-bottom: 1px solid #f0f0f0;
-    font-size: 0.9em;
+    min-width: 20px;
 }
 
-.stat-row {
+.stats-icons {
     display: flex;
-    justify-content: space-between;
-    margin-bottom: 4px;
-    font-size: 0.85em;
+    gap: 6px;
 }
 
-.stat-label {
+.stat-icon {
+    padding: 2px 4px;
+    background: #f8f9fa;
+    border-radius: 2px;
+    font-size: 0.75em;
     color: #666;
-    font-weight: normal;
+    cursor: help;
+    transition: background-color 0.2s ease;
 }
 
-.stat-value {
-    font-weight: 500;
+.stat-icon:hover {
+    background: #e9ecef;
     color: #333;
-}
-
-.stat-value.bold {
-    font-weight: bold;
-    color: #007cba;
-    font-size: 1.1em;
-}
-
-.weekly-summary {
-    border-top: 1px solid #ddd;
-    padding-top: 16px;
-}
-
-.weekly-summary h4 {
-    margin: 0 0 16px 0;
-    color: #007cba;
-    font-size: 1em;
-    text-align: center;
-}
-
-.weekly-stats-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 12px;
-}
-
-.overall-summary {
-    background: linear-gradient(135deg, #007cba 0%, #005c8a 100%);
-    color: white;
-    border: none;
-    box-shadow: 0 2px 6px rgba(0, 124, 186, 0.3);
-}
-
-.overall-summary .grade-label {
-    color: white;
-    border-bottom-color: rgba(255, 255, 255, 0.3);
-}
-
-.overall-summary .stat-label {
-    color: rgba(255, 255, 255, 0.9);
-}
-
-.overall-summary .stat-value {
-    color: white;
-    font-weight: bold;
 }
 
 /* Responsive Design */
 @media (max-width: 768px) {
-    .grade-stats-grid,
-    .weekly-stats-grid {
-        grid-template-columns: 1fr;
-    }
-    
     .grade-statistics {
-        padding: 12px;
+        padding: 6px 12px;
+    }
+
+    .stats-row {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .grade-compact-stat {
+        justify-content: space-between;
     }
 }
 </style>

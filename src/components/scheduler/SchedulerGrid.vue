@@ -361,6 +361,7 @@
         <GradeStatistics
             v-if="showStatistics && focusedPeriodId"
             :courses="courses"
+            :draft-schedules="draftSchedules"
             :visible-days="visibleDays"
             :periods="periods"
             :focused-period-id="focusedPeriodId"
@@ -703,8 +704,6 @@ export default {
                     (assignment.block_number &&
                         currentPeriod?.blockNumber &&
                         assignment.block_number === currentPeriod.blockNumber); // Fallback: block number match
-
-
 
                 return assignmentDayMatch && periodMatch;
             });
@@ -1120,7 +1119,11 @@ export default {
 
         // Drag and Drop Methods
         function handleCourseDragStart(event, course) {
-            console.log('🚀 [Scheduler] Drag started:', course.name || course.course_name, props.isReadOnly ? '(READ-ONLY MODE)' : '(EDITABLE MODE)');
+            console.log(
+                '🚀 [Scheduler] Drag started:',
+                course.name || course.course_name,
+                props.isReadOnly ? '(READ-ONLY MODE)' : '(EDITABLE MODE)'
+            );
             draggedCourse.value = course;
 
             // Emit Vue event to parent for drag-start
@@ -1167,7 +1170,11 @@ export default {
         }
 
         function handleAssignmentDragStart(event, assignment, dayId, periodId) {
-            console.log('🎯 [DragDrop] Assignment drag started:', assignment.course_name || assignment.subject_name, props.isReadOnly ? '(READ-ONLY MODE)' : '(EDITABLE MODE)');
+            console.log(
+                '🎯 [DragDrop] Assignment drag started:',
+                assignment.course_name || assignment.subject_name,
+                props.isReadOnly ? '(READ-ONLY MODE)' : '(EDITABLE MODE)'
+            );
             draggedAssignment.value = {
                 assignment,
                 originalDayId: dayId,
@@ -1288,7 +1295,7 @@ export default {
                             // Additional fields for move operation
                             fromDayId: originalDayId,
                             fromPeriodId: originalPeriodId,
-                            action: 'move'
+                            action: 'move',
                         });
 
                         // Emit update to move the assignment in the data

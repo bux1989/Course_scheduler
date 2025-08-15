@@ -23,14 +23,16 @@
                             v-for="teacher in filteredTeachers"
                             :key="teacher.id"
                             class="teacher-item"
-                            :class="{ 
-                                'selected': selectedTeachers.includes(teacher.id),
-                                'primary': primaryTeacherId === teacher.id 
+                            :class="{
+                                selected: selectedTeachers.includes(teacher.id),
+                                primary: primaryTeacherId === teacher.id,
                             }"
                             @click="toggleTeacher(teacher.id)"
                         >
                             <div class="teacher-info">
-                                <span class="teacher-name">{{ teacher.name || `${teacher.first_name} ${teacher.last_name}` }}</span>
+                                <span class="teacher-name">{{
+                                    teacher.name || `${teacher.first_name} ${teacher.last_name}`
+                                }}</span>
                                 <span v-if="teacher.email" class="teacher-email">{{ teacher.email }}</span>
                             </div>
                             <div class="teacher-controls">
@@ -64,7 +66,7 @@
                             v-for="room in filteredRooms"
                             :key="room.id"
                             class="room-item"
-                            :class="{ 'selected': selectedRoomId === room.id }"
+                            :class="{ selected: selectedRoomId === room.id }"
                             @click="selectRoom(room.id)"
                         >
                             <span class="room-name">{{ room.name || room.room_name }}</span>
@@ -76,13 +78,7 @@
 
             <div class="modal-footer">
                 <button @click="cancelSelection" class="cancel-btn">Cancel</button>
-                <button 
-                    @click="submitAssignment" 
-                    class="submit-btn"
-                    :disabled="!isValid"
-                >
-                    Assign Course
-                </button>
+                <button @click="submitAssignment" class="submit-btn" :disabled="!isValid">Assign Course</button>
             </div>
         </div>
     </div>
@@ -117,19 +113,18 @@ export default {
         // Filtered lists
         const filteredTeachers = computed(() => {
             if (!teacherSearchTerm.value) return props.teachers;
-            
+
             const searchLower = teacherSearchTerm.value.toLowerCase();
             return props.teachers.filter(teacher => {
                 const name = teacher.name || `${teacher.first_name} ${teacher.last_name}`;
                 const email = teacher.email || '';
-                return name.toLowerCase().includes(searchLower) || 
-                       email.toLowerCase().includes(searchLower);
+                return name.toLowerCase().includes(searchLower) || email.toLowerCase().includes(searchLower);
             });
         });
 
         const filteredRooms = computed(() => {
             if (!roomSearchTerm.value) return props.rooms;
-            
+
             const searchLower = roomSearchTerm.value.toLowerCase();
             return props.rooms.filter(room => {
                 const name = room.name || room.room_name || '';
@@ -144,12 +139,12 @@ export default {
         });
 
         // Watch for primary teacher changes
-        watch(selectedTeachers, (newTeachers) => {
+        watch(selectedTeachers, newTeachers => {
             // If primary teacher is no longer selected, clear it
             if (primaryTeacherId.value && !newTeachers.includes(primaryTeacherId.value)) {
                 primaryTeacherId.value = null;
             }
-            
+
             // If only one teacher selected, make them primary
             if (newTeachers.length === 1) {
                 primaryTeacherId.value = newTeachers[0];
