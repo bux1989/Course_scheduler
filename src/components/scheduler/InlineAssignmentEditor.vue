@@ -209,35 +209,31 @@ export default {
 <style scoped>
 .inline-editor {
     position: absolute;
-    top: -2px;
-    left: -2px;
-    right: -2px;
-    bottom: -2px;
-    background: rgba(255, 255, 255, 0.99);
-    backdrop-filter: blur(10px);
-    border: 3px solid #007cba;
-    border-radius: 8px;
-    padding: 10px;
-    box-shadow:
-        0 12px 32px rgba(0, 0, 0, 0.35),
-        0 0 0 2000px rgba(0, 0, 0, 0.15);
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: white;
+    border: 2px solid #007cba;
+    border-radius: 6px;
+    padding: 12px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
     z-index: 1000;
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 8px;
     font-size: 12px;
-    /* Enhanced background coverage */
-    background-clip: padding-box;
-    isolation: isolate;
-    min-height: 100%;
-    width: calc(100% + 4px);
-    height: calc(100% + 4px);
+    /* Ensure complete coverage */
+    width: 100%;
+    height: 100%;
+    box-sizing: border-box;
+    overflow-y: auto;
 }
 
 .editor-field {
     display: flex;
     align-items: flex-start;
-    gap: 4px;
+    gap: 6px;
 }
 
 .editor-field.teacher-selection {
@@ -361,8 +357,8 @@ export default {
 
 .editor-actions {
     display: flex;
-    gap: 4px;
-    margin-top: 4px;
+    gap: 6px;
+    margin-top: 8px;
     justify-content: space-between;
 }
 
