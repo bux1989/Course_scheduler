@@ -7,14 +7,47 @@
         </div>
 
         <!-- Teacher Selection -->
-        <div class="editor-field">
-            <label>Teacher:</label>
-            <select v-model="selectedTeacherId" class="editor-select">
-                <option value="">Select Teacher</option>
-                <option v-for="teacher in teachers" :key="teacher.id" :value="teacher.id">
-                    {{ teacher.name || `${teacher.first_name} ${teacher.last_name}` }}
-                </option>
-            </select>
+        <div class="editor-field teacher-selection">
+            <label>Teachers:</label>
+            <div class="teacher-list-container">
+                <div class="teacher-search">
+                    <input
+                        v-model="teacherSearchTerm"
+                        type="text"
+                        placeholder="Search teachers..."
+                        class="search-input"
+                    />
+                </div>
+                <div class="teacher-list">
+                    <div
+                        v-for="teacher in filteredTeachers"
+                        :key="teacher.id"
+                        class="teacher-item"
+                        :class="{
+                            selected: selectedTeachers.includes(teacher.id),
+                            primary: primaryTeacherId === teacher.id,
+                        }"
+                        @click="toggleTeacher(teacher.id)"
+                    >
+                        <div class="teacher-info">
+                            <span class="teacher-name">{{
+                                teacher.name || `${teacher.first_name} ${teacher.last_name}`
+                            }}</span>
+                        </div>
+                        <div class="teacher-controls">
+                            <button
+                                v-if="selectedTeachers.includes(teacher.id)"
+                                @click.stop="setPrimaryTeacher(teacher.id)"
+                                class="primary-btn"
+                                :class="{ active: primaryTeacherId === teacher.id }"
+                                title="Set as primary teacher"
+                            >
+                                {{ primaryTeacherId === teacher.id ? '★' : '☆' }}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!-- Room Selection -->
@@ -55,18 +88,52 @@ export default {
     setup(props, { emit }) {
         // Create editable copy of assignment
         const editableAssignment = ref({ ...props.assignment });
-        
+
+        // Teacher search and selection
+        const teacherSearchTerm = ref('');
+
         // Handle both teacher_ids and staff_ids field names for compatibility
         const teacherIds = props.assignment.teacher_ids || props.assignment.staff_ids || [];
-        const selectedTeacherId = ref(
-            teacherIds && teacherIds.length > 0 ? teacherIds[0] : ''
+        const selectedTeachers = ref([...teacherIds]);
+        const primaryTeacherId = ref(
+            props.assignment.primaryTeacherId || (teacherIds.length > 0 ? teacherIds[0] : null)
         );
 
+        // Filtered teachers based on search
+        const filteredTeachers = computed(() => {
+            if (!teacherSearchTerm.value) return props.teachers;
+
+            const searchLower = teacherSearchTerm.value.toLowerCase();
+            return props.teachers.filter(teacher => {
+                const name = teacher.name || `${teacher.first_name} ${teacher.last_name}`;
+                return name.toLowerCase().includes(searchLower);
+            });
+        });
+
         // Watch for teacher selection changes
-        watch(selectedTeacherId, newTeacherId => {
-            // Update both possible field names for compatibility
-            editableAssignment.value.teacher_ids = newTeacherId ? [newTeacherId] : [];
-            editableAssignment.value.staff_ids = newTeacherId ? [newTeacherId] : [];
+        watch(
+            selectedTeachers,
+            newTeachers => {
+                // Update both possible field names for compatibility
+                editableAssignment.value.teacher_ids = [...newTeachers];
+                editableAssignment.value.staff_ids = [...newTeachers];
+
+                // If primary teacher is no longer selected, clear it
+                if (primaryTeacherId.value && !newTeachers.includes(primaryTeacherId.value)) {
+                    primaryTeacherId.value = null;
+                }
+
+                // If only one teacher selected, make them primary
+                if (newTeachers.length === 1) {
+                    primaryTeacherId.value = newTeachers[0];
+                }
+            },
+            { deep: true }
+        );
+
+        // Watch for primary teacher changes
+        watch(primaryTeacherId, newPrimaryId => {
+            editableAssignment.value.primaryTeacherId = newPrimaryId;
         });
 
         // Validation - Always valid since we're just editing teacher/room assignments
@@ -75,17 +142,28 @@ export default {
             return true;
         });
 
+        function toggleTeacher(teacherId) {
+            const index = selectedTeachers.value.indexOf(teacherId);
+            if (index > -1) {
+                selectedTeachers.value.splice(index, 1);
+            } else {
+                selectedTeachers.value.push(teacherId);
+            }
+        }
+
+        function setPrimaryTeacher(teacherId) {
+            if (selectedTeachers.value.includes(teacherId)) {
+                primaryTeacherId.value = teacherId;
+            }
+        }
+
         function saveChanges() {
             if (!isValid.value) return;
 
             // Ensure both teacher field names are properly set for compatibility
-            if (selectedTeacherId.value) {
-                editableAssignment.value.teacher_ids = [selectedTeacherId.value];
-                editableAssignment.value.staff_ids = [selectedTeacherId.value];
-            } else {
-                editableAssignment.value.teacher_ids = [];
-                editableAssignment.value.staff_ids = [];
-            }
+            editableAssignment.value.teacher_ids = [...selectedTeachers.value];
+            editableAssignment.value.staff_ids = [...selectedTeachers.value];
+            editableAssignment.value.primaryTeacherId = primaryTeacherId.value;
 
             emit('save', editableAssignment.value);
         }
@@ -112,8 +190,13 @@ export default {
 
         return {
             editableAssignment,
-            selectedTeacherId,
+            teacherSearchTerm,
+            selectedTeachers,
+            primaryTeacherId,
+            filteredTeachers,
             isValid,
+            toggleTeacher,
+            setPrimaryTeacher,
             saveChanges,
             cancelEdit,
             deleteAssignment,
@@ -126,12 +209,12 @@ export default {
 <style scoped>
 .inline-editor {
     position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(255, 255, 255, 0.98);
-    backdrop-filter: blur(8px);
+    top: -2px;
+    left: -2px;
+    right: -2px;
+    bottom: -2px;
+    background: rgba(255, 255, 255, 0.99);
+    backdrop-filter: blur(10px);
     border: 3px solid #007cba;
     border-radius: 8px;
     padding: 10px;
@@ -143,15 +226,108 @@ export default {
     flex-direction: column;
     gap: 6px;
     font-size: 12px;
-    /* Additional styling to ensure the background is solid */
+    /* Enhanced background coverage */
     background-clip: padding-box;
     isolation: isolate;
+    min-height: 100%;
+    width: calc(100% + 4px);
+    height: calc(100% + 4px);
 }
 
 .editor-field {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 4px;
+}
+
+.editor-field.teacher-selection {
+    flex-direction: column;
+    align-items: stretch;
+}
+
+.teacher-list-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.teacher-search {
+    margin-bottom: 3px;
+}
+
+.search-input {
+    width: 100%;
+    padding: 2px 4px;
+    border: 1px solid #ddd;
+    border-radius: 3px;
+    font-size: 10px;
+    background: white;
+}
+
+.teacher-list {
+    max-height: 80px;
+    overflow-y: auto;
+    border: 1px solid #ddd;
+    border-radius: 3px;
+    background: white;
+}
+
+.teacher-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 3px 6px;
+    cursor: pointer;
+    border-bottom: 1px solid #f0f0f0;
+    font-size: 10px;
+    transition: background-color 0.2s;
+}
+
+.teacher-item:hover {
+    background: #f0f7ff;
+}
+
+.teacher-item.selected {
+    background: rgba(0, 124, 186, 0.1);
+    border-left: 3px solid #007cba;
+}
+
+.teacher-item.primary {
+    background: rgba(0, 124, 186, 0.2);
+    font-weight: bold;
+}
+
+.teacher-info {
+    flex: 1;
+}
+
+.teacher-name {
+    font-size: 10px;
+}
+
+.teacher-controls {
+    display: flex;
+    gap: 2px;
+}
+
+.primary-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 12px;
+    color: #999;
+    padding: 1px 3px;
+    border-radius: 2px;
+    transition: color 0.2s;
+}
+
+.primary-btn:hover {
+    color: #007cba;
+}
+
+.primary-btn.active {
+    color: #ffb400;
 }
 
 .editor-field.info-field {
