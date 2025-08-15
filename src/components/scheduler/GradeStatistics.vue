@@ -1,29 +1,26 @@
 <template>
     <div v-if="showStatistics && focusedPeriodId" class="grade-statistics">
-        <!-- Compact Statistics Display -->
+        <!-- Compact Statistics Display with Headers -->
+        <div class="stats-headers">
+            <div class="grade-label">Grade:</div>
+            <div class="stat-header" title="📊 Total free spots available">📊</div>
+            <div class="stat-header" title="⚖️ Average spots available">⚖️</div>
+            <div class="stat-header" title="📚 Amount of courses available">📚</div>
+        </div>
+        
         <div class="compact-stats-container">
             <div v-for="day in visibleDays" :key="day.id" class="day-compact-stats">
                 <h4 class="day-title">{{ day.name }}</h4>
-                <div class="stats-row">
+                <div class="stats-rows">
                     <div
                         v-for="gradeStats in getDailyGradeStats(day.id)"
                         :key="`${day.id}-${gradeStats.grade}`"
-                        class="grade-compact-stat"
+                        class="grade-stats-row"
                     >
-                        <div class="grade-number">{{ gradeStats.grade }}:</div>
-                        <div class="stats-icons">
-                            <span class="stat-icon" :title="`📊 Total free spots: ${gradeStats.totalSpots}`">{{
-                                gradeStats.totalSpots
-                            }}</span>
-                            <span
-                                class="stat-icon"
-                                :title="`⚖️ Average spots available: ${gradeStats.averageSpots.toFixed(1)}`"
-                                >{{ gradeStats.averageSpots.toFixed(1) }}</span
-                            >
-                            <span class="stat-icon" :title="`📚 Amount of courses: ${gradeStats.coursesCount}`">{{
-                                gradeStats.coursesCount
-                            }}</span>
-                        </div>
+                        <div class="grade-number">{{ gradeStats.grade }}</div>
+                        <div class="stat-value">{{ gradeStats.totalSpots }}</div>
+                        <div class="stat-value">{{ gradeStats.averageSpots.toFixed(1) }}</div>
+                        <div class="stat-value">{{ gradeStats.coursesCount }}</div>
                     </div>
                 </div>
             </div>
@@ -184,6 +181,36 @@ export default {
     margin-top: 8px;
 }
 
+.stats-headers {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 8px;
+    padding: 4px 8px;
+    background: rgba(0, 124, 186, 0.1);
+    border-radius: 4px;
+    font-size: 0.85em;
+    font-weight: 500;
+}
+
+.grade-label {
+    min-width: 50px;
+    color: #333;
+}
+
+.stat-header {
+    min-width: 40px;
+    text-align: center;
+    cursor: help;
+    padding: 2px 4px;
+    border-radius: 2px;
+    transition: background-color 0.2s ease;
+}
+
+.stat-header:hover {
+    background: rgba(0, 124, 186, 0.2);
+}
+
 .compact-stats-container {
     display: flex;
     flex-direction: column;
@@ -206,17 +233,16 @@ export default {
     font-weight: 500;
 }
 
-.stats-row {
+.stats-rows {
     display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    align-items: center;
+    flex-direction: column;
+    gap: 2px;
 }
 
-.grade-compact-stat {
+.grade-stats-row {
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: 12px;
     background: white;
     border: 1px solid #e0e0e0;
     border-radius: 4px;
@@ -227,25 +253,20 @@ export default {
 .grade-number {
     font-weight: 600;
     color: #333;
-    min-width: 20px;
+    min-width: 50px;
 }
 
-.stats-icons {
-    display: flex;
-    gap: 6px;
-}
-
-.stat-icon {
+.stat-value {
+    min-width: 40px;
+    text-align: center;
     padding: 2px 4px;
     background: #f8f9fa;
     border-radius: 2px;
     font-size: 0.75em;
     color: #666;
-    cursor: help;
-    transition: background-color 0.2s ease;
 }
 
-.stat-icon:hover {
+.stat-value:hover {
     background: #e9ecef;
     color: #333;
 }
@@ -256,13 +277,19 @@ export default {
         padding: 6px 12px;
     }
 
-    .stats-row {
+    .stats-headers {
         flex-direction: column;
         align-items: stretch;
+        gap: 4px;
     }
 
-    .grade-compact-stat {
+    .stats-rows {
+        gap: 4px;
+    }
+
+    .grade-stats-row {
         justify-content: space-between;
+        gap: 8px;
     }
 }
 </style>
