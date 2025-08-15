@@ -185,6 +185,7 @@
                                 :class="getAssignmentClasses(assignment)"
                                 :style="getAssignmentStyles(assignment)"
                                 @click.stop="handleAssignmentClick(assignment, day.id, period.id)"
+                                @contextmenu.prevent="handleAssignmentRightClick($event, assignment, day.id, period.id)"
                                 :draggable="!isEditing(assignment.id)"
                                 @dragstart="handleAssignmentDragStart($event, assignment, day.id, period.id)"
                                 @dragend="handleAssignmentDragEnd($event)"
@@ -204,16 +205,6 @@
                                     <span class="room-name" v-if="assignment.room_id">{{
                                         getRoomName(assignment.room_id)
                                     }}</span>
-
-                                    <!-- Quick Edit Button -->
-                                    <button
-                                        v-if="!isReadOnly"
-                                        @click.stop="startInlineEdit(assignment, day.id, period.id)"
-                                        class="quick-edit-btn"
-                                        title="Click to edit inline"
-                                    >
-                                        ✏️
-                                    </button>
                                 </div>
 
                                 <!-- Inline Editor -->
@@ -413,12 +404,30 @@
         @submit="handleTeacherRoomSubmit"
         @cancel="handleTeacherRoomCancel"
     />
+
+    <!-- Assignment Context Menu -->
+    <div
+        v-if="contextMenu.show"
+        class="context-menu"
+        :style="{
+            left: contextMenu.x + 'px',
+            top: contextMenu.y + 'px',
+        }"
+        @click.stop
+    >
+        <div class="context-menu-item" @click="editAssignmentFromContext">✏️ Edit Assignment</div>
+        <div class="context-menu-item delete" @click="deleteAssignmentFromContext">🗑️ Delete Assignment</div>
+    </div>
+
+    <!-- Context Menu Backdrop -->
+    <div v-if="contextMenu.show" class="context-menu-backdrop" @click="closeContextMenu"></div>
 </template>
 
 <script>
 import { computed, ref, watch, nextTick } from 'vue';
 import InlineAssignmentEditor from './InlineAssignmentEditor.vue';
 import TeacherRoomSelectionModal from './TeacherRoomSelectionModal.vue';
+import { generateUniqueDraftId } from '../../utils/idGenerator.js';
 import {
     validateAndUnwrapArray,
     safeLength,
@@ -492,6 +501,16 @@ export default {
         // Teacher/Room selection modal state
         const showTeacherRoomModal = ref(false);
         const modalCourseData = ref(null);
+
+        // Context menu state
+        const contextMenu = ref({
+            show: false,
+            x: 0,
+            y: 0,
+            assignment: null,
+            dayId: null,
+            periodId: null,
+        });
 
         // Watch for unexpected focusedPeriodId changes (simplified logging)
         watch(focusedPeriodId, (newValue, oldValue) => {
@@ -1054,10 +1073,14 @@ export default {
         function handleTeacherRoomSubmit(payload) {
             console.log('🎯 [Modal] Teacher/room assignment submitted:', payload);
 
+            // Generate unique draft ID for new assignments
+            // Use existing draftId from props only as fallback - each assignment should have its own unique draft ID
+            const uniqueDraftId = generateUniqueDraftId();
+
             // Emit the scheduled assignment event to parent component (wwElement.vue)
             emit('scheduler-drop', {
                 schoolId: props.schoolId || null,
-                draftId: props.draftId || null,
+                draftId: uniqueDraftId, // Generate unique draft ID for each new assignment
                 dayId: payload.dayId,
                 periodId: payload.periodId,
                 courseId: payload.courseId,
@@ -1305,9 +1328,10 @@ export default {
                     // Check if it's actually moving to a different cell
                     if (originalDayId !== dayId || originalPeriodId !== periodId) {
                         // Emit scheduler-drop event for WeWeb workflows (assignment move)
+                        // For moves, preserve the original assignment's draft ID
                         emit('scheduler-drop', {
                             schoolId: props.schoolId || null,
-                            draftId: props.draftId || null,
+                            draftId: assignment.draft_id || assignment.draftId || assignment.id, // Preserve original assignment's draft ID
                             dayId: dayId,
                             periodId: periodId,
                             courseId: assignment.course_id || '',
@@ -1352,16 +1376,52 @@ export default {
                 return;
             }
 
-            // If already editing this assignment, do nothing
-            if (isEditing(assignment.id)) return;
+            // Close context menu if open
+            contextMenu.value.show = false;
 
-            // If editing another assignment, close it first
+            // For planning mode, emit assignment details for workflow testing
+            emit('assignment-details', assignment);
+        }
+
+        function handleAssignmentRightClick(event, assignment, dayId, periodId) {
+            if (props.isReadOnly) {
+                // In read-only mode, just emit the assignment details event
+                emit('assignment-details', assignment);
+                return;
+            }
+
+            // Close any existing inline edit first
             if (editingAssignment.value) {
                 cancelInlineEdit();
             }
 
-            // Start inline editing directly when clicking on assignment
-            startInlineEdit(assignment, dayId, periodId);
+            // Show context menu
+            contextMenu.value = {
+                show: true,
+                x: event.clientX,
+                y: event.clientY,
+                assignment,
+                dayId,
+                periodId,
+            };
+        }
+
+        function closeContextMenu() {
+            contextMenu.value.show = false;
+        }
+
+        function editAssignmentFromContext() {
+            if (contextMenu.value.assignment) {
+                startInlineEdit(contextMenu.value.assignment, contextMenu.value.dayId, contextMenu.value.periodId);
+            }
+            closeContextMenu();
+        }
+
+        function deleteAssignmentFromContext() {
+            if (contextMenu.value.assignment) {
+                deleteInlineAssignment(contextMenu.value.assignment);
+            }
+            closeContextMenu();
         }
 
         function startInlineEdit(assignment, dayId, periodId) {
@@ -1622,11 +1682,18 @@ export default {
             // Inline Editing Methods
             isEditing,
             handleAssignmentClick,
+            handleAssignmentRightClick,
             startInlineEdit,
             saveInlineEdit,
             cancelInlineEdit,
             deleteInlineAssignment,
             handleCourseEdit,
+
+            // Context Menu Methods
+            closeContextMenu,
+            editAssignmentFromContext,
+            deleteAssignmentFromContext,
+            contextMenu,
 
             // Modal handlers
             handleTeacherRoomSubmit,
@@ -2624,5 +2691,45 @@ export default {
 
 .assignment-item.editing .assignment-content {
     display: none;
+}
+
+/* Context Menu Styles */
+.context-menu {
+    position: fixed;
+    background: white;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    z-index: 2000;
+    min-width: 150px;
+    padding: 4px 0;
+}
+
+.context-menu-item {
+    padding: 8px 12px;
+    cursor: pointer;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: background-color 0.2s;
+}
+
+.context-menu-item:hover {
+    background-color: #f5f5f5;
+}
+
+.context-menu-item.delete:hover {
+    background-color: #ffe6e6;
+    color: #d32f2f;
+}
+
+.context-menu-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1999;
 }
 </style>
