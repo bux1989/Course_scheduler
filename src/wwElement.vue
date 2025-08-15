@@ -311,6 +311,11 @@ export default {
         });
 
         const draftSchedules = computed(() => {
+            // Safety check for props hydration
+            if (!props.content || !props.content.draftSchedules) {
+                return [];
+            }
+            
             const rawDrafts = props.content.draftSchedules;
             const finalDraftArray = toArray(rawDrafts); // Enhanced toArray handles all WeWeb formats
 
@@ -346,7 +351,20 @@ export default {
         });
 
         const isLiveMode = computed(() => {
-            return !!props.content.isLiveMode;
+            // Ensure we have a proper boolean value, defaulting to false for planning mode
+            const rawValue = props.content.isLiveMode;
+            const mode = rawValue === true || rawValue === 'true';
+            
+            // Debug logging to help identify the issue
+            console.log('🔄 [wwElement] isLiveMode evaluation:', {
+                rawValue,
+                type: typeof rawValue,
+                computed: mode,
+                hasContent: !!props.content,
+                contentIsLiveMode: props.content?.isLiveMode
+            });
+            
+            return mode;
         });
 
         // Computed state
