@@ -128,7 +128,9 @@ export default {
     border: 2px solid #007cba;
     border-radius: 6px;
     padding: 8px;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25), 0 0 0 1000px rgba(0, 0, 0, 0.1);
+    box-shadow:
+        0 8px 24px rgba(0, 0, 0, 0.25),
+        0 0 0 1000px rgba(0, 0, 0, 0.1);
     z-index: 1000;
     display: flex;
     flex-direction: column;

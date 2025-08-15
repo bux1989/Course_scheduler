@@ -432,6 +432,7 @@ import { computed, ref, watch, nextTick } from 'vue';
 import InlineAssignmentEditor from './InlineAssignmentEditor.vue';
 import TeacherRoomSelectionModal from './TeacherRoomSelectionModal.vue';
 import { generateUniqueDraftId } from '../../utils/idGenerator.js';
+import { emitSchedulerRemoveEvent } from '../../utils/events.js';
 import {
     validateAndUnwrapArray,
     safeLength,
@@ -469,6 +470,8 @@ export default {
         maxDays: { type: Number, default: 6 }, // Monday-Saturday
         schoolId: { type: String, default: null },
         draftId: { type: String, default: null },
+        parentEmit: { type: Function, default: null },
+        emitDropEvents: { type: Boolean, default: false },
 
         // State
         conflicts: { type: Array, default: () => [] },
@@ -955,12 +958,6 @@ export default {
         }
 
         function getAvailableCoursesForSlot(dayId, periodId) {
-            console.log('🎯 [SchedulerGrid] getAvailableCoursesForSlot:', {
-                dayId,
-                periodId,
-                coursesTotal: safeLength(props.courses),
-            });
-
             // CRITICAL FIX: Normalize courses to use possibleSlots with dayId parsing
             const normalizedCourses = props.courses.map((course, idx) => normalizeCourse(course, idx));
 
@@ -975,16 +972,6 @@ export default {
                 const isAvailable = course.possibleSlots.some(slot => {
                     return slot.dayId === dayId && slot.periodId === periodId;
                 });
-
-                if (isAvailable) {
-                    console.log('  ✅ Course available for slot:', {
-                        courseName: course.name,
-                        courseId: course.id,
-                        possibleSlots: course.possibleSlots,
-                        dayId,
-                        periodId,
-                    });
-                }
 
                 return isAvailable;
             });
@@ -1378,9 +1365,9 @@ export default {
                 assignment: assignment.display_cell || assignment.course_name,
                 dayId,
                 periodId,
-                isReadOnly: props.isReadOnly
+                isReadOnly: props.isReadOnly,
             });
-            
+
             if (props.isReadOnly) {
                 console.log('📖 [Left-Click] Read-only mode - emitting assignment details');
                 // In read-only mode, just emit the assignment details event for external handling
@@ -1401,9 +1388,9 @@ export default {
                 dayId,
                 periodId,
                 isReadOnly: props.isReadOnly,
-                event: event.type
+                event: event.type,
             });
-            
+
             // Close any existing inline edit first
             if (editingAssignment.value) {
                 console.log('📝 [Right-Click] Canceling existing inline edit');
@@ -1431,9 +1418,13 @@ export default {
             console.log('✏️ [Context Menu] Edit assignment selected');
             if (contextMenu.value.assignment) {
                 if (props.isReadOnly) {
-                    // In read-only mode, emit assignment details for testing
-                    console.log('📖 [Context Menu] Read-only mode - emitting assignment details for testing');
-                    emit('assignment-details', contextMenu.value.assignment);
+                    // In read-only mode, show inline editor in view-only mode for assignment details
+                    console.log('📖 [Context Menu] Read-only mode - showing assignment details in inline editor');
+                    startInlineEditReadOnly(
+                        contextMenu.value.assignment,
+                        contextMenu.value.dayId,
+                        contextMenu.value.periodId
+                    );
                 } else {
                     // In editable mode, start inline editing
                     startInlineEdit(contextMenu.value.assignment, contextMenu.value.dayId, contextMenu.value.periodId);
@@ -1446,9 +1437,19 @@ export default {
             console.log('🗑️ [Context Menu] Delete assignment selected');
             if (contextMenu.value.assignment) {
                 if (props.isReadOnly) {
-                    // In read-only mode, emit assignment details for testing
-                    console.log('📖 [Context Menu] Read-only mode - emitting assignment details for testing (delete action)');
-                    emit('assignment-details', contextMenu.value.assignment);
+                    // In read-only mode, emit scheduler:remove event for testing workflows
+                    console.log('📖 [Context Menu] Read-only mode - emitting scheduler:remove for testing');
+                    const assignment = contextMenu.value.assignment;
+                    const emitFunction = props.parentEmit || emit;
+                    emitSchedulerRemoveEvent(emitFunction, {
+                        schoolId: props.schoolId,
+                        draftId: props.draftId,
+                        dayId: assignment.day_id,
+                        periodId: assignment.period_id,
+                        assignmentId: assignment.id,
+                        courseId: assignment.course_id,
+                        courseName: assignment.course_name || assignment.display_cell || '',
+                    });
                 } else {
                     // In editable mode, delete the assignment
                     deleteInlineAssignment(contextMenu.value.assignment);
@@ -1461,6 +1462,18 @@ export default {
             if (props.isReadOnly) return;
 
             console.log('✏️ [InlineEdit] Starting edit for assignment:', assignment.id);
+
+            // Close any existing edit
+            if (editingAssignment.value) {
+                cancelInlineEdit();
+            }
+
+            editingAssignment.value = assignment;
+            editingCell.value = { dayId, periodId };
+        }
+
+        function startInlineEditReadOnly(assignment, dayId, periodId) {
+            console.log('👁️ [InlineEdit] Starting read-only view for assignment:', assignment.id);
 
             // Close any existing edit
             if (editingAssignment.value) {
@@ -1717,6 +1730,7 @@ export default {
             handleAssignmentClick,
             handleAssignmentRightClick,
             startInlineEdit,
+            startInlineEditReadOnly,
             saveInlineEdit,
             cancelInlineEdit,
             deleteInlineAssignment,

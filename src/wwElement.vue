@@ -58,6 +58,8 @@
                 :show-statistics="true"
                 :school-id="content.schoolId"
                 :draft-id="content.draftId"
+                :parent-emit="$emit"
+                :emit-drop-events="true"
                 @cell-click="handleCellClick"
                 @assignment-details="handleAssignmentDetails"
                 @course-edit="handleCourseEdit"
