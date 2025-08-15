@@ -415,8 +415,12 @@
         }"
         @click.stop
     >
-        <div class="context-menu-item" @click="editAssignmentFromContext">✏️ Edit Assignment</div>
-        <div class="context-menu-item delete" @click="deleteAssignmentFromContext">🗑️ Delete Assignment</div>
+        <div class="context-menu-item" @click="editAssignmentFromContext">
+            {{ isReadOnly ? '📄 View Assignment Details' : '✏️ Edit Assignment' }}
+        </div>
+        <div class="context-menu-item delete" @click="deleteAssignmentFromContext">
+            {{ isReadOnly ? '🔍 Test Delete Event' : '🗑️ Delete Assignment' }}
+        </div>
     </div>
 
     <!-- Context Menu Backdrop -->
@@ -1400,20 +1404,13 @@ export default {
                 event: event.type
             });
             
-            if (props.isReadOnly) {
-                console.log('📖 [Right-Click] Read-only mode - emitting assignment details');
-                // In read-only mode, just emit the assignment details event
-                emit('assignment-details', assignment);
-                return;
-            }
-
             // Close any existing inline edit first
             if (editingAssignment.value) {
                 console.log('📝 [Right-Click] Canceling existing inline edit');
                 cancelInlineEdit();
             }
 
-            // Show context menu
+            // Show context menu in both read-only and editable modes for testing purposes
             console.log('📋 [Right-Click] Showing context menu at:', { x: event.clientX, y: event.clientY });
             contextMenu.value = {
                 show: true,
@@ -1433,7 +1430,14 @@ export default {
         function editAssignmentFromContext() {
             console.log('✏️ [Context Menu] Edit assignment selected');
             if (contextMenu.value.assignment) {
-                startInlineEdit(contextMenu.value.assignment, contextMenu.value.dayId, contextMenu.value.periodId);
+                if (props.isReadOnly) {
+                    // In read-only mode, emit assignment details for testing
+                    console.log('📖 [Context Menu] Read-only mode - emitting assignment details for testing');
+                    emit('assignment-details', contextMenu.value.assignment);
+                } else {
+                    // In editable mode, start inline editing
+                    startInlineEdit(contextMenu.value.assignment, contextMenu.value.dayId, contextMenu.value.periodId);
+                }
             }
             closeContextMenu();
         }
@@ -1441,7 +1445,14 @@ export default {
         function deleteAssignmentFromContext() {
             console.log('🗑️ [Context Menu] Delete assignment selected');
             if (contextMenu.value.assignment) {
-                deleteInlineAssignment(contextMenu.value.assignment);
+                if (props.isReadOnly) {
+                    // In read-only mode, emit assignment details for testing
+                    console.log('📖 [Context Menu] Read-only mode - emitting assignment details for testing (delete action)');
+                    emit('assignment-details', contextMenu.value.assignment);
+                } else {
+                    // In editable mode, delete the assignment
+                    deleteInlineAssignment(contextMenu.value.assignment);
+                }
             }
             closeContextMenu();
         }
