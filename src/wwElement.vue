@@ -55,7 +55,6 @@
                 :can-undo="canUndo"
                 :is-saving="isSaving"
                 :is-read-only="isReadOnly"
-                :is-live-mode="isLiveModeValue"
                 :show-statistics="true"
                 :school-id="schoolId"
                 :draft-id="draftId"
@@ -66,6 +65,7 @@
                 @course-edit="handleCourseEdit"
                 @toggle-non-instructional="handleToggleNonInstructional"
                 @toggle-lesson-schedules="handleToggleLessonSchedules"
+                @mode-changed="handleModeChanged"
                 @period-focus-changed="handlePeriodFocusChanged"
                 @filter-year="handleFilterYear"
                 @scheduler-drop="handleSchedulerDrop"
@@ -74,6 +74,47 @@
                 @undo-last="undo"
                 @save-draft="saveDraft"
                 @update-assignments="updateAssignments"
+            />
+        </div>
+
+        <!-- Assignment Modal -->
+        <AssignmentModal
+            :visible="showAssignmentModal"
+            :day-id="selectedCell.dayId"
+            :period-id="selectedCell.periodId"
+            :period="selectedCell.period"
+            :courses="availableCoursesForSlot"
+            :teachers="teachers"
+            :classes="classes"
+            :rooms="rooms"
+            :subjects="subjects"
+            :school-days="schoolDays"
+            :existing-assignments="selectedCell.assignments"
+            :conflicts="selectedCell.conflicts"
+            :is-read-only="isReadOnly"
+            :pre-selected-course="selectedCell.preSelectedCourse"
+            @close="closeAssignmentModal"
+            @add-assignment="addAssignment"
+            @edit-assignment="editAssignment"
+            @remove-assignment="removeAssignment"
+        />
+
+        <!-- Conflict Panel -->
+        <div v-if="showConflicts && sl(allConflicts) > 0" class="conflicts-sidebar">
+            <ConflictPanel
+                :visible="showConflicts"
+                :conflicts="allConflicts"
+                :courses="courses"
+                :teachers="teachers"
+                :classes="classes"
+                :rooms="rooms"
+                :periods="periods"
+                :school-days="schoolDays"
+                @close="showConflicts = false"
+                @navigate-to-conflict="navigateToConflict"
+                @apply-suggestion="applySuggestion"
+                @ignore-conflict="ignoreConflict"
+                @auto-resolve-all="autoResolveConflicts"
             />
         </div>
 
@@ -86,8 +127,8 @@
                 <div><strong>Draft ID:</strong> {{ draftId }}</div>
                 <div><strong>Published By:</strong> {{ publishedBy || 'Not Published' }}</div>
                 <div>
-                    <strong>Data Counts:</strong>
-                    {{ sl(periods) }} periods, {{ sl(courses) }} courses, {{ sl(teachers) }} teachers
+                    <strong>Data Counts:</strong> {{ sl(periods) }} periods, {{ sl(courses) }} courses,
+                    {{ sl(teachers) }} teachers
                 </div>
                 <button @click="emitTestEvent" class="test-button">Test Event Emission</button>
             </div>
@@ -104,8 +145,7 @@
 <script>
 import { ref, computed, watch, onMounted } from 'vue';
 import SchedulerGrid from './components/scheduler/SchedulerGrid.vue';
-
-// Keep only what’s necessary from utils to avoid collisions/cycles
+// Keep only what's necessary from utils to avoid collisions/cycles
 import { normalizePeriods, normalizeCourse } from './utils/arrayUtils.js';
 
 // Local, collision-proof helpers
@@ -115,6 +155,7 @@ const sl = v => {
     const len = v.length;
     return typeof len === 'number' ? len : 0;
 };
+const safeArray = v => (Array.isArray(v) ? v : []);
 const toArray = v => {
     if (Array.isArray(v)) return v;
     if (v == null) return [];
@@ -152,11 +193,6 @@ export default {
                 emitDropEvents: false,
             }),
         },
-        isLiveMode: {
-            type: [Boolean, String],
-            required: false,
-            default: false,
-        },
         wwElementState: { type: Object, required: true },
         /* wwEditor:start */
         wwEditorState: { type: Object, required: true },
@@ -164,6 +200,7 @@ export default {
     },
     setup(props, { emit }) {
         // Local state
+        const showAssignmentModal = ref(false);
         const showConflicts = ref(false);
         const showTestData = ref(false);
         const isSaving = ref(false);
@@ -172,134 +209,218 @@ export default {
         const undoStack = ref([]);
         const maxUndoSteps = 10;
 
-        // Computed properties
-        const schoolId = computed(() => props.content.schoolId || 'No School ID');
-        const draftId = computed(() => props.content.draftId || 'No Draft ID');
-        const publishedBy = computed(() => props.content.publishedBy || null);
+        // Selected cell for modal
+        const selectedCell = ref({
+            dayId: null,
+            periodId: null,
+            period: null,
+            assignments: [],
+            conflicts: [],
+        });
 
+        // Computed properties for data access using safe arrays
+        const schoolId = computed(() => {
+            return props.content.schoolId || 'No School ID';
+        });
+        const draftId = computed(() => {
+            return props.content.draftId || 'No Draft ID';
+        });
+        const publishedBy = computed(() => {
+            return props.content.publishedBy || null;
+        });
+
+        // Safe array computed properties with enhanced WeWeb collection support
         const periods = computed(() => {
-            const raw = props.content.periods;
-            const normalized = normalizePeriods(raw);
-            if (!nonEmpty(normalized)) {
+            const rawPeriodsData = props.content.periods;
+            const normalizedPeriods = normalizePeriods(rawPeriodsData);
+
+            if (!nonEmpty(normalizedPeriods)) {
                 console.log('📋 [Periods] No periods data available');
                 return [];
             }
-            return normalized;
+
+            return normalizedPeriods;
         });
 
         const courses = computed(() => {
-            const raw = props.content.courses;
-            const arr = toArray(raw);
-            if (!nonEmpty(arr)) {
+            const rawCourses = props.content.courses;
+            const coursesArray = toArray(rawCourses);
+
+            if (!nonEmpty(coursesArray)) {
                 console.log('🎯 [wwElement] Courses processing: no data available');
             }
-            return arr.map((course, idx) => normalizeCourse(course, idx));
+
+            // CRITICAL FIX: Apply normalizeCourse to handle possible_time_slots dayId parsing
+            return coursesArray.map((course, idx) => normalizeCourse(course, idx));
         });
 
         const teachers = computed(() => {
-            const raw = props.content.teachers;
-            const arr = toArray(raw);
-            if (!nonEmpty(arr)) {
+            const rawTeachers = props.content.teachers;
+            const teachersArray = toArray(rawTeachers);
+
+            if (!nonEmpty(teachersArray)) {
                 console.log('👥 [wwElement] Teachers processing: no data available');
             }
-            return arr;
+
+            return teachersArray;
         });
 
         const classes = computed(() => {
-            const raw = props.content.classes;
-            const arr = toArray(raw);
-            if (!nonEmpty(arr)) {
+            const rawClasses = props.content.classes;
+            const classesArray = toArray(rawClasses);
+
+            if (!nonEmpty(classesArray)) {
                 console.log('🏫 [wwElement] Classes processing: no data available');
             }
-            return arr;
+
+            return classesArray;
         });
 
         const rooms = computed(() => {
-            const raw = props.content.rooms;
-            const arr = toArray(raw);
-            if (!nonEmpty(arr)) {
+            const rawRooms = props.content.rooms;
+            const roomsArray = toArray(rawRooms);
+
+            if (!nonEmpty(roomsArray)) {
                 console.log('🏠 [wwElement] Rooms processing: no data available');
             }
-            return arr;
+
+            return roomsArray;
         });
 
         const schoolDays = computed(() => {
-            const raw = props.content.schoolDays;
-            const arr = toArray(raw);
-            if (!nonEmpty(arr)) {
+            const rawDaysData = props.content.schoolDays;
+            const validatedDays = toArray(rawDaysData); // Enhanced toArray handles all cases
+
+            if (!nonEmpty(validatedDays)) {
                 console.log('📅 [wwElement] SchoolDays processing: no data available');
                 return [];
             }
 
+            // Create fallback day names if missing
             const defaultDayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-            return arr.map((day, index) => {
+
+            const processedDays = validatedDays.map((day, index) => {
+                // Use the correct field names from the actual data structure
                 const dayName = day.name || day.name_en || day.day_name || defaultDayNames[index] || `Day ${index + 1}`;
+
                 return {
                     ...day,
+                    // Use day_id as the main identifier if available, otherwise use id
                     id: day.day_id || day.id,
                     name: dayName,
                     date: day.date || day.day_date || null,
                     is_active: day.is_active !== undefined ? day.is_active : true,
                     day_number: day.day_number || index + 1,
+                    // Keep both for compatibility
                     day_id: day.day_id || day.id,
                 };
             });
+
+            return processedDays;
         });
 
         const draftSchedules = computed(() => {
-            const raw = props.content.draftSchedules;
-            const arr = toArray(raw);
-            if (!nonEmpty(arr)) {
+            const rawDrafts = props.content.draftSchedules;
+            const finalDraftArray = toArray(rawDrafts); // Enhanced toArray handles all WeWeb formats
+
+            // Only log if no data available (for debugging data issues)
+            if (!nonEmpty(finalDraftArray)) {
                 console.log('📝 [wwElement] Draft Schedules processing: no data available');
             }
-            return arr;
+
+            return finalDraftArray;
         });
 
         const liveSchedules = computed(() => {
-            const raw = props.content.liveSchedules;
-            const arr = toArray(raw);
-            if (!nonEmpty(arr)) {
+            const rawLive = props.content.liveSchedules;
+            const finalLiveArray = toArray(rawLive); // Enhanced toArray handles all WeWeb formats
+
+            // Only log if no data available (for debugging data issues)
+            if (!nonEmpty(finalLiveArray)) {
                 console.log('📺 [wwElement] Live Schedules processing: no data available');
             }
-            return arr;
+
+            return finalLiveArray;
         });
 
         const subjects = computed(() => {
-            const raw = props.content.subjects;
-            const arr = toArray(raw);
-            if (!nonEmpty(arr)) {
+            const rawSubjects = props.content.subjects;
+            const subjectsArray = toArray(rawSubjects);
+
+            if (!nonEmpty(subjectsArray)) {
                 console.log('📚 [wwElement] Subjects processing: no data available');
             }
-            return arr;
+
+            return subjectsArray;
         });
 
-        const isLiveModeValue = computed(() => {
-            const rawValue = props.isLiveMode;
-            console.log('🔄 [wwElement] isLiveMode evaluation:', {
-                rawValue,
-                type: typeof rawValue,
-                strictBoolean: rawValue === true || rawValue === 'true',
-            });
-            return rawValue === true || rawValue === 'true';
-        });
-
+        // Computed state
         const isReadOnly = computed(() => !!publishedBy.value);
         const canUndo = computed(() => sl(undoStack.value) > 0);
 
         // Conflict detection
-        const allConflicts = computed(() => detectConflicts(draftSchedules.value));
+        const allConflicts = computed(() => {
+            return detectConflicts(draftSchedules.value);
+        });
 
+        // Available courses for selected slot
+        const availableCoursesForSlot = computed(() => {
+            if (!selectedCell.value.dayId || !selectedCell.value.periodId) {
+                return courses.value;
+            }
+
+            // CRITICAL FIX: Use dayId (backend ID) directly instead of dayNumber (UI order)
+            const currentDayId = selectedCell.value.dayId;
+            const currentPeriodId = selectedCell.value.periodId;
+
+            // Only log if we have debug context
+            if (currentDayId && currentPeriodId) {
+                console.log('🎯 [wwElement] availableCoursesForSlot filtering:', {
+                    currentDayId,
+                    currentPeriodId,
+                    totalCourses: sl(courses.value),
+                });
+            }
+
+            // Filter courses based on normalized possibleSlots (using dayId + periodId)
+            const filteredCourses = courses.value.filter(course => {
+                // If no restrictions, course is available
+                if (sl(course.possibleSlots) === 0) return true;
+
+                // Check if current slot is in possible slots using dayId + periodId
+                const isAvailable = course.possibleSlots.some(slot => {
+                    return slot.dayId === currentDayId && slot.periodId === currentPeriodId;
+                });
+
+                if (isAvailable) {
+                    console.log('  ✅ Available course:', {
+                        courseName: course.name,
+                        possibleSlots: course.possibleSlots,
+                    });
+                }
+
+                return isAvailable;
+            });
+
+            return filteredCourses;
+        });
+
+        // Methods
         function detectConflicts(schedules) {
             const conflicts = [];
             const conflictId = Date.now();
-            const slotMap = new Map();
 
+            // Group by day and period
+            const slotMap = new Map();
             schedules.forEach((assignment, index) => {
                 const key = `${assignment.day_id}-${assignment.period_id}`;
-                if (!slotMap.has(key)) slotMap.set(key, []);
+                if (!slotMap.has(key)) {
+                    slotMap.set(key, []);
+                }
                 slotMap.get(key).push({ ...assignment, index });
             });
 
+            // Check each slot for conflicts
             slotMap.forEach((assignments, slotKey) => {
                 if (sl(assignments) < 2) return;
 
@@ -307,23 +428,26 @@ export default {
 
                 // Teacher conflicts
                 const teacherMap = new Map();
-                assignments.forEach(a => {
-                    a.teacher_ids?.forEach(tid => {
-                        if (!teacherMap.has(tid)) teacherMap.set(tid, []);
-                        teacherMap.get(tid).push(a);
+                assignments.forEach(assignment => {
+                    assignment.teacher_ids?.forEach(teacherId => {
+                        if (!teacherMap.has(teacherId)) {
+                            teacherMap.set(teacherId, []);
+                        }
+                        teacherMap.get(teacherId).push(assignment);
                     });
                 });
-                teacherMap.forEach((list, tid) => {
-                    if (sl(list) > 1) {
+
+                teacherMap.forEach((teacherAssignments, teacherId) => {
+                    if (sl(teacherAssignments) > 1) {
                         conflicts.push({
-                            id: `${conflictId}-teacher-${tid}-${slotKey}`,
+                            id: `${conflictId}-teacher-${teacherId}-${slotKey}`,
                             type: 'teacher',
                             severity: 'high',
                             day_id: dayId,
                             period_id: periodId,
-                            affected_teachers: [tid],
-                            affected_courses: list.map(a => a.course_id),
-                            message: `Teacher is assigned to ${sl(list)} courses at the same time`,
+                            affected_teachers: [teacherId],
+                            affected_courses: teacherAssignments.map(a => a.course_id),
+                            message: `Teacher is assigned to ${sl(teacherAssignments)} courses at the same time`,
                             auto_resolvable: false,
                         });
                     }
@@ -331,22 +455,26 @@ export default {
 
                 // Room conflicts
                 const roomMap = new Map();
-                assignments.forEach(a => {
-                    if (!a.room_id) return;
-                    if (!roomMap.has(a.room_id)) roomMap.set(a.room_id, []);
-                    roomMap.get(a.room_id).push(a);
+                assignments.forEach(assignment => {
+                    if (assignment.room_id) {
+                        if (!roomMap.has(assignment.room_id)) {
+                            roomMap.set(assignment.room_id, []);
+                        }
+                        roomMap.get(assignment.room_id).push(assignment);
+                    }
                 });
-                roomMap.forEach((list, rid) => {
-                    if (sl(list) > 1) {
+
+                roomMap.forEach((roomAssignments, roomId) => {
+                    if (sl(roomAssignments) > 1) {
                         conflicts.push({
-                            id: `${conflictId}-room-${rid}-${slotKey}`,
+                            id: `${conflictId}-room-${roomId}-${slotKey}`,
                             type: 'room',
                             severity: 'high',
                             day_id: dayId,
                             period_id: periodId,
-                            affected_rooms: [rid],
-                            affected_courses: list.map(a => a.course_id),
-                            message: `Room is booked for ${sl(list)} courses at the same time`,
+                            affected_rooms: [roomId],
+                            affected_courses: roomAssignments.map(a => a.course_id),
+                            message: `Room is booked for ${sl(roomAssignments)} courses at the same time`,
                             auto_resolvable: true,
                         });
                     }
@@ -354,22 +482,26 @@ export default {
 
                 // Class conflicts
                 const classMap = new Map();
-                assignments.forEach(a => {
-                    if (!a.class_id) return;
-                    if (!classMap.has(a.class_id)) classMap.set(a.class_id, []);
-                    classMap.get(a.class_id).push(a);
+                assignments.forEach(assignment => {
+                    if (assignment.class_id) {
+                        if (!classMap.has(assignment.class_id)) {
+                            classMap.set(assignment.class_id, []);
+                        }
+                        classMap.get(assignment.class_id).push(assignment);
+                    }
                 });
-                classMap.forEach((list, cid) => {
-                    if (sl(list) > 1) {
+
+                classMap.forEach((classAssignments, classId) => {
+                    if (sl(classAssignments) > 1) {
                         conflicts.push({
-                            id: `${conflictId}-class-${cid}-${slotKey}`,
+                            id: `${conflictId}-class-${classId}-${slotKey}`,
                             type: 'class',
                             severity: 'medium',
                             day_id: dayId,
                             period_id: periodId,
-                            affected_classes: [cid],
-                            affected_courses: list.map(a => a.course_id),
-                            message: `Class has ${sl(list)} overlapping assignments`,
+                            affected_classes: [classId],
+                            affected_courses: classAssignments.map(a => a.course_id),
+                            message: `Class has ${sl(classAssignments)} overlapping assignments`,
                             auto_resolvable: false,
                         });
                     }
@@ -382,50 +514,90 @@ export default {
         function saveToUndoStack() {
             const currentState = JSON.stringify(draftSchedules.value);
             undoStack.value.push(currentState);
-            if (sl(undoStack.value) > maxUndoSteps) undoStack.value.shift();
+
+            if (sl(undoStack.value) > maxUndoSteps) {
+                undoStack.value.shift();
+            }
         }
 
         function handleCellClick({ dayId, periodId, period, mode, preSelectedCourse }) {
             if (isReadOnly.value) return;
 
-            // Log cell click for debugging
-            console.log('Cell clicked:', { dayId, periodId, period, mode, preSelectedCourse });
+            // Get existing assignments for this cell
+            const assignments = draftSchedules.value.filter(
+                assignment => assignment.day_id === dayId && assignment.period_id === periodId
+            );
 
-            // Emit a cell click event
-            emit('trigger-event', {
-                name: 'cellClick',
-                event: { dayId, periodId, period, mode, preSelectedCourse },
-            });
+            // Get conflicts for this cell
+            const conflicts = allConflicts.value.filter(
+                conflict => conflict.day_id === dayId && conflict.period_id === periodId
+            );
+
+            selectedCell.value = {
+                dayId,
+                periodId,
+                period,
+                assignments,
+                conflicts,
+                preSelectedCourse, // Pass the pre-selected course
+            };
+
+            showAssignmentModal.value = true;
+        }
+
+        function closeAssignmentModal() {
+            showAssignmentModal.value = false;
+            selectedCell.value = {
+                dayId: null,
+                periodId: null,
+                period: null,
+                assignments: [],
+                conflicts: [],
+                preSelectedCourse: null,
+            };
+        }
+
+        function addAssignment(newAssignment) {
+            saveToUndoStack();
+
+            const updatedSchedules = [...draftSchedules.value, newAssignment];
+            updateDraftSchedules(updatedSchedules);
+            closeAssignmentModal();
+        }
+
+        function editAssignment(assignment) {
+            // For editing, we'll close the modal and emit an event
+            // This could open a separate edit form
+            closeAssignmentModal();
+            emit('edit-assignment-requested', assignment);
         }
 
         function removeAssignment(assignmentToRemove) {
             saveToUndoStack();
 
+            // Emit scheduler:remove event if configured
             if (props.content.emitDropEvents) {
-                emit('trigger-event', {
-                    name: 'scheduler:remove',
-                    event: {
-                        schoolId: props.content.schoolId,
-                        draftId: props.content.draftId,
-                        dayId: assignmentToRemove.day_id,
-                        periodId: assignmentToRemove.period_id,
-                        assignmentId: assignmentToRemove.id,
-                        courseId: assignmentToRemove.course_id,
-                        courseName: assignmentToRemove.course_name || assignmentToRemove.display_cell || '',
-                    },
+                emitSchedulerRemoveEvent(emit, {
+                    schoolId: props.content.schoolId,
+                    draftId: props.content.draftId,
+                    dayId: assignmentToRemove.day_id,
+                    periodId: assignmentToRemove.period_id,
+                    assignmentId: assignmentToRemove.id,
+                    courseId: assignmentToRemove.course_id,
+                    courseName: assignmentToRemove.course_name || assignmentToRemove.display_cell || '',
                 });
             }
 
-            const updated = draftSchedules.value.filter(
-                a =>
+            const updatedSchedules = draftSchedules.value.filter(
+                assignment =>
                     !(
-                        a.day_id === assignmentToRemove.day_id &&
-                        a.period_id === assignmentToRemove.period_id &&
-                        a.course_id === assignmentToRemove.course_id &&
-                        a.class_id === assignmentToRemove.class_id
+                        assignment.day_id === assignmentToRemove.day_id &&
+                        assignment.period_id === assignmentToRemove.period_id &&
+                        assignment.course_id === assignmentToRemove.course_id &&
+                        assignment.class_id === assignmentToRemove.class_id
                     )
             );
-            updateDraftSchedules(updated);
+            updateDraftSchedules(updatedSchedules);
         }
 
         function updateDraftSchedules(newSchedules) {
@@ -437,13 +609,16 @@ export default {
 
         function undo() {
             if (sl(undoStack.value) === 0) return;
-            const previous = undoStack.value.pop();
-            updateDraftSchedules(JSON.parse(previous));
+
+            const previousState = undoStack.value.pop();
+            const previousSchedules = JSON.parse(previousState);
+            updateDraftSchedules(previousSchedules);
         }
 
         async function saveDraft() {
             isSaving.value = true;
             try {
+                // Emit WeWeb external event
                 emit('trigger-event', {
                     name: 'saveDraft',
                     event: {
@@ -453,21 +628,28 @@ export default {
                         action: 'save_draft',
                     },
                 });
+
+                // Also emit direct WeWeb event for external handling
                 emit('save-draft-external', {
                     draftId: draftId.value,
                     schedules: draftSchedules.value,
                     timestamp: new Date().toISOString(),
                 });
-                await new Promise(r => setTimeout(r, 1000));
+
+                // Simulate save delay
+                await new Promise(resolve => setTimeout(resolve, 1000));
+
+                // Only log success once, not repeatedly
                 console.log('💾 [wwElement] Draft saved successfully');
-            } catch (e) {
-                console.error('❌ [wwElement] Error saving draft:', e);
+            } catch (error) {
+                console.error('❌ [wwElement] Error saving draft:', error);
             } finally {
                 isSaving.value = false;
             }
         }
 
         function handleAssignmentDetails(assignment) {
+            // Open assignment details or edit mode
             emit('trigger-event', {
                 name: 'scheduler:assignment-details',
                 event: {
@@ -485,6 +667,7 @@ export default {
         }
 
         function handleCourseEdit(courseData) {
+            // Emit course edit event for external navigation
             emit('trigger-event', {
                 name: 'scheduler:course-edit',
                 event: {
@@ -498,19 +681,43 @@ export default {
         }
 
         function handleToggleNonInstructional(show) {
-            emit('trigger-event', { name: 'toggleNonInstructional', event: { showNonInstructional: show } });
-        }
-        function handleToggleLessonSchedules(show) {
-            emit('trigger-event', { name: 'toggleLessonSchedules', event: { showLessonSchedules: show } });
-        }
-        function handlePeriodFocusChanged(periodId) {
-            emit('trigger-event', { name: 'periodFocusChanged', event: { focusedPeriodId: periodId } });
-        }
-        function handleFilterYear(year) {
-            emit('trigger-event', { name: 'filterYear', event: { selectedYear: year } });
+            emit('trigger-event', {
+                name: 'toggleNonInstructional',
+                event: { showNonInstructional: show },
+            });
         }
 
+        function handleToggleLessonSchedules(show) {
+            emit('trigger-event', {
+                name: 'toggleLessonSchedules',
+                event: { showLessonSchedules: show },
+            });
+        }
+
+        function handleModeChanged(mode) {
+            emit('trigger-event', {
+                name: 'modeChanged',
+                event: { mode: mode },
+            });
+        }
+
+        function handlePeriodFocusChanged(periodId) {
+            emit('trigger-event', {
+                name: 'periodFocusChanged',
+                event: { focusedPeriodId: periodId },
+            });
+        }
+
+        function handleFilterYear(year) {
+            emit('trigger-event', {
+                name: 'filterYear',
+                event: { selectedYear: year },
+            });
+        }
+
+        // WeWeb Element Event Handlers
         function handleSchedulerDrop(eventData) {
+            // Ensure eventData has all required fields with proper defaults
             const safeEventData = {
                 schoolId: eventData?.schoolId || null,
                 draftId: eventData?.draftId || null,
@@ -524,6 +731,7 @@ export default {
                 roomId: eventData?.roomId || null,
                 source: eventData?.source || 'drag-drop',
                 timestamp: eventData?.timestamp || new Date().toISOString(),
+                // Include assignment move fields when present
                 ...(eventData?.fromDayId !== undefined && { fromDayId: eventData.fromDayId }),
                 ...(eventData?.fromPeriodId !== undefined && { fromPeriodId: eventData.fromPeriodId }),
                 ...(eventData?.action !== undefined && { action: eventData.action }),
@@ -531,7 +739,10 @@ export default {
 
             console.log('🚀 [WeWeb Event] scheduler:drop - Emitting trigger-event with data:', safeEventData);
             try {
-                emit('trigger-event', { name: 'scheduler:drop', event: safeEventData });
+                emit('trigger-event', {
+                    name: 'scheduler:drop',
+                    event: safeEventData,
+                });
                 console.log('✅ [WeWeb Event] scheduler:drop emitted successfully');
             } catch (error) {
                 console.error('❌ [WeWeb Event] scheduler:drop emission failed:', error);
@@ -539,6 +750,7 @@ export default {
         }
 
         function handleSchedulerDragStart(eventData) {
+            // Ensure eventData has all required fields with proper defaults
             const safeEventData = {
                 courseId: eventData?.courseId || '',
                 courseName: eventData?.courseName || '',
@@ -549,7 +761,10 @@ export default {
 
             console.log('🚀 [WeWeb Event] scheduler:drag-start - Emitting trigger-event with data:', safeEventData);
             try {
-                emit('trigger-event', { name: 'scheduler:drag-start', event: safeEventData });
+                emit('trigger-event', {
+                    name: 'scheduler:drag-start',
+                    event: safeEventData,
+                });
                 console.log('✅ [WeWeb Event] scheduler:drag-start emitted successfully');
             } catch (error) {
                 console.error('❌ [WeWeb Event] scheduler:drag-start emission failed:', error);
@@ -557,6 +772,7 @@ export default {
         }
 
         function handleSchedulerDragEnd(eventData) {
+            // Ensure eventData has all required fields with proper defaults
             const safeEventData = {
                 courseId: eventData?.courseId || '',
                 courseName: eventData?.courseName || '',
@@ -568,13 +784,17 @@ export default {
 
             console.log('🚀 [WeWeb Event] scheduler:drag-end - Emitting trigger-event with data:', safeEventData);
             try {
-                emit('trigger-event', { name: 'scheduler:drag-end', event: safeEventData });
+                emit('trigger-event', {
+                    name: 'scheduler:drag-end',
+                    event: safeEventData,
+                });
                 console.log('✅ [WeWeb Event] scheduler:drag-end emitted successfully');
             } catch (error) {
                 console.error('❌ [WeWeb Event] scheduler:drag-end emission failed:', error);
             }
         }
 
+        // Test function for manual event emission debugging
         function testEventEmission() {
             console.log('🧪 [WeWeb Event Test] =================================');
             console.log('🧪 [WeWeb Event Test] Manual scheduler:drop event test');
@@ -596,7 +816,10 @@ export default {
 
             try {
                 console.log('🚀 [WeWeb Event Test] Attempting to emit scheduler:drop...');
-                emit('trigger-event', { name: 'scheduler:drop', event: testData });
+                emit('trigger-event', {
+                    name: 'scheduler:drop',
+                    event: testData,
+                });
                 console.log('✅ [WeWeb Event Test] ✅ SUCCESS: scheduler:drop trigger-event emitted!');
                 console.log('📌 [WeWeb Event Test] Event data should be accessible directly in workflows');
             } catch (error) {
@@ -606,19 +829,32 @@ export default {
 
         function updateAssignments(payload) {
             if (payload.action === 'move' && payload.assignment) {
+                // Handle drag-and-drop assignment move
                 const updatedSchedules = [...draftSchedules.value];
-                const idx = updatedSchedules.findIndex(a => a.id === payload.assignment.id);
-                if (idx !== -1) {
+
+                // Find the assignment to move
+                const assignmentIndex = updatedSchedules.findIndex(a => a.id === payload.assignment.id);
+
+                if (assignmentIndex !== -1) {
+                    // Create updated assignment with new position
                     const updatedAssignment = {
-                        ...updatedSchedules[idx],
+                        ...updatedSchedules[assignmentIndex],
                         day_id: payload.toDayId,
                         period_id: payload.toPeriodId,
+                        // Update display fields if they exist
                         day_name_de: schoolDays.value.find(d => d.id === payload.toDayId)?.name_de,
                         day_name_en: schoolDays.value.find(d => d.id === payload.toDayId)?.name_en,
                     };
-                    updatedSchedules[idx] = updatedAssignment;
+
+                    // Update the schedules array
+                    updatedSchedules[assignmentIndex] = updatedAssignment;
+
+                    // Push to undo stack
                     undoStack.value.push(JSON.stringify(draftSchedules.value));
+
+                    // Update draft schedules
                     updateDraftSchedules(updatedSchedules);
+
                     console.log('✅ [DragDrop] Assignment moved successfully:', {
                         assignmentId: payload.assignment.id,
                         from: `${payload.fromDayId}-${payload.fromPeriodId}`,
@@ -628,12 +864,53 @@ export default {
                     console.warn('⚠️ [DragDrop] Could not find assignment to move:', payload.assignment.id);
                 }
             } else {
+                // Handle other assignment updates (existing functionality)
                 updateDraftSchedules(payload);
             }
         }
 
+        function navigateToConflict(conflict) {
+            // Navigate to the conflict location in the grid
+            selectedCell.value = {
+                dayId: conflict.day_id,
+                periodId: conflict.period_id,
+                period: periods.value.find(p => p.id === conflict.period_id),
+                assignments: draftSchedules.value.filter(
+                    a => a.day_id === conflict.day_id && a.period_id === conflict.period_id
+                ),
+                conflicts: [conflict],
+            };
+            showAssignmentModal.value = true;
+            showConflicts.value = false;
+        }
+
+        function applySuggestion(suggestion) {
+            // Apply suggested conflict resolution
+            emit('trigger-event', {
+                name: 'applySuggestion',
+                event: { suggestion },
+            });
+        }
+
+        function ignoreConflict(conflict) {
+            // Mark conflict as ignored
+            emit('trigger-event', {
+                name: 'ignoreConflict',
+                event: { conflictId: conflict.id },
+            });
+        }
+
+        function autoResolveConflicts() {
+            // Attempt to auto-resolve conflicts
+            emit('trigger-event', {
+                name: 'autoResolveConflicts',
+                event: { conflicts: allConflicts.value.filter(c => c.auto_resolvable) },
+            });
+        }
+
         function emitTestEvent() {
             try {
+                // Test WeWeb element event format
                 emit('element-event', {
                     name: 'scheduler:drop',
                     event: 'scheduler:drop',
@@ -667,6 +944,7 @@ export default {
             console.log('Draft ID:', draftId.value);
             console.log('Published By:', publishedBy.value);
 
+            // Detailed periods analysis
             console.log('📅 PERIODS ANALYSIS:');
             console.log('  Raw periods:', props.content.periods);
             console.log('  Processed periods:', periods.value);
@@ -676,6 +954,7 @@ export default {
                 console.log('  Sample period values:', samplePeriod);
             }
 
+            // Detailed schoolDays analysis
             console.log('🗓️ SCHOOL DAYS ANALYSIS:');
             console.log('  Raw schoolDays:', props.content.schoolDays);
             console.log('  Processed schoolDays:', schoolDays.value);
@@ -697,38 +976,42 @@ export default {
             console.log('🐛 [wwElement] === END COMPLETE DATA DUMP ===');
         }
 
-        // Auto-save
+        // Auto-save functionality
         let saveTimeout;
         watch(
             draftSchedules,
             () => {
                 if (isReadOnly.value) return;
+
                 clearTimeout(saveTimeout);
                 saveTimeout = setTimeout(() => {
                     saveDraft();
-                }, 2000);
+                }, 2000); // Auto-save after 2 seconds of no changes
             },
             { deep: true }
         );
 
+        // Debug logging on mount
         onMounted(() => {
             console.log('🚀 [wwElement] Component mounted - Course Scheduler loaded successfully');
         });
 
+        // Watch for changes in props.content (only log significant changes)
         watch(
             () => props.content,
-            (next, prev) => {
+            (newContent, oldContent) => {
+                // Only log when there are actual structural changes, not on every reactive update
                 if (
-                    next &&
-                    prev &&
-                    ((next?.periods?.length ?? 0) !== (prev?.periods?.length ?? 0) ||
-                        (next?.schoolDays?.length ?? 0) !== (prev?.schoolDays?.length ?? 0) ||
-                        (next?.courses?.length ?? 0) !== (prev?.courses?.length ?? 0))
+                    newContent &&
+                    oldContent &&
+                    (newContent?.periods?.length !== oldContent?.periods?.length ||
+                        newContent?.schoolDays?.length !== oldContent?.schoolDays?.length ||
+                        newContent?.courses?.length !== oldContent?.courses?.length)
                 ) {
                     console.log('🔄 [wwElement] Content structure changed:', {
-                        periods: next?.periods?.length || 0,
-                        schoolDays: next?.schoolDays?.length || 0,
-                        courses: next?.courses?.length || 0,
+                        periods: newContent?.periods?.length || 0,
+                        schoolDays: newContent?.schoolDays?.length || 0,
+                        courses: newContent?.courses?.length || 0,
                     });
                 }
             },
@@ -749,19 +1032,25 @@ export default {
             draftSchedules,
             liveSchedules,
             subjects,
-            isLiveModeValue,
 
             // State
+            showAssignmentModal,
             showConflicts,
             showTestData,
+            selectedCell,
             isSaving,
 
             // Computed
             isReadOnly,
             canUndo,
             allConflicts,
+            availableCoursesForSlot,
+
             // Methods
             handleCellClick,
+            closeAssignmentModal,
+            addAssignment,
+            editAssignment,
             removeAssignment,
             updateAssignments,
             undo,
@@ -770,17 +1059,23 @@ export default {
             handleCourseEdit,
             handleToggleNonInstructional,
             handleToggleLessonSchedules,
+            handleModeChanged,
             handlePeriodFocusChanged,
             handleFilterYear,
             handleSchedulerDrop,
             handleSchedulerDragStart,
             handleSchedulerDragEnd,
             testEventEmission,
+            navigateToConflict,
+            applySuggestion,
+            ignoreConflict,
+            autoResolveConflicts,
             emitTestEvent,
             logCurrentData,
 
-            // Expose local helpers for templates
+            // Utility functions
             sl,
+            safeArray,
         };
     },
 };
@@ -969,5 +1264,86 @@ export default {
     }
 }
 
-/* Responsive and accessibility styles omitted for brevity; keep your existing ones */
+/* Responsive Design */
+@media (max-width: 1200px) {
+    .conflicts-sidebar {
+        width: 350px;
+    }
+}
+
+@media (max-width: 900px) {
+    .scheduler-content {
+        flex-direction: column;
+    }
+
+    .conflicts-sidebar {
+        width: 100%;
+        position: relative;
+        top: auto;
+    }
+
+    .scheduler-header {
+        flex-direction: column;
+        gap: 12px;
+        align-items: stretch;
+
+        .scheduler-controls {
+            justify-content: space-between;
+        }
+
+        .header-actions {
+            justify-content: center;
+        }
+    }
+}
+
+@media (max-width: 600px) {
+    .course-scheduler-wrapper {
+        font-size: 0.9em;
+    }
+
+    .test-data-section {
+        width: 90vw;
+        min-width: unset;
+    }
+
+    .test-toggle {
+        bottom: 10px;
+        right: 10px;
+        width: 35px;
+        height: 35px;
+        font-size: 1em;
+    }
+}
+
+/* Accessibility improvements */
+@media (prefers-reduced-motion: reduce) {
+    * {
+        transition-duration: 0.01ms !important;
+        animation-duration: 0.01ms !important;
+    }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+    .scheduler-header,
+    .mode-indicator,
+    .undo-btn,
+    .conflicts-btn {
+        border-width: 2px;
+    }
+}
+
+/* Print styles */
+@media print {
+    .test-toggle,
+    .header-actions,
+    .conflicts-sidebar {
+        display: none !important;
+    }
+
+    .scheduler-header .mode-indicator.read-only::after {
+        content: ' (Read-Only)';
+    }
+}
 </style>

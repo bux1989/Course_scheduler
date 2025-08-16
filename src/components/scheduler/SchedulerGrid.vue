@@ -19,6 +19,14 @@
             </div>
 
             <div class="toolbar-section">
+                <label class="mode-switcher">
+                    <span>Planning Mode</span>
+                    <input type="checkbox" v-model="isLiveMode" @change="handleModeSwitch" class="mode-toggle" />
+                    <span>Live Mode</span>
+                </label>
+            </div>
+
+            <div class="toolbar-section">
                 <select v-model="selectedYearFilter" @change="$emit('filter-year', selectedYearFilter)">
                     <option value="">All Years</option>
                     <option v-for="year in yearGroups" :key="year" :value="year">{{ year }}</option>
@@ -425,10 +433,10 @@ import InlineAssignmentEditor from './InlineAssignmentEditor.vue';
 import TeacherRoomSelectionModal from './TeacherRoomSelectionModal.vue';
 import CourseSelectionModal from './CourseSelectionModal.vue';
 import { generateUniqueDraftId } from '../../utils/idGenerator.js';
-import { emitSchedulerRemoveEvent } from '../../utils/events.js';
-import { validateAndUnwrapArray, normalizeCourse, normalizePossibleSlots } from '../../utils/arrayUtils.js';
+// Keep only what's necessary from utils to avoid collisions/cycles
+import { normalizeCourse, normalizePossibleSlots } from '../../utils/arrayUtils.js';
 
-// Local helpers to avoid WeWeb runtime proxy/minifier issues
+// Local, collision-proof helpers
 const sl = v => {
     if (Array.isArray(v)) return v.length;
     if (v == null) return 0;
@@ -446,7 +454,6 @@ const toArray = v => {
     }
     return [v].filter(Boolean);
 };
-const len = v => sl(v);
 const nonEmpty = a => Array.isArray(a) && a.length > 0;
 
 export default {
@@ -472,7 +479,6 @@ export default {
 
         // Configuration
         isReadOnly: { type: Boolean, default: false },
-        isLiveMode: { type: Boolean, default: false },
         showStatistics: { type: Boolean, default: true },
         maxDays: { type: Number, default: 6 }, // Monday-Saturday
         schoolId: { type: String, default: null },
@@ -495,6 +501,7 @@ export default {
         'undo-last',
         'save-draft',
         'update-assignments',
+        'mode-changed',
         'period-focus-changed',
     ],
 
@@ -502,6 +509,7 @@ export default {
         // Local state
         const showNonInstructional = ref(true);
         const showLessonSchedules = ref(true);
+        const isLiveMode = ref(false);
         const selectedYearFilter = ref('');
         const selectedClassFilter = ref('');
         const focusedPeriodId = ref(null);
@@ -710,12 +718,10 @@ export default {
         const filteredEntriesCache = ref(new Map());
 
         const filteredEntries = computed(() => {
-            // Ensure proper boolean evaluation of isLiveMode prop
-            const isLive = props.isLiveMode === true || props.isLiveMode === 'true';
-            let entries = isLive ? props.liveSchedules : props.draftSchedules;
+            let entries = isLiveMode.value ? props.liveSchedules : props.draftSchedules;
 
             // Create cache key based on filter state
-            const cacheKey = `${isLive}-${debouncedSearchTerm.value}-${selectedClassFilter.value}-${showLessonSchedules.value}`;
+            const cacheKey = `${isLiveMode.value}-${debouncedSearchTerm.value}-${selectedClassFilter.value}-${showLessonSchedules.value}`;
 
             // Check cache first for performance
             if (filteredEntriesCache.value.has(cacheKey)) {
@@ -726,7 +732,7 @@ export default {
             if (sl(entries) > 100) {
                 console.log('🔍 [SchedulerGrid] Processing large schedule set:', {
                     count: sl(entries),
-                    mode: isLive ? 'live' : 'draft',
+                    mode: isLiveMode.value ? 'live' : 'draft',
                     hasSearch: !!debouncedSearchTerm.value,
                     hasClassFilter: !!selectedClassFilter.value,
                 });
@@ -1207,6 +1213,9 @@ export default {
             // Class filter is handled locally - no need to emit
         }
 
+        function handleModeSwitch() {
+            emit('mode-changed', isLiveMode.value ? 'live' : 'planning');
+        }
         function togglePeriodFocus(periodId) {
             if (focusedPeriodId.value === periodId) {
                 focusedPeriodId.value = null;
@@ -1788,8 +1797,7 @@ export default {
             console.log('💾 [InlineEdit] Saving changes for assignment:', updatedAssignment.id);
 
             // Create updated assignments array
-            const isLive = props.isLiveMode === true || props.isLiveMode === 'true';
-            const currentSchedules = isLive ? props.liveSchedules : props.draftSchedules;
+            const currentSchedules = isLiveMode.value ? props.liveSchedules : props.draftSchedules;
             const updatedSchedules = currentSchedules.map(schedule =>
                 schedule.id === updatedAssignment.id ? updatedAssignment : schedule
             );
@@ -1826,8 +1834,7 @@ export default {
             }
 
             // Create updated assignments array without this assignment
-            const isLive = props.isLiveMode === true || props.isLiveMode === 'true';
-            const currentSchedules = isLive ? props.liveSchedules : props.draftSchedules;
+            const currentSchedules = isLiveMode.value ? props.liveSchedules : props.draftSchedules;
             const updatedSchedules = currentSchedules.filter(schedule => schedule.id !== assignment.id);
 
             // Emit update
@@ -1967,6 +1974,7 @@ export default {
             // State
             showNonInstructional,
             showLessonSchedules,
+            isLiveMode,
             selectedYearFilter,
             selectedClassFilter,
             focusedPeriodId,
@@ -2011,6 +2019,7 @@ export default {
             openAssignmentDetails,
             handleLessonScheduleToggle,
             handleClassFilterChange,
+            handleModeSwitch,
             togglePeriodFocus,
             clearPeriodFocus,
             getFocusedPeriodName,

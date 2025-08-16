@@ -255,25 +255,6 @@ export default {
             },
             /* wwEditor:end */
         },
-        isLiveMode: {
-            label: {
-                en: 'Live Mode',
-                fr: 'Mode en direct',
-            },
-            type: 'OnOff',
-            bindable: true,
-            defaultValue: false,
-            /* wwEditor:start */
-            bindingValidation: {
-                validations: [
-                    {
-                        type: 'boolean',
-                    },
-                ],
-                tooltip: 'Controls whether the scheduler shows live schedules (true) or draft schedules (false)',
-            },
-            /* wwEditor:end */
-        },
     },
     events: {
         'scheduler:drop': {
