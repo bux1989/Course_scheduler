@@ -373,8 +373,6 @@
         :courseName="modalCourseData.courseName"
         :dayId="modalCourseData.dayId"
         :periodId="modalCourseData.periodId"
-        :draftId="draftId"
-        :schoolId="schoolId"
         :teachers="teachers"
         :rooms="rooms"
         @submit="handleTeacherRoomSubmit"
@@ -473,8 +471,7 @@ export default {
         isReadOnly: { type: Boolean, default: false },
         showStatistics: { type: Boolean, default: true },
         maxDays: { type: Number, default: 6 }, // Monday-Saturday
-        schoolId: { type: String, default: null },
-        draftId: { type: String, default: null },
+        isLiveMode: { type: Boolean, default: false },
         parentEmit: { type: Function, default: null },
         emitDropEvents: { type: Boolean, default: false },
 
@@ -495,16 +492,22 @@ export default {
         'update-assignments',
         'mode-changed',
         'period-focus-changed',
+        'update:isLiveMode',
     ],
 
     setup(props, { emit }) {
         // Local state
         const showNonInstructional = ref(true);
         const showLessonSchedules = ref(true);
-        const isLiveMode = ref(false);
         const selectedYearFilter = ref('');
         const selectedClassFilter = ref('');
         const focusedPeriodId = ref(null);
+
+        // Computed proxy for isLiveMode to enable two-way binding
+        const isLiveMode = computed({
+            get: () => props.isLiveMode,
+            set: value => emit('update:isLiveMode', value),
+        });
 
         // Inline editing state
         const editingAssignment = ref(null);
@@ -1010,6 +1013,9 @@ export default {
         }
 
         function handleModeSwitch() {
+            // Update the parent's isLiveMode through two-way binding
+            isLiveMode.value = !isLiveMode.value;
+            // Also emit the legacy mode-changed event for backward compatibility
             emit('mode-changed', isLiveMode.value ? 'live' : 'planning');
         }
         function togglePeriodFocus(periodId) {
@@ -1144,7 +1150,7 @@ export default {
 
             // Emit the scheduled assignment event to parent component (wwElement.vue)
             emit('scheduler-drop', {
-                schoolId: props.schoolId || null,
+                schoolId: null, // Parent will provide schoolId when processing event
                 draftId: uniqueDraftId, // Generate unique draft ID for each new assignment
                 dayId: payload.dayId,
                 periodId: payload.periodId,
@@ -1424,7 +1430,7 @@ export default {
                         // Emit scheduler-drop event for WeWeb workflows (assignment move)
                         // For moves, preserve the original assignment's draft ID
                         emit('scheduler-drop', {
-                            schoolId: props.schoolId || null,
+                            schoolId: null, // Parent will provide schoolId when processing event
                             draftId: assignment.draft_id || assignment.draftId || assignment.id, // Preserve original assignment's draft ID
                             dayId: dayId,
                             periodId: periodId,
@@ -1545,7 +1551,7 @@ export default {
                     const assignment = contextMenu.value.assignment;
                     const emitFunction = props.parentEmit || emit;
                     emitSchedulerRemoveEvent(emitFunction, {
-                        schoolId: props.schoolId,
+                        schoolId: null, // Parent will provide schoolId when processing event
                         draftId: assignment.id, // Use assignment's unique draft ID instead of overall draft schedule ID
                         dayId: assignment.day_id,
                         periodId: assignment.period_id,
@@ -1617,7 +1623,7 @@ export default {
             if (props.emitDropEvents) {
                 const emitFunction = props.parentEmit || emit;
                 emitSchedulerRemoveEvent(emitFunction, {
-                    schoolId: props.schoolId,
+                    schoolId: null, // Parent will provide schoolId when processing event
                     draftId: assignment.id, // Use assignment's unique draft ID instead of overall draft schedule ID
                     dayId: assignment.day_id,
                     periodId: assignment.period_id,

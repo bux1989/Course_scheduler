@@ -56,8 +56,7 @@
                 :is-saving="isSaving"
                 :is-read-only="isReadOnly"
                 :show-statistics="true"
-                :school-id="content.schoolId"
-                :draft-id="content.draftId"
+                :is-live-mode="isLiveMode"
                 :parent-emit="$emit"
                 :emit-drop-events="true"
                 @cell-click="handleCellClick"
@@ -74,6 +73,7 @@
                 @undo-last="undo"
                 @save-draft="saveDraft"
                 @update-assignments="updateAssignments"
+                @update:is-live-mode="isLiveMode = $event"
             />
         </div>
 
@@ -213,6 +213,7 @@ export default {
         const showConflicts = ref(false);
         const showTestData = ref(false);
         const isSaving = ref(false);
+        const isLiveMode = ref(false); // Manage mode toggle state in parent
 
         // Undo system
         const undoStack = ref([]);
@@ -599,6 +600,9 @@ export default {
         }
 
         function handleModeChanged(mode) {
+            // Update local isLiveMode state based on the mode
+            isLiveMode.value = mode === 'live';
+
             emit('trigger-event', {
                 name: 'modeChanged',
                 event: { mode: mode },
@@ -622,9 +626,10 @@ export default {
         // WeWeb Element Event Handlers
         function handleSchedulerDrop(eventData) {
             // Ensure eventData has all required fields with proper defaults
+            // Add back schoolId and draftId from content since they were removed from SchedulerGrid
             const safeEventData = {
-                schoolId: eventData?.schoolId || null,
-                draftId: eventData?.draftId || null,
+                schoolId: eventData?.schoolId || content.value?.schoolId || null,
+                draftId: eventData?.draftId || content.value?.draftId || null,
                 dayId: eventData?.dayId || 0,
                 periodId: eventData?.periodId || '',
                 courseId: eventData?.courseId || '',
@@ -943,6 +948,7 @@ export default {
             showTestData,
             selectedCell,
             isSaving,
+            isLiveMode,
 
             // Computed
             isReadOnly,

@@ -94,8 +94,6 @@ export default {
         courseName: { type: String, required: true },
         dayId: { type: [String, Number], required: true },
         periodId: { type: String, required: true },
-        draftId: { type: String, default: null },
-        schoolId: { type: String, default: null },
         teachers: { type: Array, default: () => [] },
         rooms: { type: Array, default: () => [] },
     },
@@ -180,9 +178,9 @@ export default {
                 primaryTeacherId: primaryTeacherId.value,
                 roomId: selectedRoomId.value,
                 periodId: props.periodId,
-                draftId: props.draftId,
+                draftId: null, // Parent will provide draftId when processing event
                 dayId: props.dayId,
-                schoolId: props.schoolId,
+                schoolId: null, // Parent will provide schoolId when processing event
                 source: 'modal-assignment',
                 timestamp: new Date().toISOString(),
             };
