@@ -55,6 +55,7 @@
                 :can-undo="canUndo"
                 :is-saving="isSaving"
                 :is-read-only="isReadOnly"
+                :is-live-mode="isLive"
                 :show-statistics="true"
                 :parent-emit="$emit"
                 :emit-drop-events="true"
@@ -71,6 +72,7 @@
                 @undo-last="undo"
                 @save-draft="saveDraft"
                 @update-assignments="updateAssignments"
+                @mode-changed="handleModeChanged"
             />
         </div>
 
@@ -179,6 +181,7 @@ export default {
                 liveSchedules: [],
                 subjects: [],
                 emitDropEvents: false,
+                mode: 'planner',
             }),
         },
         wwElementState: { type: Object, required: true },
@@ -351,7 +354,9 @@ export default {
         });
 
         // Computed state
-        const isReadOnly = computed(() => false); // Component is always in edit mode now
+        const currentMode = computed(() => props.content.mode || 'planner');
+        const isLive = computed(() => currentMode.value === 'live');
+        const isReadOnly = computed(() => isLive.value); // Live mode is read-only
         const canUndo = computed(() => safeLength(undoStack.value) > 0);
 
         // Conflict detection
@@ -592,6 +597,14 @@ export default {
             emit('trigger-event', {
                 name: 'filterYear',
                 event: { selectedYear: year },
+            });
+        }
+
+        function handleModeChanged(mode) {
+            console.log('🔄 [wwElement] Mode changed to:', mode);
+            emit('trigger-event', {
+                name: 'scheduler:mode-changed',
+                event: { mode, timestamp: new Date().toISOString() },
             });
         }
 
@@ -911,6 +924,8 @@ export default {
             isSaving,
 
             // Computed
+            currentMode,
+            isLive,
             isReadOnly,
             canUndo,
             allConflicts,
@@ -931,6 +946,7 @@ export default {
             handleToggleLessonSchedules,
             handlePeriodFocusChanged,
             handleFilterYear,
+            handleModeChanged,
             handleSchedulerDrop,
             handleSchedulerDragStart,
             handleSchedulerDragEnd,

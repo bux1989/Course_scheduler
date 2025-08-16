@@ -461,6 +461,7 @@ export default {
 
         // Configuration
         isReadOnly: { type: Boolean, default: false },
+        isLiveMode: { type: Boolean, default: false },
         showStatistics: { type: Boolean, default: true },
         maxDays: { type: Number, default: 6 }, // Monday-Saturday
         parentEmit: { type: Function, default: null },
@@ -497,9 +498,6 @@ export default {
         const selectedClassFilter = ref('');
         const focusedPeriodId = ref(null);
 
-        // Always in planning mode (no mode switching)
-        const isLiveMode = ref(false);
-
         // Inline editing state
         const editingAssignment = ref(null);
         const editingCell = ref(null);
@@ -528,6 +526,19 @@ export default {
                 console.log('🔍 [SchedulerGrid] focusedPeriodId changed:', { from: oldValue, to: newValue });
             }
         });
+
+        // Watch for mode changes and emit event
+        watch(
+            () => props.isLiveMode,
+            (newMode, oldMode) => {
+                if (newMode !== oldMode) {
+                    const mode = newMode ? 'live' : 'planner';
+                    console.log('🔄 [SchedulerGrid] Mode changed to:', mode);
+                    emit('mode-changed', mode);
+                }
+            },
+            { immediate: true }
+        );
 
         // Component initialized
 
@@ -665,14 +676,21 @@ export default {
             }, 300); // 300ms debounce
         });
 
+        // Select the appropriate schedule data based on mode
+        const currentSchedules = computed(() => {
+            return props.isLiveMode ? props.liveSchedules : props.draftSchedules;
+        });
+
         // Optimized filtered entries computed property
         const filteredEntries = computed(() => {
-            // Always use draft schedules since we're always in planning mode
-            let entries = props.draftSchedules;
+            // Use mode-based schedule selection
+            let entries = currentSchedules.value;
 
             // Debug: Log schedule data to understand the issue
             console.log('🔍 [SchedulerGrid] filteredEntries - Schedule debugging:', {
+                mode: props.isLiveMode ? 'live' : 'planner',
                 draftSchedulesCount: safeLength(props.draftSchedules),
+                liveSchedulesCount: safeLength(props.liveSchedules),
                 selectedEntries: entries,
                 selectedEntriesCount: safeLength(entries),
                 sampleEntry: safeLength(entries) > 0 ? entries[0] : null,
@@ -1571,9 +1589,9 @@ export default {
         function saveInlineEdit(updatedAssignment) {
             console.log('💾 [InlineEdit] Saving changes for assignment:', updatedAssignment.id);
 
-            // Create updated assignments array (always use draft schedules)
-            const currentSchedules = props.draftSchedules;
-            const updatedSchedules = currentSchedules.map(schedule =>
+            // Create updated assignments array (use current schedules based on mode)
+            const currentScheduleData = currentSchedules.value;
+            const updatedSchedules = currentScheduleData.map(schedule =>
                 schedule.id === updatedAssignment.id ? updatedAssignment : schedule
             );
 
@@ -1606,9 +1624,9 @@ export default {
                 });
             }
 
-            // Create updated assignments array without this assignment (always use draft schedules)
-            const currentSchedules = props.draftSchedules;
-            const updatedSchedules = currentSchedules.filter(schedule => schedule.id !== assignment.id);
+            // Create updated assignments array without this assignment (use current schedules based on mode)
+            const currentScheduleData = currentSchedules.value;
+            const updatedSchedules = currentScheduleData.filter(schedule => schedule.id !== assignment.id);
 
             // Emit update
             emit('update-assignments', updatedSchedules);
@@ -1654,12 +1672,12 @@ export default {
             return safeArray(props.courses).find(course => course.id === courseId);
         }
 
-        // Get scheduled courses for a specific day and period from draft schedules
+        // Get scheduled courses for a specific day and period from current schedules (mode-based)
         function getScheduledCoursesForSlot(dayId, periodId) {
             const scheduledCourses = [];
 
-            // Find all draft schedule entries for this specific day and period
-            const scheduledEntries = safeArray(props.draftSchedules).filter(
+            // Find all schedule entries for this specific day and period (use current schedules based on mode)
+            const scheduledEntries = safeArray(currentSchedules.value).filter(
                 entry => entry.day_id === dayId && entry.period_id === periodId
             );
 
@@ -1763,6 +1781,7 @@ export default {
             // Computed
             visibleDays,
             visiblePeriods,
+            currentSchedules,
             filteredEntries,
             yearGroups,
             availableClasses,

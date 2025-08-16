@@ -10,7 +10,10 @@
                     <p>📖 Read-only mode - Assignment details are shown for information only</p>
                 </div>
                 <div v-else>
-                    <p>This is a simplified assignment modal. Assignment functionality is handled by the SchedulerGrid component.</p>
+                    <p>
+                        This is a simplified assignment modal. Assignment functionality is handled by the SchedulerGrid
+                        component.
+                    </p>
                     <p>Day: {{ dayId }}, Period: {{ periodId }}</p>
                     <p>Available courses: {{ courses.length }}</p>
                     <p>Existing assignments: {{ existingAssignments.length }}</p>

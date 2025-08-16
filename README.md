@@ -45,6 +45,27 @@ The Course Scheduler is configured as a WeWeb element with the following propert
 - **School ID** (schoolId) - UUID for the school
 - **Draft ID** (draftId) - UUID for the draft schedule
 - **Published By** (publishedBy) - UUID of the publisher (optional)
+- **Mode** (mode) - Operating mode ('planner'|'live')
+    - `planner` - Editable mode using draft schedules (default)
+    - `live` - Read-only mode using published schedules
+
+### Mode Switching
+
+The component supports dynamic mode switching between planner and live modes:
+
+```javascript
+// Switch to live mode (read-only)
+component.mode = 'live';
+
+// Switch to planner mode (editable)
+component.mode = 'planner';
+```
+
+When the mode changes, the component:
+
+- Switches data source between `draftSchedules` and `liveSchedules`
+- Enables/disables editing features based on mode
+- Emits a `scheduler:mode-changed` event with the new mode
 
 ### API Endpoints
 
