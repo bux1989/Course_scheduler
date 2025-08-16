@@ -1,6 +1,3 @@
-// WeWeb component configuration for Course Scheduler
-// Ensures boolean props are booleans and arrays default to [] so the component can render safely.
-
 export default {
   editor: {
     label: 'Course Scheduler',
@@ -10,9 +7,7 @@ export default {
       title: 'Course Scheduler',
     },
   },
-  options: {
-    // If your builder expects sizing or alignment options, add here.
-  },
+  options: {},
   properties: {
     // Mode and flags
     isLiveMode: {
@@ -46,7 +41,7 @@ export default {
       section: 'Data',
     },
 
-    // Data collections (all default to empty arrays)
+    // Data collections (default to empty arrays)
     periods: {
       label: 'Periods',
       type: 'array',
@@ -109,23 +104,6 @@ export default {
       bindable: true,
       defaultValue: [],
       section: 'Data',
-    },
-
-    // Optional Supabase (only if you use it)
-    supabaseUrl: {
-      label: 'Supabase URL',
-      type: 'text',
-      bindable: true,
-      placeholder: 'https://xyzcompany.supabase.co',
-      section: 'Integrations',
-    },
-    supabaseKey: {
-      label: 'Supabase Key',
-      type: 'text',
-      bindable: true,
-      options: { secret: true },
-      placeholder: 'public-anon-key',
-      section: 'Integrations',
     },
   },
 };
