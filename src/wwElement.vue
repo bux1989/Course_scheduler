@@ -57,8 +57,8 @@
                 :is-read-only="isReadOnly"
                 :is-live-mode="isLiveModeValue"
                 :show-statistics="true"
-                :school-id="content.schoolId"
-                :draft-id="content.draftId"
+                :school-id="schoolId"
+                :draft-id="draftId"
                 :parent-emit="$emit"
                 :emit-drop-events="true"
                 @cell-click="handleCellClick"
@@ -806,8 +806,8 @@ export default {
             console.log('🧪 [WeWeb Event Test] =================================');
 
             const testData = {
-                schoolId: content.value?.schoolId || null,
-                draftId: content.value?.draftId || null,
+                schoolId: props.content?.schoolId || null,
+                draftId: props.content?.draftId || null,
                 dayId: 1,
                 periodId: 'test-period-id',
                 courseId: 'test-course-id',
