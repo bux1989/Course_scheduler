@@ -1,12 +1,44 @@
-import axios from 'axios';
+// Browser-compatible HTTP client using fetch API
+const API_BASE_URL = '/api';
 
-// Create axios instance with base URL from environment variable
-const api = axios.create({
-    baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
-    headers: {
-        'Content-Type': 'application/json',
+// Simple fetch wrapper to replace axios
+const api = {
+    get: async (url) => {
+        try {
+            const response = await fetch(`${API_BASE_URL}${url}`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+            });
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return { data: await response.json() };
+        } catch (error) {
+            console.error('API GET error:', error);
+            throw error;
+        }
     },
-});
+    post: async (url, data) => {
+        try {
+            const response = await fetch(`${API_BASE_URL}${url}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(data),
+            });
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return { data: await response.json() };
+        } catch (error) {
+            console.error('API POST error:', error);
+            throw error;
+        }
+    },
+};
 
 // Mock data for development when API is unavailable
 const mockPeriods = [

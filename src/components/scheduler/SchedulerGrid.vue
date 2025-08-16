@@ -934,8 +934,13 @@ export default {
 
         // Event handlers
         function handleCellClick(dayId, periodId, period) {
-            console.log('🖱️ [SchedulerGrid] Cell clicked:', { dayId, periodId, period: period?.name, isReadOnly: props.isReadOnly });
-            
+            console.log('🖱️ [SchedulerGrid] Cell clicked:', {
+                dayId,
+                periodId,
+                period: period?.name,
+                isReadOnly: props.isReadOnly,
+            });
+
             if (props.isReadOnly) {
                 console.log('📖 [SchedulerGrid] Read-only mode - ignoring cell click');
                 return;
@@ -955,11 +960,15 @@ export default {
         function openAssignmentModal(dayId, periodId, period) {
             if (props.isReadOnly) return;
 
-            console.log('🎯 [SchedulerGrid] Opening course selection modal for:', { dayId, periodId, period: period.name });
+            console.log('🎯 [SchedulerGrid] Opening course selection modal for:', {
+                dayId,
+                periodId,
+                period: period.name,
+            });
 
             // Get available courses for this time slot
             const availableCourses = getAvailableCoursesForSlot(dayId, periodId);
-            
+
             // Find day and period names for the modal
             const day = props.schoolDays.find(d => d.id === dayId);
             const dayName = day ? day.name : `Day ${dayId}`;

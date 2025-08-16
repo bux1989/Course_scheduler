@@ -95,7 +95,8 @@
 
 <script>
 import { ref, computed, onMounted, onUnmounted } from 'vue';
-import { useSchedulerStore } from '../../pinia/scheduler';
+import { useGridLogic } from '../../composables/useGridLogic';
+import { useSchedulerState } from '../../composables/useSchedulerState';
 
 export default {
     name: 'TimeGrid',
@@ -154,7 +155,12 @@ export default {
     },
     emits: ['add-entry'],
     setup(props, { emit }) {
-        const store = useSchedulerStore();
+        // Use new composables
+        const { filteredEntries, removeEntry: storeRemoveEntry } = useSchedulerState();
+
+        const { formatTime, getEntryRoomNameFromEntry, getEntryTeacherNamesFromEntry, getEntryTitleFromEntry } =
+            useGridLogic(props);
+
         const timeGridRef = ref(null);
 
         // Dragging state
@@ -171,7 +177,7 @@ export default {
         const keyboardEndY = ref(0);
 
         // Computed properties
-        const entries = computed(() => store.filteredEntries.filter(e => e.schedule_type === 'adhoc'));
+        const entries = computed(() => filteredEntries.value.filter(e => e.schedule_type === 'adhoc'));
 
         const timeLabels = computed(() => {
             const labels = [];
@@ -199,16 +205,6 @@ export default {
             };
         });
 
-        // Methods
-        function formatTime(timeString) {
-            if (!timeString) return '';
-            const parts = timeString.split(':');
-            if (parts.length >= 2) {
-                return `${parts[0]}:${parts[1]}`;
-            }
-            return timeString;
-        }
-
         function getDayEntries(dayId) {
             return entries.value.filter(entry => entry.day_id === dayId);
         }
@@ -227,31 +223,10 @@ export default {
             };
         }
 
-        function getEntryTitle(entry) {
-            if (entry.meeting_name) return entry.meeting_name;
-            if (entry.course_id) {
-                const course = props.courses.find(c => c.id === entry.course_id);
-                return course ? course.name : '';
-            }
-            return 'Untitled';
-        }
-
-        function getEntryRoomName(entry) {
-            if (!entry.room_id) return '';
-            const room = props.rooms.find(r => r.id === entry.room_id);
-            return room ? room.name : '';
-        }
-
-        function getEntryTeacherNames(entry) {
-            if (!entry.teacher_ids || !entry.teacher_ids.length) return '';
-            const teacherNames = entry.teacher_ids
-                .map(id => {
-                    const teacher = props.teachers.find(t => t.id === id);
-                    return teacher ? teacher.name : '';
-                })
-                .filter(name => name);
-            return teacherNames.join(', ');
-        }
+        // Alias the composable functions for template compatibility
+        const getEntryTitle = getEntryTitleFromEntry;
+        const getEntryRoomName = getEntryRoomNameFromEntry;
+        const getEntryTeacherNames = getEntryTeacherNamesFromEntry;
 
         function timeToMinutes(timeString) {
             if (!timeString) return 0;
@@ -328,7 +303,7 @@ export default {
         function removeEntry(entry) {
             const index = entries.value.indexOf(entry);
             if (index !== -1) {
-                store.removeEntry(index);
+                storeRemoveEntry(index);
             }
         }
 

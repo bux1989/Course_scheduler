@@ -5,6 +5,7 @@ A comprehensive Vue 3 Course Scheduler component built for WeWeb platform, provi
 ## 🎯 Features
 
 ### ✅ Implemented Features
+
 - **Vue 3 Composition API** - All components use modern Vue 3 syntax
 - **Pinia Store** - Centralized state management for schedule data
 - **Period Grid View** - Weekly view with periods and clickable cells
@@ -21,6 +22,7 @@ A comprehensive Vue 3 Course Scheduler component built for WeWeb platform, provi
 ## 🏗️ Component Structure
 
 ### Core Components
+
 - **`SchedulerPage.vue`** - Main container with entry forms and dialogs
 - **`SchedulerToolbar.vue`** - View toggle, filters, and action buttons
 - **`PeriodGrid.vue`** - Period-based weekly grid with clickable cells
@@ -28,6 +30,7 @@ A comprehensive Vue 3 Course Scheduler component built for WeWeb platform, provi
 - **`PublishDialog.vue`** - Publish confirmation modal
 
 ### Supporting Infrastructure
+
 - **`src/api/scheduler.js`** - Axios client with mock data support
 - **`src/pinia/scheduler.js`** - Pinia store with actions and getters
 - **`src/wwElement.vue`** - WeWeb component wrapper
@@ -76,18 +79,21 @@ store.toggleMockMode(); // Enables mock data
 ## 🎮 User Interface
 
 ### Period View
+
 - **7-column grid** (Sunday to Saturday) with period rows
 - **Click cells** to add/edit schedule entries
 - **Visual indicators** for occupied slots
 - **Period information** displays time ranges
 
 ### Time View
+
 - **Drag to create** time blocks (15-minute snap)
 - **Vertical time grid** from 8:00 AM to 5:00 PM
 - **Visual time slots** with drag-and-drop functionality
 - **Existing entries** displayed as colored blocks
 
 ### Toolbar Features
+
 - **View Toggle** - Switch between Period and Time views
 - **Teacher Filters** - Click teacher chips to filter
 - **Class/Room Filters** - Dropdown selections
@@ -95,6 +101,7 @@ store.toggleMockMode(); // Enables mock data
 - **Publish** - Make schedule visible to users
 
 ### Draft Panel
+
 - **Live entry count** and list
 - **Edit/Remove** buttons for each entry
 - **Real-time updates** as entries are modified
@@ -102,6 +109,7 @@ store.toggleMockMode(); // Enables mock data
 ## 🔧 Technical Implementation
 
 ### Entry Data Structure
+
 ```javascript
 {
   "schedule_type": "period" | "adhoc",
@@ -120,6 +128,7 @@ store.toggleMockMode(); // Enables mock data
 ```
 
 ### State Management (Pinia)
+
 - **schoolId, draftId, publishedBy** - Core identifiers
 - **viewMode** - 'period' | 'time'
 - **periods[]** - Available time periods
@@ -128,6 +137,7 @@ store.toggleMockMode(); // Enables mock data
 - **isLoading, error, isDraftSaved** - UI state
 
 ### Actions Available
+
 - `initialize(school, draft, publisher)` - Setup component
 - `loadPeriods()` - Fetch available periods
 - `checkPlacement(payload)` - Validate slot availability
@@ -142,6 +152,7 @@ store.toggleMockMode(); // Enables mock data
 ## 🎯 Demo & Testing
 
 A working demo is available in `test-scheduler.html` which demonstrates:
+
 - **Interactive grid** with clickable cells
 - **Entry management** with add/remove functionality
 - **Real-time updates** in the draft panel
