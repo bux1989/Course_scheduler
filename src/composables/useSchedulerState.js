@@ -8,63 +8,69 @@ import { useSchedulerStore } from '../pinia/scheduler';
 export function useSchedulerState() {
     const store = useSchedulerStore();
 
-    // Core state
-    const schoolId = computed(() => store.schoolId);
-    const draftId = computed(() => store.draftId);
-    const publishedBy = computed(() => store.publishedBy);
-    const viewMode = computed(() => store.viewMode);
-    const isLoading = computed(() => store.isLoading);
-    const error = computed(() => store.error);
-    const isDraftSaved = computed(() => store.isDraftSaved);
+    // Core state with safety checks
+    const schoolId = computed(() => store?.schoolId || null);
+    const draftId = computed(() => store?.draftId || null);
+    const publishedBy = computed(() => store?.publishedBy || null);
+    const viewMode = computed(() => store?.viewMode || 'period');
+    const isLoading = computed(() => store?.isLoading || false);
+    const error = computed(() => store?.error || null);
+    const isDraftSaved = computed(() => store?.isDraftSaved || true);
 
-    // Data state
-    const periods = computed(() => store.periods);
-    const entries = computed(() => store.entries);
-    const filteredEntries = computed(() => store.filteredEntries);
-    const periodEntries = computed(() => store.periodEntries);
-    const adhocEntries = computed(() => store.adhocEntries);
+    // Data state with safety checks
+    const periods = computed(() => store?.periods || []);
+    const entries = computed(() => store?.entries || []);
+    const filteredEntries = computed(() => store?.filteredEntries || []);
+    const periodEntries = computed(() => store?.periodEntries || []);
+    const adhocEntries = computed(() => store?.adhocEntries || []);
 
-    // Filter state
-    const selectedTeacherIds = computed(() => store.selectedTeacherIds);
-    const selectedClassId = computed(() => store.selectedClassId);
-    const selectedRoomId = computed(() => store.selectedRoomId);
+    // Filter state with safety checks
+    const selectedTeacherIds = computed(() => store?.selectedTeacherIds || []);
+    const selectedClassId = computed(() => store?.selectedClassId || null);
+    const selectedRoomId = computed(() => store?.selectedRoomId || null);
 
-    // Computed derived state
+    // Computed derived state with safety checks
     const isReadOnly = computed(() => !!publishedBy.value);
-    const hasEntries = computed(() => entries.value.length > 0);
-    const hasFilteredEntries = computed(() => filteredEntries.value.length > 0);
+    const hasEntries = computed(() => (entries.value || []).length > 0);
+    const hasFilteredEntries = computed(() => (filteredEntries.value || []).length > 0);
     const isPeriodView = computed(() => viewMode.value === 'period');
     const isTimeView = computed(() => viewMode.value === 'time');
 
-    // Filter utilities
+    // Filter utilities with safety checks
     const hasActiveFilters = computed(() => {
-        return selectedTeacherIds.value.length > 0 || selectedClassId.value !== null || selectedRoomId.value !== null;
+        const teacherIds = selectedTeacherIds.value || [];
+        const classId = selectedClassId.value;
+        const roomId = selectedRoomId.value;
+        return teacherIds.length > 0 || classId !== null || roomId !== null;
     });
 
     const activeFiltersCount = computed(() => {
         let count = 0;
-        if (selectedTeacherIds.value.length > 0) count++;
-        if (selectedClassId.value !== null) count++;
-        if (selectedRoomId.value !== null) count++;
+        const teacherIds = selectedTeacherIds.value || [];
+        const classId = selectedClassId.value;
+        const roomId = selectedRoomId.value;
+        if (teacherIds.length > 0) count++;
+        if (classId !== null) count++;
+        if (roomId !== null) count++;
         return count;
     });
 
-    // Actions (direct delegation to store)
+    // Actions (direct delegation to store with safety checks)
     const actions = {
-        initialize: store.initialize,
-        updateData: store.updateData,
-        loadPeriods: store.loadPeriods,
-        checkPlacement: store.checkPlacement,
-        upsertEntry: store.upsertEntry,
-        removeEntry: store.removeEntry,
-        persistDraft: store.persistDraft,
-        publish: store.publish,
-        setViewMode: store.setViewMode,
-        toggleTeacher: store.toggleTeacher,
-        setSelectedClass: store.setSelectedClass,
-        setSelectedRoom: store.setSelectedRoom,
-        clearFilters: store.clearFilters,
-        toggleMockMode: store.toggleMockMode,
+        initialize: (...args) => store?.initialize?.(...args),
+        updateData: (...args) => store?.updateData?.(...args),
+        loadPeriods: (...args) => store?.loadPeriods?.(...args),
+        checkPlacement: (...args) => store?.checkPlacement?.(...args),
+        upsertEntry: (...args) => store?.upsertEntry?.(...args),
+        removeEntry: (...args) => store?.removeEntry?.(...args),
+        persistDraft: (...args) => store?.persistDraft?.(...args),
+        publish: (...args) => store?.publish?.(...args),
+        setViewMode: (...args) => store?.setViewMode?.(...args),
+        toggleTeacher: (...args) => store?.toggleTeacher?.(...args),
+        setSelectedClass: (...args) => store?.setSelectedClass?.(...args),
+        setSelectedRoom: (...args) => store?.setSelectedRoom?.(...args),
+        clearFilters: (...args) => store?.clearFilters?.(...args),
+        toggleMockMode: (...args) => store?.toggleMockMode?.(...args),
     };
 
     return {

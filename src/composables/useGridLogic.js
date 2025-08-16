@@ -8,27 +8,30 @@ import { useSchedulerStore } from '../pinia/scheduler';
 export function useGridLogic(props) {
     const store = useSchedulerStore();
 
-    // Core data access
-    const periods = computed(() => store.periods);
-    const entries = computed(() => store.filteredEntries);
+    // Core data access with safety checks
+    const periods = computed(() => store?.periods || []);
+    const entries = computed(() => store?.filteredEntries || []);
 
-    // Entry utilities
+    // Entry utilities with safety checks
     function hasEntry(dayId, periodId, scheduleType = 'period') {
-        return entries.value.some(
+        const entriesArray = entries.value || [];
+        return entriesArray.some(
             entry => entry.day_id === dayId && entry.period_id === periodId && entry.schedule_type === scheduleType
         );
     }
 
     function getEntry(dayId, periodId, scheduleType = 'period') {
-        return entries.value.find(
+        const entriesArray = entries.value || [];
+        return entriesArray.find(
             entry => entry.day_id === dayId && entry.period_id === periodId && entry.schedule_type === scheduleType
         );
     }
 
     function removeEntry(dayId, periodId, scheduleType = 'period') {
         const entry = getEntry(dayId, periodId, scheduleType);
-        if (entry) {
-            const index = entries.value.indexOf(entry);
+        if (entry && store?.removeEntry) {
+            const entriesArray = entries.value || [];
+            const index = entriesArray.indexOf(entry);
             if (index !== -1) {
                 store.removeEntry(index);
             }

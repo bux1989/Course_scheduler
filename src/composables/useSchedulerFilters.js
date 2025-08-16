@@ -8,64 +8,84 @@ import { useSchedulerStore } from '../pinia/scheduler';
 export function useSchedulerFilters() {
     const store = useSchedulerStore();
 
-    // Computed filter state from store
-    const selectedTeacherIds = computed(() => store.selectedTeacherIds);
-    const selectedClassId = computed(() => store.selectedClassId);
-    const selectedRoomId = computed(() => store.selectedRoomId);
+    // Computed filter state from store with safety checks
+    const selectedTeacherIds = computed(() => store?.selectedTeacherIds || []);
+    const selectedClassId = computed(() => store?.selectedClassId || null);
+    const selectedRoomId = computed(() => store?.selectedRoomId || null);
 
-    // Filter actions (delegated to store)
+    // Filter actions (delegated to store with safety checks)
     function toggleTeacher(teacherId) {
-        store.toggleTeacher(teacherId);
+        if (store?.toggleTeacher) {
+            store.toggleTeacher(teacherId);
+        }
     }
 
     function setSelectedClass(classId) {
-        store.setSelectedClass(classId);
+        if (store?.setSelectedClass) {
+            store.setSelectedClass(classId);
+        }
     }
 
     function setSelectedRoom(roomId) {
-        store.setSelectedRoom(roomId);
+        if (store?.setSelectedRoom) {
+            store.setSelectedRoom(roomId);
+        }
     }
 
     function clearFilters() {
-        store.clearFilters();
+        if (store?.clearFilters) {
+            store.clearFilters();
+        }
     }
 
-    // Filter utilities
+    // Filter utilities with safety checks
     function isTeacherSelected(teacherId) {
-        return selectedTeacherIds.value.includes(teacherId);
+        const teacherIds = selectedTeacherIds.value || [];
+        return teacherIds.includes(teacherId);
     }
 
     function hasActiveFilters() {
-        return selectedTeacherIds.value.length > 0 || selectedClassId.value !== null || selectedRoomId.value !== null;
+        const teacherIds = selectedTeacherIds.value || [];
+        const classId = selectedClassId.value;
+        const roomId = selectedRoomId.value;
+        return teacherIds.length > 0 || classId !== null || roomId !== null;
     }
 
     function getActiveFiltersCount() {
         let count = 0;
-        if (selectedTeacherIds.value.length > 0) count++;
-        if (selectedClassId.value !== null) count++;
-        if (selectedRoomId.value !== null) count++;
+        const teacherIds = selectedTeacherIds.value || [];
+        const classId = selectedClassId.value;
+        const roomId = selectedRoomId.value;
+        if (teacherIds.length > 0) count++;
+        if (classId !== null) count++;
+        if (roomId !== null) count++;
         return count;
     }
 
-    // Entry filtering utilities
+    // Entry filtering utilities with safety checks
     function applyFilters(entries) {
+        if (!entries || !Array.isArray(entries)) return [];
+
         let filtered = [...entries];
+        const teacherIds = selectedTeacherIds.value || [];
+        const classId = selectedClassId.value;
+        const roomId = selectedRoomId.value;
 
         // Apply teacher filter
-        if (selectedTeacherIds.value.length > 0) {
+        if (teacherIds.length > 0) {
             filtered = filtered.filter(entry => {
-                return entry.teacher_ids && entry.teacher_ids.some(id => selectedTeacherIds.value.includes(id));
+                return entry.teacher_ids && entry.teacher_ids.some(id => teacherIds.includes(id));
             });
         }
 
         // Apply class filter
-        if (selectedClassId.value) {
-            filtered = filtered.filter(entry => entry.class_id === selectedClassId.value);
+        if (classId) {
+            filtered = filtered.filter(entry => entry.class_id === classId);
         }
 
         // Apply room filter
-        if (selectedRoomId.value) {
-            filtered = filtered.filter(entry => entry.room_id === selectedRoomId.value);
+        if (roomId) {
+            filtered = filtered.filter(entry => entry.room_id === roomId);
         }
 
         return filtered;
