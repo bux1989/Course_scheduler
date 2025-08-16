@@ -3,7 +3,7 @@ const API_BASE_URL = '/api';
 
 // Simple fetch wrapper to replace axios
 const api = {
-    get: async (url) => {
+    get: async url => {
         try {
             const response = await fetch(`${API_BASE_URL}${url}`, {
                 method: 'GET',

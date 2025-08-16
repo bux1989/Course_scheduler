@@ -12,25 +12,6 @@ export default {
         },
     },
     properties: {
-        isLiveMode: {
-            label: {
-                en: 'Live Mode',
-                fr: 'Mode Live',
-            },
-            type: 'OnOff',
-            bindable: true,
-            defaultValue: false,
-            /* wwEditor:start */
-            bindingValidation: {
-                validations: [
-                    {
-                        type: 'boolean',
-                    },
-                ],
-                tooltip: 'Toggle between Planning Mode (false) and Live Mode (true)',
-            },
-            /* wwEditor:end */
-        },
         periods: {
             label: {
                 en: 'Periods',

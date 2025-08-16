@@ -169,7 +169,6 @@ export default {
             type: Object,
             required: true,
             default: () => ({
-                isLiveMode: false,
                 periods: [],
                 courses: [],
                 teachers: [],
@@ -210,11 +209,9 @@ export default {
         const showConflicts = ref(false);
         const showTestData = ref(false);
         const isSaving = ref(false);
-        
-        // isLiveMode is now controlled by WeWeb configuration prop
-        const isLiveMode = computed(() => {
-            return props.content.isLiveMode || false;
-        });
+
+        // isLiveMode is managed internally by the component
+        const isLiveMode = ref(false);
 
         // Undo system
         const undoStack = ref([]);
@@ -588,27 +585,14 @@ export default {
         }
 
         function handleModeChanged(mode) {
-            // Update local isLiveMode state based on the mode
-            // Note: isLiveMode is now computed from props, so we emit an event to update the external state
-            emit('trigger-event', {
-                name: 'modeChanged',
-                event: { 
-                    mode: mode,
-                    isLiveMode: mode === 'live'
-                },
-            });
+            // Update internal isLiveMode state
+            isLiveMode.value = mode === 'live';
         }
 
         function handleLiveModeChange(newValue) {
             // Handle the update:isLiveMode event from SchedulerGrid
-            // Emit a WeWeb event to update the external isLiveMode prop
-            emit('trigger-event', {
-                name: 'liveModeChanged',
-                event: { 
-                    isLiveMode: newValue,
-                    mode: newValue ? 'live' : 'planning'
-                },
-            });
+            // Update internal state directly
+            isLiveMode.value = newValue;
         }
 
         function handlePeriodFocusChanged(periodId) {
