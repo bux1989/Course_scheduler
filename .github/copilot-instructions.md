@@ -111,9 +111,12 @@ A flexible course scheduling system for educational institutions with:
 
 ### Key Props
 
-- `schoolId`: string - UUID of the school
-- `draftId`: string - UUID of the current draft being edited
-- `publishedBy`: string|null - UUID of publishing user
+Draft schedules
+Schedules
+Periods
+Teachers
+School days
+live schedule
 
 ### Exposed Actions
 
