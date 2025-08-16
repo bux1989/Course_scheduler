@@ -63,8 +63,6 @@ export function emitElementEvent(vmOrEmit, name, data, options = {}) {
  * Emit scheduler:drop event when a course is successfully assigned
  * @param {Function|Vue instance} emitOrVm - Emit function or Vue component instance
  * @param {Object} payload - Drop event data
- * @param {string|null} payload.schoolId - School ID
- * @param {string|null} payload.draftId - Draft ID
  * @param {number} payload.dayId - Backend day ID
  * @param {string} payload.periodId - Period UUID
  * @param {string} payload.courseId - Course ID
@@ -77,8 +75,6 @@ export function emitElementEvent(vmOrEmit, name, data, options = {}) {
  */
 export function emitSchedulerDropEvent(emitOrVm, payload) {
     const eventData = {
-        schoolId: payload.schoolId || null,
-        draftId: payload.draftId || null,
         dayId: Number(payload.dayId), // Ensure it's a number (backend dayId)
         periodId: String(payload.periodId), // Ensure it's a string (period UUID)
         courseId: String(payload.courseId),
@@ -134,8 +130,6 @@ export function emitSchedulerDragEndEvent(emitOrVm, payload) {
  */
 export function emitSchedulerRemoveEvent(emitOrVm, payload) {
     const eventData = {
-        schoolId: payload.schoolId || null,
-        draftId: payload.draftId || null,
         dayId: Number(payload.dayId),
         periodId: String(payload.periodId),
         assignmentId: String(payload.assignmentId),

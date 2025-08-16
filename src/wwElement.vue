@@ -56,8 +56,6 @@
                 :is-saving="isSaving"
                 :is-read-only="isReadOnly"
                 :show-statistics="true"
-                :school-id="content.schoolId"
-                :draft-id="content.draftId"
                 :parent-emit="$emit"
                 :emit-drop-events="true"
                 @cell-click="handleCellClick"
@@ -65,7 +63,6 @@
                 @course-edit="handleCourseEdit"
                 @toggle-non-instructional="handleToggleNonInstructional"
                 @toggle-lesson-schedules="handleToggleLessonSchedules"
-                @mode-changed="handleModeChanged"
                 @period-focus-changed="handlePeriodFocusChanged"
                 @filter-year="handleFilterYear"
                 @scheduler-drop="handleSchedulerDrop"
@@ -123,9 +120,7 @@
             <button @click="showTestData = false" class="close-test">×</button>
             <h3>Component Test Data</h3>
             <div class="test-info">
-                <div><strong>School ID:</strong> {{ schoolId }}</div>
-                <div><strong>Draft ID:</strong> {{ draftId }}</div>
-                <div><strong>Published By:</strong> {{ publishedBy || 'Not Published' }}</div>
+                <div><strong>Read Only:</strong> {{ isReadOnly ? 'Yes' : 'No' }}</div>
                 <div>
                     <strong>Data Counts:</strong> {{ safeLength(periods) }} periods, {{ safeLength(courses) }} courses,
                     {{ safeLength(teachers) }} teachers
@@ -145,6 +140,8 @@
 <script>
 import { ref, computed, watch, onMounted, getCurrentInstance } from 'vue';
 import SchedulerGrid from './components/scheduler/SchedulerGrid.vue';
+import AssignmentModal from './components/scheduler/AssignmentModal.vue';
+import ConflictPanel from './components/scheduler/ConflictPanel.vue';
 import {
     validateAndUnwrapArray,
     safeLength,
@@ -164,15 +161,14 @@ export default {
     name: 'CourseScheduler',
     components: {
         SchedulerGrid,
+        AssignmentModal,
+        ConflictPanel,
     },
     props: {
         content: {
             type: Object,
             required: true,
             default: () => ({
-                schoolId: null,
-                draftId: null,
-                publishedBy: null,
                 periods: [],
                 courses: [],
                 teachers: [],
@@ -199,7 +195,7 @@ export default {
             () => props.content,
             newContent => {
                 if (newContent && store.initialize) {
-                    store.initialize(newContent.schoolId, newContent.draftId, newContent.publishedBy, {
+                    store.initialize(null, null, null, {
                         periods: toArray(newContent.periods),
                         draftSchedules: toArray(newContent.draftSchedules),
                     });
@@ -228,15 +224,6 @@ export default {
         });
 
         // Computed properties for data access using safe arrays
-        const schoolId = computed(() => {
-            return props.content.schoolId || 'No School ID';
-        });
-        const draftId = computed(() => {
-            return props.content.draftId || 'No Draft ID';
-        });
-        const publishedBy = computed(() => {
-            return props.content.publishedBy || null;
-        });
 
         // Safe array computed properties with enhanced WeWeb collection support
         const periods = computed(() => {
@@ -364,7 +351,7 @@ export default {
         });
 
         // Computed state
-        const isReadOnly = computed(() => !!publishedBy.value);
+        const isReadOnly = computed(() => false); // Component is always in edit mode now
         const canUndo = computed(() => safeLength(undoStack.value) > 0);
 
         // Conflict detection
@@ -482,8 +469,6 @@ export default {
             // Emit scheduler:remove event if configured
             if (props.content.emitDropEvents) {
                 emitSchedulerRemoveEvent(emit, {
-                    schoolId: props.content.schoolId,
-                    draftId: props.content.draftId,
                     dayId: assignmentToRemove.day_id,
                     periodId: assignmentToRemove.period_id,
                     assignmentId: assignmentToRemove.id,
@@ -526,7 +511,6 @@ export default {
                 emit('trigger-event', {
                     name: 'saveDraft',
                     event: {
-                        draftId: draftId.value,
                         schedules: draftSchedules.value,
                         timestamp: new Date().toISOString(),
                         action: 'save_draft',
@@ -535,7 +519,6 @@ export default {
 
                 // Also emit direct WeWeb event for external handling
                 emit('save-draft-external', {
-                    draftId: draftId.value,
                     schedules: draftSchedules.value,
                     timestamp: new Date().toISOString(),
                 });
@@ -598,13 +581,6 @@ export default {
             });
         }
 
-        function handleModeChanged(mode) {
-            emit('trigger-event', {
-                name: 'modeChanged',
-                event: { mode: mode },
-            });
-        }
-
         function handlePeriodFocusChanged(periodId) {
             emit('trigger-event', {
                 name: 'periodFocusChanged',
@@ -623,8 +599,6 @@ export default {
         function handleSchedulerDrop(eventData) {
             // Ensure eventData has all required fields with proper defaults
             const safeEventData = {
-                schoolId: eventData?.schoolId || null,
-                draftId: eventData?.draftId || null,
                 dayId: eventData?.dayId || 0,
                 periodId: eventData?.periodId || '',
                 courseId: eventData?.courseId || '',
@@ -705,8 +679,6 @@ export default {
             console.log('🧪 [WeWeb Event Test] =================================');
 
             const testData = {
-                schoolId: content.value?.schoolId || null,
-                draftId: content.value?.draftId || null,
                 dayId: 1,
                 periodId: 'test-period-id',
                 courseId: 'test-course-id',
@@ -844,9 +816,6 @@ export default {
         function logCurrentData() {
             console.log('🐛 [wwElement] === COMPLETE DATA DUMP ===');
             console.log('Raw content object:', props.content);
-            console.log('School ID:', schoolId.value);
-            console.log('Draft ID:', draftId.value);
-            console.log('Published By:', publishedBy.value);
 
             // Detailed periods analysis
             console.log('📅 PERIODS ANALYSIS:');
@@ -924,9 +893,6 @@ export default {
 
         return {
             // Data
-            schoolId,
-            draftId,
-            publishedBy,
             periods,
             courses,
             teachers,
@@ -963,7 +929,6 @@ export default {
             handleCourseEdit,
             handleToggleNonInstructional,
             handleToggleLessonSchedules,
-            handleModeChanged,
             handlePeriodFocusChanged,
             handleFilterYear,
             handleSchedulerDrop,
