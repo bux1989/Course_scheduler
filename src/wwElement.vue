@@ -143,7 +143,7 @@
 </template>
 
 <script>
-import { ref, computed, watch, onMounted } from 'vue';
+import { ref, computed, watch, onMounted, getCurrentInstance } from 'vue';
 import SchedulerGrid from './components/scheduler/SchedulerGrid.vue';
 import {
     validateAndUnwrapArray,
@@ -158,7 +158,7 @@ import {
 } from './utils/arrayUtils.js';
 import { emitSchedulerRemoveEvent } from './utils/events.js';
 import { detectConflicts } from './utils/conflictDetection.js';
-import { useSchedulerStore } from './pinia/scheduler';
+import { useSchedulerStore } from './state/schedulerState';
 
 export default {
     name: 'CourseScheduler',
@@ -191,14 +191,14 @@ export default {
         /* wwEditor:end */
     },
     setup(props, { emit }) {
-        // Initialize scheduler store
+        // Initialize scheduler store - now using simple Vue reactivity
         const store = useSchedulerStore();
 
         // Initialize store with component data
         watch(
             () => props.content,
             newContent => {
-                if (newContent) {
+                if (newContent && store.initialize) {
                     store.initialize(newContent.schoolId, newContent.draftId, newContent.publishedBy, {
                         periods: toArray(newContent.periods),
                         draftSchedules: toArray(newContent.draftSchedules),

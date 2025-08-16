@@ -3,42 +3,34 @@
  * Manages all filtering logic in one place
  */
 import { ref, computed } from 'vue';
-import { useSchedulerStore } from '../pinia/scheduler';
+import { useSchedulerStore } from '../state/schedulerState';
 
 export function useSchedulerFilters() {
     const store = useSchedulerStore();
 
-    // Computed filter state from store with safety checks
-    const selectedTeacherIds = computed(() => store?.selectedTeacherIds || []);
-    const selectedClassId = computed(() => store?.selectedClassId || null);
-    const selectedRoomId = computed(() => store?.selectedRoomId || null);
+    // Computed filter state from store
+    const selectedTeacherIds = computed(() => store.selectedTeacherIds?.value || []);
+    const selectedClassId = computed(() => store.selectedClassId?.value || null);
+    const selectedRoomId = computed(() => store.selectedRoomId?.value || null);
 
-    // Filter actions (delegated to store with safety checks)
+    // Filter actions (delegated to store)
     function toggleTeacher(teacherId) {
-        if (store?.toggleTeacher) {
-            store.toggleTeacher(teacherId);
-        }
+        store.toggleTeacher(teacherId);
     }
 
     function setSelectedClass(classId) {
-        if (store?.setSelectedClass) {
-            store.setSelectedClass(classId);
-        }
+        store.setSelectedClass(classId);
     }
 
     function setSelectedRoom(roomId) {
-        if (store?.setSelectedRoom) {
-            store.setSelectedRoom(roomId);
-        }
+        store.setSelectedRoom(roomId);
     }
 
     function clearFilters() {
-        if (store?.clearFilters) {
-            store.clearFilters();
-        }
+        store.clearFilters();
     }
 
-    // Filter utilities with safety checks
+    // Filter utilities
     function isTeacherSelected(teacherId) {
         const teacherIds = selectedTeacherIds.value || [];
         return teacherIds.includes(teacherId);
@@ -62,7 +54,7 @@ export function useSchedulerFilters() {
         return count;
     }
 
-    // Entry filtering utilities with safety checks
+    // Entry filtering utilities
     function applyFilters(entries) {
         if (!entries || !Array.isArray(entries)) return [];
 

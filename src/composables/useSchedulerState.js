@@ -3,40 +3,40 @@
  * Provides consistent access to scheduler state across components
  */
 import { computed } from 'vue';
-import { useSchedulerStore } from '../pinia/scheduler';
+import { useSchedulerStore } from '../state/schedulerState';
 
 export function useSchedulerState() {
     const store = useSchedulerStore();
 
-    // Core state with safety checks
-    const schoolId = computed(() => store?.schoolId || null);
-    const draftId = computed(() => store?.draftId || null);
-    const publishedBy = computed(() => store?.publishedBy || null);
-    const viewMode = computed(() => store?.viewMode || 'period');
-    const isLoading = computed(() => store?.isLoading || false);
-    const error = computed(() => store?.error || null);
-    const isDraftSaved = computed(() => store?.isDraftSaved || true);
+    // Core state - store now returns computed refs, so we access the value directly
+    const schoolId = computed(() => store.schoolId?.value || null);
+    const draftId = computed(() => store.draftId?.value || null);
+    const publishedBy = computed(() => store.publishedBy?.value || null);
+    const viewMode = computed(() => store.viewMode?.value || 'period');
+    const isLoading = computed(() => store.isLoading?.value || false);
+    const error = computed(() => store.error?.value || null);
+    const isDraftSaved = computed(() => store.isDraftSaved?.value || true);
 
-    // Data state with safety checks
-    const periods = computed(() => store?.periods || []);
-    const entries = computed(() => store?.entries || []);
-    const filteredEntries = computed(() => store?.filteredEntries || []);
-    const periodEntries = computed(() => store?.periodEntries || []);
-    const adhocEntries = computed(() => store?.adhocEntries || []);
+    // Data state
+    const periods = computed(() => store.periods?.value || []);
+    const entries = computed(() => store.entries?.value || []);
+    const filteredEntries = computed(() => store.filteredEntries?.value || []);
+    const periodEntries = computed(() => store.periodEntries?.value || []);
+    const adhocEntries = computed(() => store.adhocEntries?.value || []);
 
-    // Filter state with safety checks
-    const selectedTeacherIds = computed(() => store?.selectedTeacherIds || []);
-    const selectedClassId = computed(() => store?.selectedClassId || null);
-    const selectedRoomId = computed(() => store?.selectedRoomId || null);
+    // Filter state
+    const selectedTeacherIds = computed(() => store.selectedTeacherIds?.value || []);
+    const selectedClassId = computed(() => store.selectedClassId?.value || null);
+    const selectedRoomId = computed(() => store.selectedRoomId?.value || null);
 
-    // Computed derived state with safety checks
+    // Computed derived state
     const isReadOnly = computed(() => !!publishedBy.value);
     const hasEntries = computed(() => (entries.value || []).length > 0);
     const hasFilteredEntries = computed(() => (filteredEntries.value || []).length > 0);
     const isPeriodView = computed(() => viewMode.value === 'period');
     const isTimeView = computed(() => viewMode.value === 'time');
 
-    // Filter utilities with safety checks
+    // Filter utilities
     const hasActiveFilters = computed(() => {
         const teacherIds = selectedTeacherIds.value || [];
         const classId = selectedClassId.value;
@@ -55,22 +55,19 @@ export function useSchedulerState() {
         return count;
     });
 
-    // Actions (direct delegation to store with safety checks)
+    // Actions (direct delegation to store)
     const actions = {
-        initialize: (...args) => store?.initialize?.(...args),
-        updateData: (...args) => store?.updateData?.(...args),
-        loadPeriods: (...args) => store?.loadPeriods?.(...args),
-        checkPlacement: (...args) => store?.checkPlacement?.(...args),
-        upsertEntry: (...args) => store?.upsertEntry?.(...args),
-        removeEntry: (...args) => store?.removeEntry?.(...args),
-        persistDraft: (...args) => store?.persistDraft?.(...args),
-        publish: (...args) => store?.publish?.(...args),
-        setViewMode: (...args) => store?.setViewMode?.(...args),
-        toggleTeacher: (...args) => store?.toggleTeacher?.(...args),
-        setSelectedClass: (...args) => store?.setSelectedClass?.(...args),
-        setSelectedRoom: (...args) => store?.setSelectedRoom?.(...args),
-        clearFilters: (...args) => store?.clearFilters?.(...args),
-        toggleMockMode: (...args) => store?.toggleMockMode?.(...args),
+        initialize: store.initialize,
+        updateData: store.updateData,
+        upsertEntry: store.upsertEntry,
+        removeEntry: store.removeEntry,
+        persistDraft: store.persistDraft,
+        publish: store.publish,
+        setViewMode: store.setViewMode,
+        toggleTeacher: store.toggleTeacher,
+        setSelectedClass: store.setSelectedClass,
+        setSelectedRoom: store.setSelectedRoom,
+        clearFilters: store.clearFilters,
     };
 
     return {

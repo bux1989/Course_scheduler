@@ -3,16 +3,16 @@
  * Centralizes common functionality between PeriodGrid and TimeGrid
  */
 import { computed } from 'vue';
-import { useSchedulerStore } from '../pinia/scheduler';
+import { useSchedulerStore } from '../state/schedulerState';
 
 export function useGridLogic(props) {
     const store = useSchedulerStore();
 
-    // Core data access with safety checks
-    const periods = computed(() => store?.periods || []);
-    const entries = computed(() => store?.filteredEntries || []);
+    // Core data access
+    const periods = computed(() => store.periods?.value || []);
+    const entries = computed(() => store.filteredEntries?.value || []);
 
-    // Entry utilities with safety checks
+    // Entry utilities
     function hasEntry(dayId, periodId, scheduleType = 'period') {
         const entriesArray = entries.value || [];
         return entriesArray.some(
@@ -29,7 +29,7 @@ export function useGridLogic(props) {
 
     function removeEntry(dayId, periodId, scheduleType = 'period') {
         const entry = getEntry(dayId, periodId, scheduleType);
-        if (entry && store?.removeEntry) {
+        if (entry) {
             const entriesArray = entries.value || [];
             const index = entriesArray.indexOf(entry);
             if (index !== -1) {
