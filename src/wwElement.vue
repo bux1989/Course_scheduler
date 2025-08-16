@@ -136,7 +136,7 @@ const activeSchedules = computed(() =>
   effectiveIsLiveMode.value ? liveSchedulesList.value : draftSchedulesList.value
 );
 
-// Fallback grid data if nothing is provided (ensures grid renders)
+// Fallback grid data (ensures grid renders)
 const fallbackDays = Object.freeze([
   { id: 'mon', name: 'Mon' },
   { id: 'tue', name: 'Tue' },
@@ -175,7 +175,7 @@ const labelAssignment = (a) => {
   return teacher ? `${course} — ${teacher}` : course;
 };
 
-// Minimal matching: match day and period IDs/keys if present
+// Minimal matching for assignments
 const cellAssignments = (day, period) => {
   const dId = day?.id ?? day?.day ?? day?.weekday ?? dayKey(day);
   const pId = period?.id ?? period?.period ?? period?.slot ?? periodKey(period);
@@ -189,10 +189,8 @@ const cellAssignments = (day, period) => {
 };
 
 onMounted(() => {
-  console.info('🚀 [wwElement] Component mounted - Course Scheduler loaded successfully');
-  if (!daysList.value.length || !periodsList.value.length) {
-    console.info('ℹ️ [wwElement] Using fallback grid (no schoolDays/periods provided).');
-  }
+  // Build marker helps confirm the correct bundle is loaded
+  console.info('🚀 [wwElement] Mounted (build: ww-2025-08-16-12:25Z)');
 });
 </script>
 
