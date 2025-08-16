@@ -493,6 +493,10 @@ export default {
         'mode-changed',
         'period-focus-changed',
         'update:isLiveMode',
+        'scheduler-drop',
+        'scheduler-drag-start',
+        'scheduler-drag-end',
+        'course-edit',
     ],
 
     setup(props, { emit }) {
@@ -1150,8 +1154,6 @@ export default {
 
             // Emit the scheduled assignment event to parent component (wwElement.vue)
             emit('scheduler-drop', {
-                schoolId: null, // Parent will provide schoolId when processing event
-                draftId: uniqueDraftId, // Generate unique draft ID for each new assignment
                 dayId: payload.dayId,
                 periodId: payload.periodId,
                 courseId: payload.courseId,
@@ -1428,10 +1430,7 @@ export default {
                     // Check if it's actually moving to a different cell
                     if (originalDayId !== dayId || originalPeriodId !== periodId) {
                         // Emit scheduler-drop event for WeWeb workflows (assignment move)
-                        // For moves, preserve the original assignment's draft ID
                         emit('scheduler-drop', {
-                            schoolId: null, // Parent will provide schoolId when processing event
-                            draftId: assignment.draft_id || assignment.draftId || assignment.id, // Preserve original assignment's draft ID
                             dayId: dayId,
                             periodId: periodId,
                             courseId: assignment.course_id || '',
@@ -1551,8 +1550,6 @@ export default {
                     const assignment = contextMenu.value.assignment;
                     const emitFunction = props.parentEmit || emit;
                     emitSchedulerRemoveEvent(emitFunction, {
-                        schoolId: null, // Parent will provide schoolId when processing event
-                        draftId: assignment.id, // Use assignment's unique draft ID instead of overall draft schedule ID
                         dayId: assignment.day_id,
                         periodId: assignment.period_id,
                         assignmentId: assignment.id,
@@ -1623,8 +1620,6 @@ export default {
             if (props.emitDropEvents) {
                 const emitFunction = props.parentEmit || emit;
                 emitSchedulerRemoveEvent(emitFunction, {
-                    schoolId: null, // Parent will provide schoolId when processing event
-                    draftId: assignment.id, // Use assignment's unique draft ID instead of overall draft schedule ID
                     dayId: assignment.day_id,
                     periodId: assignment.period_id,
                     assignmentId: assignment.id,

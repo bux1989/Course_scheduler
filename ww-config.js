@@ -12,69 +12,22 @@ export default {
         },
     },
     properties: {
-        schoolId: {
+        isLiveMode: {
             label: {
-                en: 'School ID',
-                fr: 'ID École',
+                en: 'Live Mode',
+                fr: 'Mode Live',
             },
-            type: 'Text',
-            options: {
-                placeholder: 'Enter school UUID',
-            },
+            type: 'OnOff',
             bindable: true,
-            defaultValue: null,
+            defaultValue: false,
             /* wwEditor:start */
             bindingValidation: {
                 validations: [
                     {
-                        type: 'string',
+                        type: 'boolean',
                     },
                 ],
-                tooltip: 'UUID of the school for which the schedule is being created',
-            },
-            /* wwEditor:end */
-        },
-        draftId: {
-            label: {
-                en: 'Draft ID',
-                fr: 'ID Brouillon',
-            },
-            type: 'Text',
-            options: {
-                placeholder: 'Enter draft UUID',
-            },
-            bindable: true,
-            defaultValue: null,
-            /* wwEditor:start */
-            bindingValidation: {
-                validations: [
-                    {
-                        type: 'string',
-                    },
-                ],
-                tooltip: 'UUID of the current draft being edited',
-            },
-            /* wwEditor:end */
-        },
-        publishedBy: {
-            label: {
-                en: 'Published By',
-                fr: 'Publié par',
-            },
-            type: 'Text',
-            options: {
-                placeholder: 'Enter user UUID',
-            },
-            bindable: true,
-            defaultValue: null,
-            /* wwEditor:start */
-            bindingValidation: {
-                validations: [
-                    {
-                        type: 'string',
-                    },
-                ],
-                tooltip: 'UUID of the user publishing the schedule, or null if not published',
+                tooltip: 'Toggle between Planning Mode (false) and Live Mode (true)',
             },
             /* wwEditor:end */
         },
@@ -303,8 +256,6 @@ export default {
             name: 'scheduler:drop',
             label: { en: 'On Scheduler Drop' },
             event: {
-                schoolId: null,
-                draftId: null,
                 dayId: 0,
                 periodId: '',
                 courseId: '',
@@ -386,8 +337,6 @@ export default {
             name: 'scheduler:remove',
             label: { en: 'On Assignment Remove' },
             event: {
-                schoolId: null,
-                draftId: null,
                 dayId: 0,
                 periodId: '',
                 assignmentId: '',
