@@ -4,7 +4,7 @@
       <div class="title">Course Scheduler</div>
       <div class="meta">
         <span>School: {{ String(effectiveSchoolId ?? '') }}</span>
-        <span v-if="!effectiveIsLiveMode">Draft: {{ String(effectiveDraftId ?? '') }}</span>
+        <span v-if="!effectiveIsLiveMode && effectiveDraftId">Draft: {{ String(effectiveDraftId) }}</span>
         <span class="mode" :class="{ live: effectiveIsLiveMode }">
           Mode: {{ effectiveIsLiveMode ? 'Live' : 'Planning' }}
         </span>
@@ -13,31 +13,36 @@
     </div>
 
     <div v-if="!hasGridBasis" class="empty">
-      <p>Missing periods and/or school days data. The grid requires both.</p>
+      <p>No periods or school days provided. Showing fallback grid to help you verify rendering.</p>
     </div>
 
-    <div v-else class="grid-container">
+    <div class="grid-container">
       <table class="grid">
         <thead>
           <tr>
             <th class="corner"></th>
-            <th v-for="day in daysList" :key="dayKey(day)" class="day-col">
+            <th v-for="day in daysToRender" :key="dayKey(day)" class="day-col">
               {{ labelDay(day) }}
             </th>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="period in periodsList" :key="periodKey(period)">
+          <tr v-for="period in periodsToRender" :key="periodKey(period)">
             <th class="period-row">
               {{ labelPeriod(period) }}
             </th>
-            <td v-for="day in daysList"
-                :key="dayKey(day) + '::' + periodKey(period)"
-                class="cell">
+            <td
+              v-for="day in daysToRender"
+              :key="dayKey(day) + '::' + periodKey(period)"
+              class="cell"
+            >
               <div class="cell-content">
-                <!-- Basic placeholder to confirm rendering; actual assignments can be injected -->
                 <div class="assignments" v-if="cellAssignments(day, period).length">
-                  <div class="assignment" v-for="a in cellAssignments(day, period)" :key="assignmentKey(a)">
+                  <div
+                    class="assignment"
+                    v-for="a in cellAssignments(day, period)"
+                    :key="assignmentKey(a)"
+                  >
                     {{ labelAssignment(a) }}
                   </div>
                 </div>
@@ -48,23 +53,17 @@
         </tbody>
       </table>
       <div class="footer">
-        <span>Days: {{ safeLength(daysList) }}</span>
-        <span>Periods: {{ safeLength(periodsList) }}</span>
-        <span>Entries: {{ safeLength(activeSchedules) }}</span>
+        <span>Days: {{ daysToRender.length }}</span>
+        <span>Periods: {{ periodsToRender.length }}</span>
+        <span>Entries: {{ activeSchedules.length }}</span>
+        <span v-if="usingFallback" class="fallback-indicator">(Fallback grid active)</span>
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-// Defensive helpers
-const safeLength = (v) => {
-  if (Array.isArray(v)) return v.length;
-  if (v == null) return 0;
-  if (typeof v === 'string') return v.length;
-  const len = v?.length;
-  return typeof len === 'number' ? len : 0;
-};
+import { computed, defineProps, onMounted } from 'vue';
 
 const coerceBoolean = (v, fallback = false) => {
   if (typeof v === 'boolean') return v;
@@ -72,14 +71,12 @@ const coerceBoolean = (v, fallback = false) => {
     const s = v.trim().toLowerCase();
     if (s === 'true') return true;
     if (s === 'false') return false;
-    // treat non-empty strings as true
     return s.length > 0 ? true : fallback;
   }
   if (typeof v === 'number') return v !== 0;
   return fallback;
 };
 
-// Accept both top-level props and legacy content.* for backward compatibility
 const props = defineProps({
   content: { type: Object, default: null },
 
@@ -101,90 +98,72 @@ const props = defineProps({
   liveSchedules: { type: Array, default: () => [] },
 
   readOnly: { type: [Boolean, String, Number], default: false },
-
-  // Optional Supabase (only if used). Leave empty to disable.
-  supabaseUrl: { type: String, default: '' },
-  supabaseKey: { type: String, default: '' },
 });
 
-// Prefer top-level; fall back to content.*
+// Backward compatible access (prefer top-level; fallback to content.*)
 const pick = (key, fallbackValue) => {
   if (props[key] !== undefined && props[key] !== null) return props[key];
   return props.content?.[key] ?? fallbackValue;
 };
 
-// Effective identifiers
-const effectiveSchoolId = computed(() => {
-  const v = pick('schoolId', undefined);
-  return v ?? null;
-});
-
-const effectiveDraftId = computed(() => {
-  const v = pick('draftId', undefined);
-  return v ?? null;
-});
-
-// Effective mode as strict boolean
+const effectiveSchoolId = computed(() => pick('schoolId', null));
+const effectiveDraftId = computed(() => pick('draftId', null));
 const effectiveIsLiveMode = computed(() => {
   const top = props.isLiveMode;
   const legacy = props.content?.isLiveMode;
   return coerceBoolean(top !== undefined ? top : legacy, false);
 });
-
 const effectiveReadOnly = computed(() => coerceBoolean(pick('readOnly', false), false));
 
-// Data lists (always arrays)
+// Data arrays (always arrays)
 const periodsList = computed(() => {
   const v = pick('periods', []);
   return Array.isArray(v) ? v : [];
 });
-
 const daysList = computed(() => {
   const v = pick('schoolDays', []);
   return Array.isArray(v) ? v : [];
 });
-
-const coursesList = computed(() => {
-  const v = pick('courses', []);
-  return Array.isArray(v) ? v : [];
-});
-
-const teachersList = computed(() => {
-  const v = pick('teachers', []);
-  return Array.isArray(v) ? v : [];
-});
-
-const classesList = computed(() => {
-  const v = pick('classes', []);
-  return Array.isArray(v) ? v : [];
-});
-
-const roomsList = computed(() => {
-  const v = pick('rooms', []);
-  return Array.isArray(v) ? v : [];
-});
-
-const subjectsList = computed(() => {
-  const v = pick('subjects', []);
-  return Array.isArray(v) ? v : [];
-});
-
-// Schedule sets
 const draftSchedulesList = computed(() => {
   const v = pick('draftSchedules', []);
   return Array.isArray(v) ? v : [];
 });
-
 const liveSchedulesList = computed(() => {
   const v = pick('liveSchedules', []);
   return Array.isArray(v) ? v : [];
 });
-
 const activeSchedules = computed(() =>
   effectiveIsLiveMode.value ? liveSchedulesList.value : draftSchedulesList.value
 );
 
-// Keys/labels to avoid runtime errors regardless of object shapes
+// Fallback grid data if nothing is provided (ensures grid renders)
+const fallbackDays = Object.freeze([
+  { id: 'mon', name: 'Mon' },
+  { id: 'tue', name: 'Tue' },
+  { id: 'wed', name: 'Wed' },
+  { id: 'thu', name: 'Thu' },
+  { id: 'fri', name: 'Fri' },
+]);
+const fallbackPeriods = Object.freeze(
+  Array.from({ length: 6 }, (_, i) => ({ id: `p${i + 1}`, name: `Period ${i + 1}` }))
+);
+
+const hasGridBasis = computed(
+  () => daysList.value.length > 0 && periodsList.value.length > 0
+);
+
+// Render lists with fallback if needed
+const daysToRender = computed(() =>
+  daysList.value.length ? daysList.value : fallbackDays
+);
+const periodsToRender = computed(() =>
+  periodsList.value.length ? periodsList.value : fallbackPeriods
+);
+const usingFallback = computed(
+  () => !(daysList.value.length && periodsList.value.length)
+);
+
+// Helpers
 const periodKey = (p) => String(p?.id ?? p?.key ?? p?.name ?? JSON.stringify(p));
 const dayKey = (d) => String(d?.id ?? d?.key ?? d?.name ?? JSON.stringify(d));
 const assignmentKey = (a) => String(a?.id ?? a?.key ?? JSON.stringify(a));
@@ -196,7 +175,7 @@ const labelAssignment = (a) => {
   return teacher ? `${course} — ${teacher}` : course;
 };
 
-// Minimal cell matching: try common fields dayId/day/weekday and periodId/period/slot
+// Minimal matching: match day and period IDs/keys if present
 const cellAssignments = (day, period) => {
   const dId = day?.id ?? day?.day ?? day?.weekday ?? dayKey(day);
   const pId = period?.id ?? period?.period ?? period?.slot ?? periodKey(period);
@@ -209,82 +188,12 @@ const cellAssignments = (day, period) => {
   });
 };
 
-// Basic grid visibility
-const hasGridBasis = computed(() => safeLength(periodsList.value) > 0 && safeLength(daysList.value) > 0);
-
-// Logging helpers to mirror your console messages
-const logDataPresence = () => {
-  const log = (icon, label, data) => {
-    if (!safeLength(data)) {
-      console.info(`%c${icon} [wwElement] ${label} processing: no data available`, 'color:#888');
-    } else {
-      console.info(`%c${icon} [wwElement] ${label} loaded: ${safeLength(data)} item(s)`, 'color:#0a0');
-    }
-  };
-  log('📝', 'Draft Schedules', draftSchedulesList.value);
-  log('📺', 'Live Schedules', liveSchedulesList.value);
-  log('📋', 'Periods', periodsList.value);
-  log('📅', 'SchoolDays', daysList.value);
-  log('🎯', 'Courses', coursesList.value);
-  log('👥', 'Teachers', teachersList.value);
-  log('🏫', 'Classes', classesList.value);
-  log('🏠', 'Rooms', roomsList.value);
-  log('📚', 'Subjects', subjectsList.value);
-  console.info('🔄 [wwElement] isLiveMode evaluation:', {
-    rawValue: pick('isLiveMode', false),
-    type: typeof pick('isLiveMode', false),
-    strictBoolean: effectiveIsLiveMode.value,
-  });
-};
-
-// Supabase singleton (optional; only if URL/Key provided)
-// Prevent "Multiple GoTrueClient instances detected" by reusing a single client with a unique storageKey.
-let supabaseClient = null;
-const getSupabaseClient = async () => {
-  const url = props.supabaseUrl;
-  const key = props.supabaseKey;
-  if (!url || !key) return null;
-
-  if (window.__schedulerSupabase) return window.__schedulerSupabase;
-
-  try {
-    // Dynamic import to avoid bundling errors if not installed/needed
-    const mod = await import(/* @vite-ignore */ '@supabase/supabase-js');
-    const { createClient } = mod;
-    supabaseClient = createClient(url, key, {
-      auth: {
-        storageKey: 'ww-scheduler-auth',
-      },
-    });
-    window.__schedulerSupabase = supabaseClient;
-    return supabaseClient;
-  } catch (err) {
-    console.warn('Supabase not available or failed to initialize:', err);
-    return null;
-  }
-};
-
-onMounted(async () => {
-  logDataPresence();
+onMounted(() => {
   console.info('🚀 [wwElement] Component mounted - Course Scheduler loaded successfully');
-
-  // Initialize supabase only once if credentials are provided
-  await getSupabaseClient();
+  if (!daysList.value.length || !periodsList.value.length) {
+    console.info('ℹ️ [wwElement] Using fallback grid (no schoolDays/periods provided).');
+  }
 });
-
-watch(
-  () => ({
-    live: effectiveIsLiveMode.value,
-    schoolId: effectiveSchoolId.value,
-    draftId: effectiveDraftId.value,
-    p: periodsList.value,
-    d: daysList.value,
-    ds: draftSchedulesList.value,
-    ls: liveSchedulesList.value,
-  }),
-  () => logDataPresence(),
-  { deep: false }
-);
 </script>
 
 <style scoped>
@@ -412,5 +321,9 @@ watch(
   color: #666;
   border-top: 1px solid #e5e7eb;
   background: #fafafa;
+}
+
+.fallback-indicator {
+  color: #8a6d3b;
 }
 </style>
