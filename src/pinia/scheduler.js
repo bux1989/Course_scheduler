@@ -19,14 +19,14 @@ export const useSchedulerStore = defineStore('scheduler', () => {
     const lastCheckResult = ref(null);
     const isDraftSaved = ref(true);
 
-    // Getters
-    const filteredEntries = computed(() => {
-        let filtered = [...entries.value];
+    // Centralized filter function
+    function applyFiltersToEntries(entriesArray) {
+        let filtered = [...entriesArray];
 
         // Apply teacher filter
         if (selectedTeacherIds.value.length > 0) {
             filtered = filtered.filter(entry => {
-                return entry.teacher_ids.some(id => selectedTeacherIds.value.includes(id));
+                return entry.teacher_ids && entry.teacher_ids.some(id => selectedTeacherIds.value.includes(id));
             });
         }
 
@@ -41,6 +41,11 @@ export const useSchedulerStore = defineStore('scheduler', () => {
         }
 
         return filtered;
+    }
+
+    // Getters using centralized filter logic
+    const filteredEntries = computed(() => {
+        return applyFiltersToEntries(entries.value);
     });
 
     const periodEntries = computed(() => {

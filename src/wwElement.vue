@@ -158,6 +158,7 @@ import {
 } from './utils/arrayUtils.js';
 import { emitSchedulerRemoveEvent } from './utils/events.js';
 import { detectConflicts } from './utils/conflictDetection.js';
+import { useSchedulerStore } from './pinia/scheduler';
 
 export default {
     name: 'CourseScheduler',
@@ -190,6 +191,23 @@ export default {
         /* wwEditor:end */
     },
     setup(props, { emit }) {
+        // Initialize scheduler store
+        const store = useSchedulerStore();
+
+        // Initialize store with component data
+        watch(
+            () => props.content,
+            newContent => {
+                if (newContent) {
+                    store.initialize(newContent.schoolId, newContent.draftId, newContent.publishedBy, {
+                        periods: toArray(newContent.periods),
+                        draftSchedules: toArray(newContent.draftSchedules),
+                    });
+                }
+            },
+            { immediate: true, deep: true }
+        );
+
         // Local state
         const showAssignmentModal = ref(false);
         const showConflicts = ref(false);
@@ -958,6 +976,15 @@ export default {
             autoResolveConflicts,
             emitTestEvent,
             logCurrentData,
+
+            // Public API methods for programmatic control
+            setViewMode: store.setViewMode,
+            toggleTeacher: store.toggleTeacher,
+            setSelectedClass: store.setSelectedClass,
+            setSelectedRoom: store.setSelectedRoom,
+            clearFilters: store.clearFilters,
+            persistDraft: store.persistDraft,
+            publish: store.publish,
 
             // Utility functions
             safeLength,
