@@ -56,7 +56,6 @@
                 :is-saving="isSaving"
                 :is-read-only="isReadOnly"
                 :show-statistics="true"
-                :is-live-mode="isLiveMode"
                 :parent-emit="$emit"
                 :emit-drop-events="true"
                 @cell-click="handleCellClick"
@@ -64,7 +63,6 @@
                 @course-edit="handleCourseEdit"
                 @toggle-non-instructional="handleToggleNonInstructional"
                 @toggle-lesson-schedules="handleToggleLessonSchedules"
-                @mode-changed="handleModeChanged"
                 @period-focus-changed="handlePeriodFocusChanged"
                 @filter-year="handleFilterYear"
                 @scheduler-drop="handleSchedulerDrop"
@@ -73,7 +71,6 @@
                 @undo-last="undo"
                 @save-draft="saveDraft"
                 @update-assignments="updateAssignments"
-                @update:is-live-mode="handleLiveModeChange"
             />
         </div>
 
@@ -123,7 +120,6 @@
             <button @click="showTestData = false" class="close-test">×</button>
             <h3>Component Test Data</h3>
             <div class="test-info">
-                <div><strong>Live Mode:</strong> {{ isLiveMode ? 'Yes' : 'No' }}</div>
                 <div><strong>Read Only:</strong> {{ isReadOnly ? 'Yes' : 'No' }}</div>
                 <div>
                     <strong>Data Counts:</strong> {{ safeLength(periods) }} periods, {{ safeLength(courses) }} courses,
@@ -209,9 +205,6 @@ export default {
         const showConflicts = ref(false);
         const showTestData = ref(false);
         const isSaving = ref(false);
-
-        // isLiveMode is managed internally by the component
-        const isLiveMode = ref(false);
 
         // Undo system
         const undoStack = ref([]);
@@ -584,17 +577,6 @@ export default {
             });
         }
 
-        function handleModeChanged(mode) {
-            // Update internal isLiveMode state
-            isLiveMode.value = mode === 'live';
-        }
-
-        function handleLiveModeChange(newValue) {
-            // Handle the update:isLiveMode event from SchedulerGrid
-            // Update internal state directly
-            isLiveMode.value = newValue;
-        }
-
         function handlePeriodFocusChanged(periodId) {
             emit('trigger-event', {
                 name: 'periodFocusChanged',
@@ -830,7 +812,6 @@ export default {
         function logCurrentData() {
             console.log('🐛 [wwElement] === COMPLETE DATA DUMP ===');
             console.log('Raw content object:', props.content);
-            console.log('Is Live Mode:', isLiveMode.value);
 
             // Detailed periods analysis
             console.log('📅 PERIODS ANALYSIS:');
@@ -924,7 +905,6 @@ export default {
             showTestData,
             selectedCell,
             isSaving,
-            isLiveMode,
 
             // Computed
             isReadOnly,
