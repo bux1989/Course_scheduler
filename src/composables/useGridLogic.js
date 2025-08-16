@@ -15,17 +15,13 @@ export function useGridLogic(props) {
     // Entry utilities
     function hasEntry(dayId, periodId, scheduleType = 'period') {
         return entries.value.some(
-            entry => entry.day_id === dayId && 
-                    entry.period_id === periodId && 
-                    entry.schedule_type === scheduleType
+            entry => entry.day_id === dayId && entry.period_id === periodId && entry.schedule_type === scheduleType
         );
     }
 
     function getEntry(dayId, periodId, scheduleType = 'period') {
         return entries.value.find(
-            entry => entry.day_id === dayId && 
-                    entry.period_id === periodId && 
-                    entry.schedule_type === scheduleType
+            entry => entry.day_id === dayId && entry.period_id === periodId && entry.schedule_type === scheduleType
         );
     }
 
@@ -138,22 +134,66 @@ export function useGridLogic(props) {
         return availableCourses;
     }
 
+    // Entry data formatters for direct entry objects (used by TimeGrid)
+    function getEntryRoomNameFromEntry(entry) {
+        if (!entry || !entry.room_id) return '';
+        const room = props.rooms?.find(r => r.id === entry.room_id);
+        return room?.name || '';
+    }
+
+    function getEntryTeacherNamesFromEntry(entry) {
+        if (!entry) return '';
+
+        // First try to use direct teacher_names if available
+        if (entry.teacher_names && Array.isArray(entry.teacher_names) && entry.teacher_names.length > 0) {
+            return entry.teacher_names.join(', ');
+        }
+
+        // Fallback to looking up teacher names by IDs
+        const teacherIds = entry.staff_ids || entry.teacher_ids;
+        if (!teacherIds || !teacherIds.length) return '';
+
+        const teacherNames = teacherIds
+            .map(id => {
+                const teacher = props.teachers?.find(t => t.id === id);
+                return teacher ? teacher.name : '';
+            })
+            .filter(name => name);
+
+        return teacherNames.join(', ');
+    }
+
+    function getEntryTitleFromEntry(entry) {
+        if (!entry) return 'Untitled';
+        if (entry.meeting_name) return entry.meeting_name;
+        if (entry.course_id) {
+            const course = props.courses?.find(c => c.id === entry.course_id);
+            return course?.name || course?.course_name || course?.title || '';
+        }
+        return 'Untitled';
+    }
+
     return {
         // State
         periods,
         entries,
-        
+
         // Entry utilities
         hasEntry,
         getEntry,
         removeEntry,
-        
-        // Entry formatters
+
+        // Entry formatters (day/period based)
         getEntryCourseName,
         getEntryRoomName,
         getEntryTeacherNames,
         getEntryColor,
-        
+
+        // Entry formatters (direct entry object based)
+        getEntryRoomNameFromEntry,
+        getEntryTeacherNamesFromEntry,
+        getEntryTitleFromEntry,
+
         // Utilities
         formatTime,
         normalizeCourse,

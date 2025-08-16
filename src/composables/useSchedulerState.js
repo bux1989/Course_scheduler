@@ -38,9 +38,7 @@ export function useSchedulerState() {
 
     // Filter utilities
     const hasActiveFilters = computed(() => {
-        return selectedTeacherIds.value.length > 0 || 
-               selectedClassId.value !== null || 
-               selectedRoomId.value !== null;
+        return selectedTeacherIds.value.length > 0 || selectedClassId.value !== null || selectedRoomId.value !== null;
     });
 
     const activeFiltersCount = computed(() => {

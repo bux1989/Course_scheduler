@@ -51,7 +51,7 @@ export function detectConflicts(schedules) {
 function detectTeacherConflicts(assignments, conflictId, slotKey, dayId, periodId) {
     const conflicts = [];
     const teacherMap = new Map();
-    
+
     assignments.forEach(assignment => {
         assignment.teacher_ids?.forEach(teacherId => {
             if (!teacherMap.has(teacherId)) {
@@ -86,7 +86,7 @@ function detectTeacherConflicts(assignments, conflictId, slotKey, dayId, periodI
 function detectRoomConflicts(assignments, conflictId, slotKey, dayId, periodId) {
     const conflicts = [];
     const roomMap = new Map();
-    
+
     assignments.forEach(assignment => {
         if (assignment.room_id) {
             if (!roomMap.has(assignment.room_id)) {
@@ -121,7 +121,7 @@ function detectRoomConflicts(assignments, conflictId, slotKey, dayId, periodId) 
 function detectClassConflicts(assignments, conflictId, slotKey, dayId, periodId) {
     const conflicts = [];
     const classMap = new Map();
-    
+
     assignments.forEach(assignment => {
         if (assignment.class_id) {
             if (!classMap.has(assignment.class_id)) {
@@ -159,14 +159,13 @@ function detectClassConflicts(assignments, conflictId, slotKey, dayId, periodId)
 export function checkEntryConflicts(newEntry, existingEntries) {
     // Create a temporary schedule with the new entry
     const tempSchedules = [...existingEntries, newEntry];
-    
+
     // Detect all conflicts
     const allConflicts = detectConflicts(tempSchedules);
-    
+
     // Return only conflicts that involve the new entry
-    return allConflicts.filter(conflict => 
-        conflict.day_id === newEntry.day_id && 
-        conflict.period_id === newEntry.period_id
+    return allConflicts.filter(
+        conflict => conflict.day_id === newEntry.day_id && conflict.period_id === newEntry.period_id
     );
 }
 
@@ -178,9 +177,7 @@ export function checkEntryConflicts(newEntry, existingEntries) {
  * @returns {Array} Conflicts for the specific slot
  */
 export function getSlotConflicts(conflicts, dayId, periodId) {
-    return conflicts.filter(conflict => 
-        conflict.day_id === dayId && conflict.period_id === periodId
-    );
+    return conflicts.filter(conflict => conflict.day_id === dayId && conflict.period_id === periodId);
 }
 
 /**

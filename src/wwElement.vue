@@ -157,6 +157,7 @@ import {
     normalizePossibleSlots,
 } from './utils/arrayUtils.js';
 import { emitSchedulerRemoveEvent } from './utils/events.js';
+import { detectConflicts } from './utils/conflictDetection.js';
 
 export default {
     name: 'CourseScheduler',
@@ -396,111 +397,6 @@ export default {
         });
 
         // Methods
-        function detectConflicts(schedules) {
-            const conflicts = [];
-            const conflictId = Date.now();
-
-            // Group by day and period
-            const slotMap = new Map();
-            schedules.forEach((assignment, index) => {
-                const key = `${assignment.day_id}-${assignment.period_id}`;
-                if (!slotMap.has(key)) {
-                    slotMap.set(key, []);
-                }
-                slotMap.get(key).push({ ...assignment, index });
-            });
-
-            // Check each slot for conflicts
-            slotMap.forEach((assignments, slotKey) => {
-                if (safeLength(assignments) < 2) return;
-
-                const [dayId, periodId] = slotKey.split('-').map(Number);
-
-                // Teacher conflicts
-                const teacherMap = new Map();
-                assignments.forEach(assignment => {
-                    assignment.teacher_ids?.forEach(teacherId => {
-                        if (!teacherMap.has(teacherId)) {
-                            teacherMap.set(teacherId, []);
-                        }
-                        teacherMap.get(teacherId).push(assignment);
-                    });
-                });
-
-                teacherMap.forEach((teacherAssignments, teacherId) => {
-                    if (safeLength(teacherAssignments) > 1) {
-                        conflicts.push({
-                            id: `${conflictId}-teacher-${teacherId}-${slotKey}`,
-                            type: 'teacher',
-                            severity: 'high',
-                            day_id: dayId,
-                            period_id: periodId,
-                            affected_teachers: [teacherId],
-                            affected_courses: teacherAssignments.map(a => a.course_id),
-                            message: `Teacher is assigned to ${safeLength(teacherAssignments)} courses at the same time`,
-                            auto_resolvable: false,
-                        });
-                    }
-                });
-
-                // Room conflicts
-                const roomMap = new Map();
-                assignments.forEach(assignment => {
-                    if (assignment.room_id) {
-                        if (!roomMap.has(assignment.room_id)) {
-                            roomMap.set(assignment.room_id, []);
-                        }
-                        roomMap.get(assignment.room_id).push(assignment);
-                    }
-                });
-
-                roomMap.forEach((roomAssignments, roomId) => {
-                    if (safeLength(roomAssignments) > 1) {
-                        conflicts.push({
-                            id: `${conflictId}-room-${roomId}-${slotKey}`,
-                            type: 'room',
-                            severity: 'high',
-                            day_id: dayId,
-                            period_id: periodId,
-                            affected_rooms: [roomId],
-                            affected_courses: roomAssignments.map(a => a.course_id),
-                            message: `Room is booked for ${safeLength(roomAssignments)} courses at the same time`,
-                            auto_resolvable: true,
-                        });
-                    }
-                });
-
-                // Class conflicts
-                const classMap = new Map();
-                assignments.forEach(assignment => {
-                    if (assignment.class_id) {
-                        if (!classMap.has(assignment.class_id)) {
-                            classMap.set(assignment.class_id, []);
-                        }
-                        classMap.get(assignment.class_id).push(assignment);
-                    }
-                });
-
-                classMap.forEach((classAssignments, classId) => {
-                    if (safeLength(classAssignments) > 1) {
-                        conflicts.push({
-                            id: `${conflictId}-class-${classId}-${slotKey}`,
-                            type: 'class',
-                            severity: 'medium',
-                            day_id: dayId,
-                            period_id: periodId,
-                            affected_classes: [classId],
-                            affected_courses: classAssignments.map(a => a.course_id),
-                            message: `Class has ${safeLength(classAssignments)} overlapping assignments`,
-                            auto_resolvable: false,
-                        });
-                    }
-                });
-            });
-
-            return conflicts;
-        }
-
         function saveToUndoStack() {
             const currentState = JSON.stringify(draftSchedules.value);
             undoStack.value.push(currentState);

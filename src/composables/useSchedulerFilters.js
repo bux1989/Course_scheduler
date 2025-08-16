@@ -36,9 +36,7 @@ export function useSchedulerFilters() {
     }
 
     function hasActiveFilters() {
-        return selectedTeacherIds.value.length > 0 || 
-               selectedClassId.value !== null || 
-               selectedRoomId.value !== null;
+        return selectedTeacherIds.value.length > 0 || selectedClassId.value !== null || selectedRoomId.value !== null;
     }
 
     function getActiveFiltersCount() {

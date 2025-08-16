@@ -146,11 +146,7 @@ export default {
     emits: ['add-entry', 'show-period-details'],
     setup(props, { emit }) {
         // Use new composables
-        const {
-            periods,
-            entries,
-            removeEntry: storeRemoveEntry,
-        } = useSchedulerState();
+        const { periods, entries, removeEntry: storeRemoveEntry } = useSchedulerState();
 
         const {
             hasEntry,
