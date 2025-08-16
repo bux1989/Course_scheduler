@@ -55,7 +55,7 @@
                 :can-undo="canUndo"
                 :is-saving="isSaving"
                 :is-read-only="isReadOnly"
-                :is-live-mode="isLiveMode"
+                :is-live-mode="isLiveModeValue"
                 :show-statistics="true"
                 :school-id="content.schoolId"
                 :draft-id="content.draftId"
@@ -354,7 +354,8 @@ export default {
             return subjectsArray;
         });
 
-        const isLiveMode = computed(() => {
+        // Computed property for isLiveMode evaluation
+        const isLiveModeValue = computed(() => {
             // Strict boolean evaluation to prevent WeWeb undefined/unbound props from being truthy
             const rawValue = props.isLiveMode;
             console.log('🔄 [wwElement] isLiveMode evaluation:', {
@@ -1036,7 +1037,7 @@ export default {
             draftSchedules,
             liveSchedules,
             subjects,
-            isLiveMode,
+            isLiveModeValue,
 
             // State
             showAssignmentModal,
