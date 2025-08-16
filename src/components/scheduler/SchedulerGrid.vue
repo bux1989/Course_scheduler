@@ -81,13 +81,13 @@
         </div>
 
         <!-- Main Grid -->
-        <div v-if="safeLength(visibleDays) > 0 && safeLength(visiblePeriods) > 0" class="main-grid-container">
+        <div v-if="sl(visibleDays) > 0 && sl(visiblePeriods) > 0" class="main-grid-container">
             <!-- Grid Header with Days -->
             <div class="grid-header" role="row">
                 <div class="period-header-cell" role="columnheader">
                     <span class="period-label">Period</span>
                     <div class="debug-info">
-                        <small>Days: {{ safeLength(visibleDays) }}, Periods: {{ safeLength(visiblePeriods) }}</small>
+                        <small>Days: {{ sl(visibleDays) }}, Periods: {{ sl(visiblePeriods) }}</small>
                     </div>
                 </div>
                 <div
@@ -160,7 +160,7 @@
                         :data-period-id="period.id"
                     >
                         <!-- Multiple Assignments Display -->
-                        <div v-if="safeLength(getCellAssignments(day.id, period.id)) > 0" class="assignments-container">
+                        <div v-if="sl(getCellAssignments(day.id, period.id)) > 0" class="assignments-container">
                             <div
                                 v-for="(assignment, index) in getCellAssignments(day.id, period.id)"
                                 :key="index"
@@ -251,7 +251,7 @@
                         </div>
 
                         <!-- Show "No data" if no statistics -->
-                        <div v-if="safeLength(getDailyGradeStats(day.id, focusedPeriodId)) === 0" class="no-stats">
+                        <div v-if="sl(getDailyGradeStats(day.id, focusedPeriodId)) === 0" class="no-stats">
                             <span class="no-stats-text">No courses scheduled</span>
                         </div>
                     </div>
@@ -264,16 +264,16 @@
             <div class="grid-hidden-message">
                 ❌ Grid Hidden - Debug Info:
                 <ul>
-                    <li>Visible Days: {{ safeLength(visibleDays) }} ({{ visibleDays.map(d => d.name).join(', ') }})</li>
+                    <li>Visible Days: {{ sl(visibleDays) }} ({{ visibleDays.map(d => d.name).join(', ') }})</li>
                     <li>
-                        Visible Periods: {{ safeLength(visiblePeriods) }} ({{
+                        Visible Periods: {{ sl(visiblePeriods) }} ({{
                             visiblePeriods.map(p => p.name || p.label).join(', ')
                         }})
                     </li>
                     <li>Show Non-Instructional: {{ showNonInstructional }}</li>
                     <li>Focused Period: {{ focusedPeriodId }}</li>
-                    <li>Total Periods Available: {{ safeLength(periods) }}</li>
-                    <li>Total School Days Available: {{ safeLength(schoolDays) }}</li>
+                    <li>Total Periods Available: {{ sl(periods) }}</li>
+                    <li>Total School Days Available: {{ sl(schoolDays) }}</li>
                 </ul>
                 <button
                     @click="
@@ -318,10 +318,7 @@
                                 <small v-if="course.subject_name">{{ course.subject_name }}</small>
                             </div>
                         </div>
-                        <div
-                            v-if="safeLength(getAvailableCoursesForSlot(day.id, focusedPeriodId)) === 0"
-                            class="no-courses"
-                        >
+                        <div v-if="sl(getAvailableCoursesForSlot(day.id, focusedPeriodId)) === 0" class="no-courses">
                             No courses available for this day/period
                         </div>
                     </div>
@@ -329,7 +326,7 @@
             </div>
 
             <!-- No Preferred Days Courses Panel -->
-            <div v-if="safeLength(getNoPreferredDaysCourses()) > 0" class="no-preferred-days-panel">
+            <div v-if="sl(getNoPreferredDaysCourses()) > 0" class="no-preferred-days-panel">
                 <h4>📅 Courses with No Preferred Days</h4>
                 <p class="panel-description">
                     These courses have no time slot restrictions and can be scheduled on any day:
@@ -429,16 +426,28 @@ import TeacherRoomSelectionModal from './TeacherRoomSelectionModal.vue';
 import CourseSelectionModal from './CourseSelectionModal.vue';
 import { generateUniqueDraftId } from '../../utils/idGenerator.js';
 import { emitSchedulerRemoveEvent } from '../../utils/events.js';
-import {
-    validateAndUnwrapArray,
-    safeLength,
-    safeArray,
-    toArray,
-    len,
-    nonEmpty,
-    normalizeCourse,
-    normalizePossibleSlots,
-} from '../../utils/arrayUtils.js';
+import { validateAndUnwrapArray, normalizeCourse, normalizePossibleSlots } from '../../utils/arrayUtils.js';
+
+// Local helpers to avoid WeWeb runtime proxy/minifier issues
+const sl = v => {
+    if (Array.isArray(v)) return v.length;
+    if (v == null) return 0;
+    const len = v.length;
+    return typeof len === 'number' ? len : 0;
+};
+const safeArray = v => (Array.isArray(v) ? v : []);
+const toArray = v => {
+    if (Array.isArray(v)) return v;
+    if (v == null) return [];
+    if (typeof v === 'object') {
+        if (Array.isArray(v.data)) return v.data;
+        if (Array.isArray(v.items)) return v.items;
+        if (Array.isArray(v.value)) return v.value;
+    }
+    return [v].filter(Boolean);
+};
+const len = v => sl(v);
+const nonEmpty = a => Array.isArray(a) && a.length > 0;
 
 export default {
     name: 'SchedulerGrid',
@@ -511,16 +520,16 @@ export default {
         // Monitor performance improvements
         watch(filteredEntries, newEntries => {
             const startTime = performance.now();
-            performanceMetrics.value.lastProcessedCount = safeLength(newEntries);
+            performanceMetrics.value.lastProcessedCount = sl(newEntries);
 
             // After processing completes
             nextTick(() => {
                 performanceMetrics.value.processingTime = performance.now() - startTime;
 
                 // Log performance summary for large datasets
-                if (safeLength(newEntries) > 100) {
+                if (sl(newEntries) > 100) {
                     console.log('📊 [Performance] Schedule processing completed:', {
-                        scheduleCount: safeLength(newEntries),
+                        scheduleCount: sl(newEntries),
                         processingTimeMs: performanceMetrics.value.processingTime.toFixed(2),
                         cellCacheSize: cellAssignmentsCache.value.size,
                         indexSize: assignmentsByDayPeriod.value.size,
@@ -564,7 +573,7 @@ export default {
         const visibleDays = computed(() => {
             const validatedDays = validateAndUnwrapArray(props.schoolDays, 'schoolDays');
 
-            if (safeLength(validatedDays) === 0) {
+            if (sl(validatedDays) === 0) {
                 return [];
             }
 
@@ -576,7 +585,7 @@ export default {
             // Use the periods directly - they are already normalized in the parent component
             const validatedPeriods = safeArray(props.periods);
 
-            if (safeLength(validatedPeriods) === 0) {
+            if (sl(validatedPeriods) === 0) {
                 console.log('🔍 [SchedulerGrid] No periods available:', {
                     periodsType: typeof props.periods,
                     periodsLength: props.periods?.length,
@@ -587,8 +596,8 @@ export default {
             }
 
             // Reduced logging - only when periods count changes significantly
-            if (safeLength(validatedPeriods) > 0) {
-                const periodsCount = safeLength(validatedPeriods);
+            if (sl(validatedPeriods) > 0) {
+                const periodsCount = sl(validatedPeriods);
                 if (periodsCount !== lastLoggedPeriodsCount.value || periodsCount > 20) {
                     console.log('🔍 [SchedulerGrid] Period processing summary:', {
                         totalPeriods: periodsCount,
@@ -606,7 +615,7 @@ export default {
                 const focusedPeriods = validatedPeriods.filter(period => period.id === focusedPeriodId.value);
 
                 // Safety check: if focused period ID doesn't match any periods, clear the focus and show all
-                if (safeLength(focusedPeriods) === 0) {
+                if (sl(focusedPeriods) === 0) {
                     console.warn('🚨 [SchedulerGrid] Focused period ID does not match any periods. Clearing focus.', {
                         focusedId: focusedPeriodId.value,
                         availableIds: validatedPeriods.slice(0, 5).map(p => p.id),
@@ -677,7 +686,7 @@ export default {
             }
 
             // Simple fallback - if no periods match filters, show all periods
-            if (safeLength(filteredPeriods) === 0 && safeLength(props.periods) > 0) {
+            if (sl(filteredPeriods) === 0 && sl(props.periods) > 0) {
                 filteredPeriods = safeArray(props.periods);
             }
 
@@ -714,9 +723,9 @@ export default {
             }
 
             // Only log when count is significant to reduce console spam
-            if (safeLength(entries) > 100) {
+            if (sl(entries) > 100) {
                 console.log('🔍 [SchedulerGrid] Processing large schedule set:', {
-                    count: safeLength(entries),
+                    count: sl(entries),
                     mode: isLive ? 'live' : 'draft',
                     hasSearch: !!debouncedSearchTerm.value,
                     hasClassFilter: !!selectedClassFilter.value,
@@ -899,9 +908,9 @@ export default {
             const assignments = getCellAssignments(dayId, periodId);
             const classes = [];
 
-            if (safeLength(assignments) > 0) {
+            if (sl(assignments) > 0) {
                 classes.push('has-assignments');
-                if (safeLength(assignments) > 1) classes.push('multiple-assignments');
+                if (sl(assignments) > 1) classes.push('multiple-assignments');
             }
 
             // Check for conflicts
@@ -915,11 +924,11 @@ export default {
 
         function getCellAriaLabel(day, period) {
             const assignments = getCellAssignments(day.id, period.id);
-            if (safeLength(assignments) === 0) {
+            if (sl(assignments) === 0) {
                 return `${day.name} ${period.name}: Empty, click to add assignment`;
             }
             const courseNames = assignments.map(a => getDisplayName(a)).join(', ');
-            return `${day.name} ${period.name}: ${courseNames}, ${safeLength(assignments)} assignment${safeLength(assignments) > 1 ? 's' : ''}`;
+            return `${day.name} ${period.name}: ${courseNames}, ${sl(assignments)} assignment${sl(assignments) > 1 ? 's' : ''}`;
         }
 
         function getAssignmentClasses(assignment) {
@@ -1224,7 +1233,7 @@ export default {
             // Filter courses that are available for this specific day/period using dayId
             let availableCourses = normalizedCourses.filter(course => {
                 // If course has no time slot restrictions, it's available anywhere
-                if (safeLength(course.possibleSlots) === 0) {
+                if (sl(course.possibleSlots) === 0) {
                     return true;
                 }
 
@@ -1257,7 +1266,7 @@ export default {
                 if (selectedClass) {
                     availableCourses = availableCourses.filter(course => {
                         // Check if course is available for the selected class's year group
-                        if (course.is_for_year_groups && safeLength(course.is_for_year_groups) > 0) {
+                        if (course.is_for_year_groups && sl(course.is_for_year_groups) > 0) {
                             return course.is_for_year_groups.includes(selectedClass.year_group);
                         }
                         return true; // If no restrictions, course is available
@@ -1266,11 +1275,11 @@ export default {
             }
 
             // Reduced logging - only when significant data
-            if (safeLength(availableCourses) > 50 || debouncedSearchTerm.value) {
+            if (sl(availableCourses) > 50 || debouncedSearchTerm.value) {
                 console.log('🎯 [SchedulerGrid] Available courses for slot:', {
                     dayId,
                     periodId,
-                    availableCount: safeLength(availableCourses),
+                    availableCount: sl(availableCourses),
                     searchTerm: debouncedSearchTerm.value,
                     classFilter: selectedClassFilter.value,
                 });
@@ -1390,7 +1399,7 @@ export default {
             // Get courses that have no possible_time_slots restrictions for the focused period
             const coursesWithoutRestrictions = props.courses.filter(course => {
                 // Course has no time slot restrictions
-                return !course.possible_time_slots || safeLength(course.possible_time_slots) === 0;
+                return !course.possible_time_slots || sl(course.possible_time_slots) === 0;
             });
 
             // Filter by current search term and class filter for consistency
@@ -1423,8 +1432,8 @@ export default {
             }
 
             console.log('📅 [NoPreferredDays] Filtered courses:', {
-                total: safeLength(coursesWithoutRestrictions),
-                afterSearch: safeLength(filteredCourses),
+                total: sl(coursesWithoutRestrictions),
+                afterSearch: sl(filteredCourses),
                 searchTerm: debouncedSearchTerm.value,
                 classFilter: selectedClassFilter.value,
             });
@@ -2045,7 +2054,7 @@ export default {
             handleCourseSelectionCancel,
 
             // Utility functions
-            safeLength,
+            sl,
             safeArray,
 
             // Grade Statistics functions

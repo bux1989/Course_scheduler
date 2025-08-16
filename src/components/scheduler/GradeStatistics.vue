@@ -30,7 +30,15 @@
 
 <script>
 import { computed } from 'vue';
-import { safeLength, safeArray } from '../../utils/arrayUtils.js';
+
+// Local helpers to avoid WeWeb runtime proxy/minifier issues
+const sl = v => {
+    if (Array.isArray(v)) return v.length;
+    if (v == null) return 0;
+    const len = v.length;
+    return typeof len === 'number' ? len : 0;
+};
+const safeArray = v => (Array.isArray(v) ? v : []);
 
 export default {
     name: 'GradeStatistics',
@@ -166,7 +174,7 @@ export default {
         return {
             allGrades,
             getDailyGradeStats,
-            safeLength,
+            sl,
         };
     },
 };
