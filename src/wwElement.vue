@@ -140,6 +140,8 @@
 <script>
 import { ref, computed, watch, onMounted, getCurrentInstance } from 'vue';
 import SchedulerGrid from './components/scheduler/SchedulerGrid.vue';
+import AssignmentModal from './components/scheduler/AssignmentModal.vue';
+import ConflictPanel from './components/scheduler/ConflictPanel.vue';
 import {
     validateAndUnwrapArray,
     safeLength,
@@ -159,6 +161,8 @@ export default {
     name: 'CourseScheduler',
     components: {
         SchedulerGrid,
+        AssignmentModal,
+        ConflictPanel,
     },
     props: {
         content: {
@@ -925,8 +929,6 @@ export default {
             handleCourseEdit,
             handleToggleNonInstructional,
             handleToggleLessonSchedules,
-            handleModeChanged,
-            handleLiveModeChange,
             handlePeriodFocusChanged,
             handleFilterYear,
             handleSchedulerDrop,
