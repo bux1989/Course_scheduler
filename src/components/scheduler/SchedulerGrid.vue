@@ -1145,7 +1145,7 @@ export default {
             console.log('🎯 [Modal] Teacher/room assignment submitted:', payload);
 
             // Generate unique draft ID for new assignments
-            // Use existing draftId from props only as fallback - each assignment should have its own unique draft ID
+            // Each assignment should have its own unique draft ID
             const uniqueDraftId = generateUniqueDraftId();
 
             // Emit the scheduled assignment event to parent component (wwElement.vue)
