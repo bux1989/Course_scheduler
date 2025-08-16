@@ -181,8 +181,12 @@ export default {
                 liveSchedules: [],
                 subjects: [],
                 emitDropEvents: false,
-                isLiveMode: false,
             }),
+        },
+        isLiveMode: {
+            type: [Boolean, String],
+            required: false,
+            default: false,
         },
         wwElementState: { type: Object, required: true },
         /* wwEditor:start */
@@ -351,10 +355,14 @@ export default {
         });
 
         const isLiveMode = computed(() => {
-            // Ensure we have a proper boolean value, defaulting to false for planning mode
-            const rawValue = props.content.isLiveMode;
-            const mode = rawValue === true || rawValue === 'true';
-            return mode;
+            // Strict boolean evaluation to prevent WeWeb undefined/unbound props from being truthy
+            const rawValue = props.isLiveMode;
+            console.log('🔄 [wwElement] isLiveMode evaluation:', {
+                rawValue,
+                type: typeof rawValue,
+                strictBoolean: rawValue === true || rawValue === 'true'
+            });
+            return rawValue === true || rawValue === 'true';
         });
 
         // Computed state
