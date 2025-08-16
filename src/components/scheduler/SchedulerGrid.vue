@@ -1,0 +1,2881 @@
+<template>
+    <div class="scheduler-grid" role="grid" aria-label="School schedule grid">
+        <!-- Toolbar -->
+        <div class="scheduler-toolbar">
+            <div class="toolbar-section">
+                <label class="filter-label">
+                    <input
+                        type="checkbox"
+                        v-model="showNonInstructional"
+                        @change="$emit('toggle-non-instructional', showNonInstructional)"
+                    />
+                    Show Non-Instructional Blocks
+                </label>
+
+                <label class="filter-label">
+                    <input type="checkbox" v-model="showLessonSchedules" @change="handleLessonScheduleToggle" />
+                    Show Lesson Schedules (No Course)
+                </label>
+            </div>
+
+            <div class="toolbar-section">
+                <label class="mode-switcher">
+                    <span>Planning Mode</span>
+                    <input type="checkbox" v-model="isLiveMode" @change="handleModeSwitch" class="mode-toggle" />
+                    <span>Live Mode</span>
+                </label>
+            </div>
+
+            <div class="toolbar-section">
+                <select v-model="selectedYearFilter" @change="$emit('filter-year', selectedYearFilter)">
+                    <option value="">All Years</option>
+                    <option v-for="year in yearGroups" :key="year" :value="year">{{ year }}</option>
+                </select>
+            </div>
+
+            <div class="toolbar-section">
+                <select v-model="selectedClassFilter" @change="handleClassFilterChange">
+                    <option value="">All Classes</option>
+                    <option v-for="cls in availableClasses" :key="cls.id" :value="cls.id">{{ cls.name }}</option>
+                </select>
+            </div>
+
+            <div class="toolbar-section">
+                <input
+                    v-model="searchTerm"
+                    type="text"
+                    placeholder="Search courses/classes..."
+                    class="search-input"
+                    title="Search assignments by course, class, or teacher name"
+                />
+                <button v-if="searchTerm" @click="searchTerm = ''" class="clear-search-btn" title="Clear search">
+                    ✕
+                </button>
+                <div v-if="debouncedSearchTerm || selectedClassFilter" class="filter-status">
+                    <small>
+                        Filters active:
+                        <span v-if="debouncedSearchTerm" class="filter-tag">Search: "{{ debouncedSearchTerm }}"</span>
+                        <span v-if="selectedClassFilter" class="filter-tag"
+                            >Class: {{ getClassName(selectedClassFilter) }}</span
+                        >
+                        <span v-if="!showLessonSchedules" class="filter-tag">Courses only</span>
+                        <span v-if="!showNonInstructional" class="filter-tag">Instructional periods only</span>
+                    </small>
+                </div>
+            </div>
+
+            <div class="toolbar-section">
+                <button
+                    @click="clearPeriodFocus"
+                    v-if="focusedPeriodId"
+                    class="focus-button active"
+                    title="Show all periods"
+                >
+                    Show All Periods (Currently: {{ getFocusedPeriodName() }})
+                </button>
+                <span v-else class="focus-hint"
+                    >Click a period name to focus on that period and see available courses</span
+                >
+            </div>
+
+            <div class="toolbar-actions">
+                <button @click="$emit('undo-last')" :disabled="!canUndo" class="undo-button" title="Undo last change">
+                    ↶ Undo
+                </button>
+                <button @click="$emit('save-draft')" class="save-button" :class="{ saving: isSaving }">
+                    {{ isSaving ? 'Saving...' : 'Save Draft' }}
+                </button>
+            </div>
+        </div>
+
+        <!-- Main Grid -->
+        <div v-if="safeLength(visibleDays) > 0 && safeLength(visiblePeriods) > 0" class="main-grid-container">
+            <!-- Grid Header with Days -->
+            <div class="grid-header" role="row">
+                <div class="period-header-cell" role="columnheader">
+                    <span class="period-label">Period</span>
+                    <div class="debug-info">
+                        <small>Days: {{ safeLength(visibleDays) }}, Periods: {{ safeLength(visiblePeriods) }}</small>
+                    </div>
+                </div>
+                <div
+                    v-for="(day, index) in visibleDays"
+                    :key="day.id"
+                    class="day-header-cell"
+                    role="columnheader"
+                    :aria-colindex="index + 1"
+                >
+                    <span class="day-name">{{ day.name }}</span>
+                    <span class="day-date" v-if="day.date">{{ formatDate(day.date) }}</span>
+                    <div class="debug-info">
+                        <small>ID: {{ day.id }}</small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Grid Body -->
+            <div class="grid-body">
+                <div
+                    v-for="(period, periodIndex) in visiblePeriods"
+                    :key="period.id"
+                    class="grid-row"
+                    :class="{ 'non-instructional': !period.is_instructional }"
+                    role="row"
+                    :aria-rowindex="periodIndex + 1"
+                >
+                    <!-- Period Label -->
+                    <div
+                        class="period-label-cell"
+                        role="rowheader"
+                        :class="{ focused: focusedPeriodId === period.id }"
+                        @click="togglePeriodFocus(period.id)"
+                        title="Click to focus on this period"
+                    >
+                        <div class="period-info">
+                            <span class="period-name">{{ period.name }}</span>
+                            <span class="period-time"
+                                >{{ formatTime(period.start_time) }} - {{ formatTime(period.end_time) }}</span
+                            >
+                            <span v-if="!period.is_instructional" class="non-instructional-badge">
+                                {{ period.type || 'Break' }}
+                            </span>
+                            <div class="debug-info">
+                                <small
+                                    >ID: {{ period.id }}, Instructional:
+                                    {{ period.is_instructional !== false ? 'Yes' : 'No' }}</small
+                                >
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Day Cells -->
+                    <div
+                        v-for="day in visibleDays"
+                        :key="`${period.id}-${day.id}`"
+                        class="schedule-cell drop-zone"
+                        :class="getCellClasses(day.id, period.id)"
+                        role="gridcell"
+                        tabindex="0"
+                        @click="handleCellClick(day.id, period.id, period)"
+                        @keydown.enter="handleCellClick(day.id, period.id, period)"
+                        @keydown.space.prevent="handleCellClick(day.id, period.id, period)"
+                        :aria-label="getCellAriaLabel(day, period)"
+                        @dragover.prevent="handleCellDragOver($event, day.id, period.id)"
+                        @dragenter.prevent="handleCellDragEnter($event, day.id, period.id)"
+                        @dragleave="handleCellDragLeave($event, day.id, period.id)"
+                        @drop="handleCellDrop($event, day.id, period.id)"
+                        :data-day-id="day.id"
+                        :data-period-id="period.id"
+                    >
+                        <!-- Multiple Assignments Display -->
+                        <div v-if="safeLength(getCellAssignments(day.id, period.id)) > 0" class="assignments-container">
+                            <div
+                                v-for="(assignment, index) in getCellAssignments(day.id, period.id)"
+                                :key="index"
+                                class="assignment-item draggable-assignment"
+                                :class="getAssignmentClasses(assignment)"
+                                :style="getAssignmentStyles(assignment)"
+                                @click.stop="handleAssignmentClick(assignment, day.id, period.id)"
+                                @contextmenu.prevent="handleAssignmentRightClick($event, assignment, day.id, period.id)"
+                                :draggable="!isEditing(assignment.id)"
+                                @dragstart="handleAssignmentDragStart($event, assignment, day.id, period.id)"
+                                @dragend="handleAssignmentDragEnd($event)"
+                                :data-assignment-id="assignment.id"
+                                :data-day-id="day.id"
+                                :data-period-id="period.id"
+                            >
+                                <!-- Normal Assignment Display -->
+                                <div v-if="!isEditing(assignment.id)" class="assignment-content">
+                                    <span class="course-name">{{ getDisplayName(assignment) }}</span>
+                                    <span class="class-name" v-if="assignment.class_id">{{
+                                        getClassName(assignment.class_id)
+                                    }}</span>
+                                    <span class="teacher-names" v-if="getAssignmentTeachers(assignment)">
+                                        {{ getAssignmentTeachers(assignment) }}
+                                    </span>
+                                    <span class="room-name" v-if="assignment.room_id">{{
+                                        getRoomName(assignment.room_id)
+                                    }}</span>
+                                </div>
+
+                                <!-- Conflict Indicators -->
+                                <div v-if="hasConflicts(assignment)" class="conflict-indicator" title="Has conflicts">
+                                    ⚠️
+                                </div>
+
+                                <!-- Deleted Entity Warnings -->
+                                <div v-if="hasDeletedEntities(assignment)" class="deleted-warning" title="Missing data">
+                                    ❌
+                                </div>
+                            </div>
+
+                            <!-- Add More Button for cells with assignments -->
+                            <button
+                                class="add-more-button"
+                                @click.stop="openAssignmentModal(day.id, period.id, period)"
+                                title="Add another assignment"
+                            >
+                                +
+                            </button>
+                        </div>
+
+                        <!-- Empty Cell -->
+                        <div v-else class="empty-cell">
+                            <span class="add-icon">+</span>
+                            <span class="add-text">Add Course</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Grade Statistics Row (when period is focused) -->
+                <div v-if="showStatistics && focusedPeriodId" class="statistics-row">
+                    <!-- Empty cell for period column -->
+                    <div class="period-label-cell stats-label-cell">
+                        <div class="stats-title">
+                            <span class="stats-emoji">📈</span>
+                            <span>Grade Stats</span>
+                        </div>
+                    </div>
+
+                    <!-- Statistics for each day -->
+                    <div v-for="day in visibleDays" :key="`stats-${day.id}`" class="day-statistics-cell">
+                        <div class="stats-headers">
+                            <div class="stat-header" title="📊 Total free spots available">📊</div>
+                            <div class="stat-header" title="⚖️ Average spots available">⚖️</div>
+                            <div class="stat-header" title="📚 Amount of courses available">📚</div>
+                        </div>
+
+                        <div class="stats-rows">
+                            <div
+                                v-for="gradeStats in getDailyGradeStats(day.id, focusedPeriodId)"
+                                :key="`${day.id}-${gradeStats.grade}`"
+                                class="grade-stats-row"
+                            >
+                                <div class="grade-number">{{ gradeStats.grade }}:</div>
+                                <div class="stat-value">{{ gradeStats.totalSpots }}</div>
+                                <div class="stat-value">{{ gradeStats.averageSpots.toFixed(1) }}</div>
+                                <div class="stat-value">{{ gradeStats.coursesCount }}</div>
+                            </div>
+                        </div>
+
+                        <!-- Show "No data" if no statistics -->
+                        <div v-if="safeLength(getDailyGradeStats(day.id, focusedPeriodId)) === 0" class="no-stats">
+                            <span class="no-stats-text">No courses scheduled</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Debug info when grid is hidden -->
+        <div v-else class="grid-hidden-debug">
+            <div class="grid-hidden-message">
+                ❌ Grid Hidden - Debug Info:
+                <ul>
+                    <li>Visible Days: {{ safeLength(visibleDays) }} ({{ visibleDays.map(d => d.name).join(', ') }})</li>
+                    <li>
+                        Visible Periods: {{ safeLength(visiblePeriods) }} ({{
+                            visiblePeriods.map(p => p.name || p.label).join(', ')
+                        }})
+                    </li>
+                    <li>Show Non-Instructional: {{ showNonInstructional }}</li>
+                    <li>Focused Period: {{ focusedPeriodId }}</li>
+                    <li>Total Periods Available: {{ safeLength(periods) }}</li>
+                    <li>Total School Days Available: {{ safeLength(schoolDays) }}</li>
+                </ul>
+                <button
+                    @click="
+                        showNonInstructional = true;
+                        focusedPeriodId = null;
+                    "
+                    class="emergency-show-btn"
+                >
+                    🚨 Emergency: Show All Data
+                </button>
+            </div>
+        </div>
+
+        <!-- Available Courses for Focused Period -->
+        <div v-if="focusedPeriodId" class="available-courses-panel">
+            <h3>Available Courses for {{ getFocusedPeriodName() }}</h3>
+            <div class="focused-period-info">
+                <em>Courses that can be scheduled during this period on each day</em>
+            </div>
+            <div class="day-courses-grid">
+                <div v-for="day in visibleDays" :key="day.id" class="day-courses-column">
+                    <h4>{{ day.name }}</h4>
+                    <div class="available-courses-list">
+                        <div
+                            v-for="course in getAvailableCoursesForSlot(day.id, focusedPeriodId)"
+                            :key="course.id"
+                            class="course-card draggable-course"
+                            :style="getCourseCardStyle(course)"
+                            @click="assignCourseToSlot(course, day.id, focusedPeriodId)"
+                            :title="`Click to assign or drag ${course.name || course.course_name} to schedule`"
+                            :draggable="true"
+                            :data-course-id="course.id"
+                            :data-day-id="day.id"
+                            :data-period-id="focusedPeriodId"
+                            @dragstart="handleCourseDragStart($event, course)"
+                            @dragend="handleCourseDragEnd($event)"
+                        >
+                            <div class="course-name">{{ course.name || course.course_name || course.title }}</div>
+                            <div class="course-details">
+                                <small v-if="course.course_code">Code: {{ course.course_code }}</small>
+                                <small v-if="course.max_students">Max: {{ course.max_students }}</small>
+                                <small v-if="course.subject_name">{{ course.subject_name }}</small>
+                            </div>
+                        </div>
+                        <div
+                            v-if="safeLength(getAvailableCoursesForSlot(day.id, focusedPeriodId)) === 0"
+                            class="no-courses"
+                        >
+                            No courses available for this day/period
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- No Preferred Days Courses Panel -->
+            <div v-if="safeLength(getNoPreferredDaysCourses()) > 0" class="no-preferred-days-panel">
+                <h4>📅 Courses with No Preferred Days</h4>
+                <p class="panel-description">
+                    These courses have no time slot restrictions and can be scheduled on any day:
+                </p>
+                <div class="no-preferred-courses-list">
+                    <div
+                        v-for="course in getNoPreferredDaysCourses()"
+                        :key="`no-pref-${course.id}`"
+                        class="course-card"
+                        :style="getCourseCardStyle(course)"
+                        @click="assignCourseToFocusedSlot(course)"
+                        :title="`${course.name || course.course_name} - Can be scheduled on any day`"
+                    >
+                        <div class="course-name">{{ course.name || course.course_name || course.title }}</div>
+                        <div class="course-details">
+                            <small v-if="course.course_code">Code: {{ course.course_code }}</small>
+                            <small v-if="course.max_students">Max: {{ course.max_students }}</small>
+                            <small v-if="course.subject_name">{{ course.subject_name }}</small>
+                            <small class="flexible-tag">📅 Flexible scheduling</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Grade Statistics Component - Now integrated into main grid above -->
+    </div>
+
+    <!-- Teacher/Room Selection Modal -->
+    <TeacherRoomSelectionModal
+        v-if="showTeacherRoomModal && modalCourseData"
+        :courseId="modalCourseData.courseId"
+        :courseName="modalCourseData.courseName"
+        :dayId="modalCourseData.dayId"
+        :periodId="modalCourseData.periodId"
+        :draftId="draftId"
+        :schoolId="schoolId"
+        :teachers="teachers"
+        :rooms="rooms"
+        @submit="handleTeacherRoomSubmit"
+        @cancel="handleTeacherRoomCancel"
+    />
+
+    <!-- Course Selection Modal -->
+    <CourseSelectionModal
+        v-if="showCourseSelectionModal && courseSelectionData"
+        :dayId="courseSelectionData.dayId"
+        :dayName="courseSelectionData.dayName"
+        :periodId="courseSelectionData.periodId"
+        :periodName="courseSelectionData.periodName"
+        :availableCourses="courseSelectionData.availableCourses"
+        @submit="handleCourseSelectionSubmit"
+        @cancel="handleCourseSelectionCancel"
+    />
+
+    <!-- Assignment Context Menu -->
+    <div
+        v-if="contextMenu.show"
+        class="context-menu"
+        :style="{
+            left: contextMenu.x + 'px',
+            top: contextMenu.y + 'px',
+        }"
+        @click.stop
+    >
+        <div class="context-menu-item" @click="editAssignmentFromContext">
+            {{ isReadOnly ? '📄 View Assignment Details' : '✏️ Edit Assignment' }}
+        </div>
+        <div class="context-menu-item delete" @click="deleteAssignmentFromContext">
+            {{ isReadOnly ? '🔍 Test Delete Event' : '🗑️ Delete Assignment' }}
+        </div>
+    </div>
+
+    <!-- Context Menu Backdrop -->
+    <div v-if="contextMenu.show" class="context-menu-backdrop" @click="closeContextMenu"></div>
+
+    <!-- Inline Assignment Editor (rendered at top level to avoid positioning conflicts) -->
+    <InlineAssignmentEditor
+        v-if="editingAssignment"
+        :assignment="editingAssignment"
+        :courses="courses"
+        :teachers="teachers"
+        :classes="classes"
+        :rooms="rooms"
+        :subjects="subjects"
+        @save="saveInlineEdit"
+        @cancel="cancelInlineEdit"
+        @delete="deleteInlineAssignment"
+        @edit-course="handleCourseEdit"
+    />
+</template>
+
+<script>
+import { computed, ref, watch, nextTick } from 'vue';
+import InlineAssignmentEditor from './InlineAssignmentEditor.vue';
+import TeacherRoomSelectionModal from './TeacherRoomSelectionModal.vue';
+import CourseSelectionModal from './CourseSelectionModal.vue';
+import { generateUniqueDraftId } from '../../utils/idGenerator.js';
+import { emitSchedulerRemoveEvent } from '../../utils/events.js';
+import {
+    validateAndUnwrapArray,
+    safeLength,
+    safeArray,
+    toArray,
+    len,
+    nonEmpty,
+    normalizeCourse,
+    normalizePossibleSlots,
+} from '../../utils/arrayUtils.js';
+
+export default {
+    name: 'SchedulerGrid',
+    components: {
+        InlineAssignmentEditor,
+        TeacherRoomSelectionModal,
+        CourseSelectionModal,
+    },
+    props: {
+        // Data props
+        periods: { type: Array, default: () => [] },
+        schoolDays: { type: Array, default: () => [] },
+        courses: { type: Array, default: () => [] },
+        teachers: { type: Array, default: () => [] },
+        classes: { type: Array, default: () => [] },
+        rooms: { type: Array, default: () => [] },
+        subjects: { type: Array, default: () => [] },
+
+        // Schedule data
+        draftSchedules: { type: Array, default: () => [] },
+        liveSchedules: { type: Array, default: () => [] },
+
+        // Configuration
+        isReadOnly: { type: Boolean, default: false },
+        showStatistics: { type: Boolean, default: true },
+        maxDays: { type: Number, default: 6 }, // Monday-Saturday
+        schoolId: { type: String, default: null },
+        draftId: { type: String, default: null },
+        parentEmit: { type: Function, default: null },
+        emitDropEvents: { type: Boolean, default: false },
+
+        // State
+        conflicts: { type: Array, default: () => [] },
+        canUndo: { type: Boolean, default: false },
+        isSaving: { type: Boolean, default: false },
+    },
+
+    emits: [
+        'cell-click',
+        'assignment-details',
+        'toggle-non-instructional',
+        'toggle-lesson-schedules',
+        'filter-year',
+        'undo-last',
+        'save-draft',
+        'update-assignments',
+        'mode-changed',
+        'period-focus-changed',
+    ],
+
+    setup(props, { emit }) {
+        // Local state
+        const showNonInstructional = ref(true);
+        const showLessonSchedules = ref(true);
+        const isLiveMode = ref(false);
+        const selectedYearFilter = ref('');
+        const selectedClassFilter = ref('');
+        const focusedPeriodId = ref(null);
+
+        // Inline editing state
+        const editingAssignment = ref(null);
+        const editingCell = ref(null);
+
+        // Teacher/Room selection modal state
+        const showTeacherRoomModal = ref(false);
+        const modalCourseData = ref(null);
+
+        // Course selection modal state
+        const showCourseSelectionModal = ref(false);
+        const courseSelectionData = ref(null);
+
+        // Context menu state
+        const contextMenu = ref({
+            show: false,
+            x: 0,
+            y: 0,
+            assignment: null,
+            dayId: null,
+            periodId: null,
+        });
+
+        // Watch for unexpected focusedPeriodId changes (simplified logging)
+        watch(focusedPeriodId, (newValue, oldValue) => {
+            if (newValue !== oldValue) {
+                console.log('🔍 [SchedulerGrid] focusedPeriodId changed:', { from: oldValue, to: newValue });
+            }
+        });
+
+        // Component initialized
+
+        // Simplified computed properties without reactive caching to prevent disappearing
+        const visibleDays = computed(() => {
+            const validatedDays = validateAndUnwrapArray(props.schoolDays, 'schoolDays');
+
+            if (safeLength(validatedDays) === 0) {
+                return [];
+            }
+
+            const maxDaysLimit = props.maxDays || 7;
+            return validatedDays.slice(0, maxDaysLimit);
+        });
+
+        const visiblePeriods = computed(() => {
+            // Use the periods directly - they are already normalized in the parent component
+            const validatedPeriods = safeArray(props.periods);
+
+            if (safeLength(validatedPeriods) === 0) {
+                console.log('🔍 [SchedulerGrid] No periods available:', {
+                    periodsType: typeof props.periods,
+                    periodsLength: props.periods?.length,
+                    periodsKeys: Object.keys(props.periods || {}),
+                    samplePeriod: Array.isArray(props.periods) ? props.periods[0] : props.periods,
+                });
+                return [];
+            }
+
+            // Debug info only when periods change
+            if (safeLength(validatedPeriods) > 0) {
+                console.log('🔍 [SchedulerGrid] Period processing summary:', {
+                    totalPeriods: safeLength(validatedPeriods),
+                    focusedPeriodId: focusedPeriodId.value,
+                    showNonInstructional: showNonInstructional.value,
+                    stableIds: validatedPeriods.slice(0, 3).map(p => p.id), // Show stable IDs generated
+                });
+            }
+
+            let filteredPeriods = validatedPeriods;
+
+            // First filter by focused period if set
+            if (focusedPeriodId.value) {
+                const focusedPeriods = validatedPeriods.filter(period => period.id === focusedPeriodId.value);
+
+                // Safety check: if focused period ID doesn't match any periods, clear the focus and show all
+                if (safeLength(focusedPeriods) === 0) {
+                    console.warn('🚨 [SchedulerGrid] Focused period ID does not match any periods. Clearing focus.', {
+                        focusedId: focusedPeriodId.value,
+                        availableIds: validatedPeriods.slice(0, 5).map(p => p.id),
+                    });
+                    focusedPeriodId.value = null;
+                    // Don't filter, show all periods
+                } else {
+                    filteredPeriods = focusedPeriods;
+                }
+            }
+            // Then filter by instructional status
+            else if (!showNonInstructional.value) {
+                filteredPeriods = validatedPeriods.filter(period => {
+                    // Show periods where attendance_requirement is 'flexible' or 'required' or 'contracted'
+                    let shouldShow =
+                        period.attendance_requirement === 'flexible' ||
+                        period.attendance_requirement === 'required' ||
+                        period.attendance_requirement === 'contracted';
+
+                    // Alternative checks if attendance_requirement is not available or doesn't match expected values
+                    if (!shouldShow && !period.attendance_requirement) {
+                        // Fall back to is_instructional field
+                        if (period.is_instructional !== undefined) {
+                            shouldShow = period.is_instructional === true;
+                        }
+                        // Check block_type - exclude known non-instructional types
+                        else if (period.block_type) {
+                            const nonInstructionalTypes = [
+                                'break',
+                                'pause',
+                                'lunch',
+                                'recess',
+                                'assembly',
+                                'flexband',
+                                'frühdienst',
+                            ];
+                            shouldShow = !nonInstructionalTypes.includes(period.block_type.toLowerCase());
+                        }
+                        // Fall back to label/name content analysis
+                        else if (period.label || period.name) {
+                            const text = (period.label || period.name).toLowerCase();
+                            const isBreakTime =
+                                text.includes('break') ||
+                                text.includes('pause') ||
+                                text.includes('lunch') ||
+                                text.includes('flexband') ||
+                                text.includes('frühdienst') ||
+                                text.includes('benutzerdefiniert');
+                            shouldShow = !isBreakTime;
+                        }
+                        // Default to showing if we can't determine
+                        else {
+                            shouldShow = true;
+                        }
+                    }
+                    // If we still don't have a clear answer and attendance_requirement exists but is not 'flexible' or 'required'
+                    else if (
+                        !shouldShow &&
+                        period.attendance_requirement &&
+                        period.attendance_requirement !== 'optional'
+                    ) {
+                        // Show periods that aren't explicitly optional
+                        shouldShow = true;
+                    }
+
+                    return shouldShow;
+                });
+            }
+
+            // Simple fallback - if no periods match filters, show all periods
+            if (safeLength(filteredPeriods) === 0 && safeLength(props.periods) > 0) {
+                filteredPeriods = safeArray(props.periods);
+            }
+
+            return filteredPeriods;
+        });
+
+        // Performance optimization - debounced filtering
+        const debouncedSearchTerm = ref('');
+        const searchTerm = ref('');
+        let searchDebounceTimer = null;
+
+        // Watch for search changes with debouncing
+        watch(searchTerm, newTerm => {
+            clearTimeout(searchDebounceTimer);
+            searchDebounceTimer = setTimeout(() => {
+                debouncedSearchTerm.value = newTerm;
+            }, 300); // 300ms debounce
+        });
+
+        // Optimized filtered entries computed property
+        const filteredEntries = computed(() => {
+            let entries = isLiveMode.value ? props.liveSchedules : props.draftSchedules;
+
+            // Debug: Log schedule data to understand the issue
+            console.log('🔍 [SchedulerGrid] filteredEntries - Schedule debugging:', {
+                isLiveMode: isLiveMode.value,
+                draftSchedulesCount: safeLength(props.draftSchedules),
+                liveSchedulesCount: safeLength(props.liveSchedules),
+                rawDraftSchedules: props.draftSchedules,
+                rawLiveSchedules: props.liveSchedules,
+                selectedEntries: entries,
+                selectedEntriesCount: safeLength(entries),
+                sampleEntry: safeLength(entries) > 0 ? entries[0] : null,
+            });
+
+            // Apply debounced search filter
+            if (debouncedSearchTerm.value) {
+                const search = debouncedSearchTerm.value.toLowerCase();
+                entries = entries.filter(entry => {
+                    return (
+                        (entry.course_name && entry.course_name.toLowerCase().includes(search)) ||
+                        (entry.subject_name && entry.subject_name.toLowerCase().includes(search)) ||
+                        (entry.class_name && entry.class_name.toLowerCase().includes(search)) ||
+                        (entry.teacher_names && entry.teacher_names.some(name => name.toLowerCase().includes(search)))
+                    );
+                });
+            }
+
+            // Apply class filter
+            if (selectedClassFilter.value) {
+                entries = entries.filter(entry => entry.class_id === selectedClassFilter.value);
+            }
+
+            // Apply lesson schedule filter
+            if (!showLessonSchedules.value) {
+                entries = entries.filter(entry => entry.course_id);
+            }
+
+            return entries;
+        });
+
+        const yearGroups = computed(() => {
+            const years = new Set();
+            props.classes.forEach(cls => {
+                if (cls.year_group) years.add(cls.year_group);
+            });
+            return Array.from(years).sort();
+        });
+
+        const availableClasses = computed(() => {
+            // Filter classes based on year filter if applied
+            if (selectedYearFilter.value) {
+                return props.classes.filter(cls => cls.year_group === selectedYearFilter.value);
+            }
+            return props.classes.slice().sort((a, b) => a.name.localeCompare(b.name));
+        });
+
+        // Helper functions
+        function formatTime(timeString) {
+            if (!timeString) return '';
+            const parts = timeString.split(':');
+            return parts.length >= 2 ? `${parts[0]}:${parts[1]}` : timeString;
+        }
+
+        function formatDate(date) {
+            if (!date) return '';
+            return new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        }
+
+        function getCellAssignments(dayId, periodId) {
+            // Use optimized filtered entries for better performance
+            let assignments = filteredEntries.value.filter(assignment => {
+                // Enhanced day ID matching - handle multiple day ID formats robustly
+                const currentDay = props.schoolDays.find(d => d.id === dayId || d.day_id === dayId);
+
+                // Try multiple approaches for day matching to handle different data structures
+                const assignmentDayMatch =
+                    assignment.day_id === dayId || // Direct day_id match
+                    assignment.day_id === currentDay?.day_id || // Match via current day's day_id
+                    assignment.day_id === currentDay?.id || // Match via current day's id
+                    assignment.day_number === currentDay?.day_number || // Match via day number
+                    assignment.day_number === currentDay?.id || // Sometimes day_number matches id
+                    (currentDay?.name && assignment.day_name_en === currentDay.name) || // Match by day name
+                    (currentDay?.name_en && assignment.day_name_en === currentDay.name_en); // Match by English name
+
+                // SIMPLIFIED PERIOD MATCHING: Since we now use canonical UUID IDs,
+                // assignment.period_id should directly match periodId
+                const currentPeriod = props.periods.find(p => p.id === periodId);
+                const periodMatch =
+                    assignment.period_id === periodId || // Primary: Direct UUID match
+                    (assignment.block_number &&
+                        currentPeriod?.blockNumber &&
+                        assignment.block_number === currentPeriod.blockNumber); // Fallback: block number match
+
+                return assignmentDayMatch && periodMatch;
+            });
+
+            // Sort assignments by class name, then by course/subject name (already filtered by filteredEntries)
+            const sortedAssignments = assignments.sort((a, b) => {
+                const classA = getClassName(a.class_id);
+                const classB = getClassName(b.class_id);
+
+                if (classA !== classB) {
+                    return classA.localeCompare(classB);
+                }
+
+                // If same class, sort by course/subject name
+                const courseA = getCourseName(a.course_id) || getSubjectName(a.subject_id);
+                const courseB = getCourseName(b.course_id) || getSubjectName(b.subject_id);
+                return courseA.localeCompare(courseB);
+            });
+
+            return sortedAssignments;
+        }
+
+        function getCellClasses(dayId, periodId) {
+            const assignments = getCellAssignments(dayId, periodId);
+            const classes = [];
+
+            if (safeLength(assignments) > 0) {
+                classes.push('has-assignments');
+                if (safeLength(assignments) > 1) classes.push('multiple-assignments');
+            }
+
+            // Check for conflicts
+            const hasConflict = assignments.some(assignment =>
+                props.conflicts.some(conflict => conflict.day_id === dayId && conflict.period_id === periodId)
+            );
+            if (hasConflict) classes.push('has-conflicts');
+
+            return classes;
+        }
+
+        function getCellAriaLabel(day, period) {
+            const assignments = getCellAssignments(day.id, period.id);
+            if (safeLength(assignments) === 0) {
+                return `${day.name} ${period.name}: Empty, click to add assignment`;
+            }
+            const courseNames = assignments.map(a => getDisplayName(a)).join(', ');
+            return `${day.name} ${period.name}: ${courseNames}, ${safeLength(assignments)} assignment${safeLength(assignments) > 1 ? 's' : ''}`;
+        }
+
+        function getAssignmentClasses(assignment) {
+            const classes = [];
+            if (hasConflicts(assignment)) classes.push('has-conflict');
+            if (hasDeletedEntities(assignment)) classes.push('has-deleted-entities');
+
+            // Add class for lesson schedules (no course, only class and subject)
+            const courseName = getCourseName(assignment.course_id);
+            if (!courseName && assignment.subject_id) {
+                classes.push('lesson-schedule');
+            }
+
+            return classes;
+        }
+
+        function getAssignmentStyles(assignment) {
+            const course = props.courses.find(c => c.id === assignment.course_id);
+            const cls = props.classes.find(c => c.id === assignment.class_id);
+
+            return {
+                borderLeft: `4px solid ${course?.color || cls?.color || '#e0e0e0'}`,
+                backgroundColor: course?.color ? `${course.color}15` : cls?.color ? `${cls.color}15` : '#f9f9f9',
+            };
+        }
+
+        function getCourseName(courseId) {
+            if (!courseId) {
+                return null; // Return null instead of "No Course" to allow fallback to subject
+            }
+            const course = props.courses.find(c => c.id === courseId);
+            const courseName = course?.name || course?.course_name || course?.title;
+
+            if (!course) {
+                return null; // Return null to allow fallback to subject
+            }
+
+            return courseName || null;
+        }
+
+        function getSubjectName(subjectId) {
+            if (!subjectId) return null;
+            const subject = props.subjects.find(s => s.id === subjectId);
+            return subject?.name || subject?.title || subject?.subject_name || `Subject ${subjectId}`;
+        }
+
+        function getDisplayName(assignment) {
+            // Prioritize course name, then subject name, then fallback
+            const courseName = getCourseName(assignment.course_id);
+            if (courseName) return courseName;
+
+            const subjectName = getSubjectName(assignment.subject_id);
+            if (subjectName) return subjectName;
+
+            return 'No Course';
+        }
+
+        function getClassName(classId) {
+            if (!classId) return '';
+            const cls = props.classes.find(c => c.id === classId);
+            return cls?.name || 'No Class';
+        }
+
+        function getTeacherNames(teacherIds) {
+            if (!teacherIds?.length) return 'No Teacher';
+            const names = teacherIds.map(id => {
+                const teacher = props.teachers.find(t => t.id === id);
+                return teacher?.name || 'Unknown Teacher';
+            });
+            return names.join(', ');
+        }
+
+        function getAssignmentTeachers(assignment) {
+            // First try to use direct teacher_names if available
+            if (
+                assignment.teacher_names &&
+                Array.isArray(assignment.teacher_names) &&
+                assignment.teacher_names.length > 0
+            ) {
+                return assignment.teacher_names.join(', ');
+            }
+
+            // Fallback to looking up teacher names by IDs
+            const teacherIds = assignment.staff_ids || assignment.teacher_ids;
+            if (teacherIds && teacherIds.length > 0) {
+                return getTeacherNames(teacherIds);
+            }
+
+            return '';
+        }
+
+        function getRoomName(roomId) {
+            if (!roomId) return 'No Room';
+            const room = props.rooms.find(r => r.id === roomId);
+            return room?.name || 'Unknown Room';
+        }
+
+        function hasConflicts(assignment) {
+            return props.conflicts.some(
+                conflict =>
+                    conflict.day_id === assignment.day_id &&
+                    conflict.period_id === assignment.period_id &&
+                    (conflict.assignment_id === assignment.id ||
+                        conflict.teacher_ids?.some(id => assignment.teacher_ids?.includes(id)) ||
+                        conflict.class_id === assignment.class_id ||
+                        conflict.room_id === assignment.room_id)
+            );
+        }
+
+        function hasDeletedEntities(assignment) {
+            const courseExists = !assignment.course_id || props.courses.some(c => c.id === assignment.course_id);
+            const classExists = !assignment.class_id || props.classes.some(c => c.id === assignment.class_id);
+            const roomExists = !assignment.room_id || props.rooms.some(r => r.id === assignment.room_id);
+            const teachersExist =
+                !assignment.teacher_ids?.length ||
+                assignment.teacher_ids.every(id => props.teachers.some(t => t.id === id));
+
+            return !courseExists || !classExists || !roomExists || !teachersExist;
+        }
+
+        // Event handlers
+        function handleCellClick(dayId, periodId, period) {
+            console.log('🖱️ [SchedulerGrid] Cell clicked:', { dayId, periodId, period: period?.name, isReadOnly: props.isReadOnly });
+            
+            if (props.isReadOnly) {
+                console.log('📖 [SchedulerGrid] Read-only mode - ignoring cell click');
+                return;
+            }
+
+            // Check if cell has assignments
+            const assignments = getCellAssignments(dayId, periodId);
+            if (assignments.length === 0) {
+                console.log('📋 [SchedulerGrid] Empty cell clicked - opening course selection modal');
+                openAssignmentModal(dayId, periodId, period);
+            } else {
+                console.log('📋 [SchedulerGrid] Cell with assignments clicked - emitting cell-click event');
+                emit('cell-click', { dayId, periodId, period });
+            }
+        }
+
+        function openAssignmentModal(dayId, periodId, period) {
+            if (props.isReadOnly) return;
+
+            console.log('🎯 [SchedulerGrid] Opening course selection modal for:', { dayId, periodId, period: period.name });
+
+            // Get available courses for this time slot
+            const availableCourses = getAvailableCoursesForSlot(dayId, periodId);
+            
+            // Find day and period names for the modal
+            const day = props.schoolDays.find(d => d.id === dayId);
+            const dayName = day ? day.name : `Day ${dayId}`;
+            const periodName = period ? period.name : `Period ${periodId}`;
+
+            // Set course selection data
+            courseSelectionData.value = {
+                dayId,
+                periodId,
+                dayName,
+                periodName,
+                period,
+                availableCourses,
+            };
+
+            // Show the course selection modal
+            showCourseSelectionModal.value = true;
+
+            // Also emit the original event for backward compatibility
+            emit('cell-click', {
+                dayId,
+                periodId,
+                period,
+                mode: 'add',
+            });
+        }
+
+        function openAssignmentDetails(assignment) {
+            emit('assignment-details', assignment);
+        }
+
+        // New event handlers
+        function handleLessonScheduleToggle() {
+            emit('toggle-lesson-schedules', showLessonSchedules.value);
+        }
+
+        function handleClassFilterChange() {
+            // Class filter is handled locally - no need to emit
+        }
+
+        function handleModeSwitch() {
+            emit('mode-changed', isLiveMode.value ? 'live' : 'planning');
+        }
+        function togglePeriodFocus(periodId) {
+            if (focusedPeriodId.value === periodId) {
+                focusedPeriodId.value = null;
+            } else {
+                focusedPeriodId.value = periodId;
+            }
+            emit('period-focus-changed', focusedPeriodId.value);
+        }
+
+        function clearPeriodFocus() {
+            focusedPeriodId.value = null;
+            emit('period-focus-changed', null);
+        }
+
+        function getFocusedPeriodName() {
+            const period = props.periods.find(p => p.id === focusedPeriodId.value);
+            return period?.name || period?.label || 'Unknown Period';
+        }
+
+        function getAvailableCoursesForSlot(dayId, periodId) {
+            // CRITICAL FIX: Normalize courses to use possibleSlots with dayId parsing
+            const normalizedCourses = props.courses.map((course, idx) => normalizeCourse(course, idx));
+
+            // Filter courses that are available for this specific day/period using dayId
+            let availableCourses = normalizedCourses.filter(course => {
+                // If course has no time slot restrictions, it's available anywhere
+                if (safeLength(course.possibleSlots) === 0) {
+                    return true;
+                }
+
+                // Check if this day/period combination is in the course's possible slots
+                const isAvailable = course.possibleSlots.some(slot => {
+                    return slot.dayId === dayId && slot.periodId === periodId;
+                });
+
+                return isAvailable;
+            });
+
+            // Apply search filter
+            if (debouncedSearchTerm.value) {
+                const search = debouncedSearchTerm.value.toLowerCase();
+                availableCourses = availableCourses.filter(course => {
+                    return (
+                        (course.name && course.name.toLowerCase().includes(search)) ||
+                        (course.course_name && course.course_name.toLowerCase().includes(search)) ||
+                        (course.title && course.title.toLowerCase().includes(search)) ||
+                        (course.course_code && course.course_code.toLowerCase().includes(search)) ||
+                        (course.subject_name && course.subject_name.toLowerCase().includes(search)) ||
+                        (course.description && course.description.toLowerCase().includes(search))
+                    );
+                });
+            }
+
+            // Apply class filter
+            if (selectedClassFilter.value) {
+                const selectedClass = props.classes.find(cls => cls.id === selectedClassFilter.value);
+                if (selectedClass) {
+                    availableCourses = availableCourses.filter(course => {
+                        // Check if course is available for the selected class's year group
+                        if (course.is_for_year_groups && safeLength(course.is_for_year_groups) > 0) {
+                            return course.is_for_year_groups.includes(selectedClass.year_group);
+                        }
+                        return true; // If no restrictions, course is available
+                    });
+                }
+            }
+
+            console.log('🎯 [SchedulerGrid] Available courses for slot (after filtering):', {
+                dayId,
+                periodId,
+                availableCount: safeLength(availableCourses),
+                searchTerm: debouncedSearchTerm.value,
+                classFilter: selectedClassFilter.value,
+                courses: availableCourses.map(c => ({ id: c.id, name: c.name || c.course_name })),
+            });
+
+            return availableCourses;
+        }
+
+        function getCourseCardStyle(course) {
+            return {
+                borderLeft: `4px solid ${course.color || '#007cba'}`,
+                backgroundColor: course.color ? `${course.color}15` : '#f0f8ff',
+            };
+        }
+
+        function assignCourseToSlot(course, dayId, periodId) {
+            console.log(
+                '🎯 [Scheduler] Opening teacher/room selection for course:',
+                course.name || course.course_name,
+                'to day:',
+                dayId,
+                'period:',
+                periodId,
+                props.isReadOnly ? '(READ-ONLY MODE - EVENTS ONLY)' : '(EDITABLE MODE)'
+            );
+
+            // Store the course data for the modal
+            modalCourseData.value = {
+                courseId: course.id,
+                courseName: course.name || course.course_name || '',
+                courseCode: course.code || course.course_code || '',
+                dayId: dayId,
+                periodId: periodId,
+            };
+
+            // Show the teacher/room selection modal (works in both read-only and editable modes)
+            showTeacherRoomModal.value = true;
+
+            // Also emit drag-end event
+            emit('scheduler-drag-end', {
+                courseId: course.id,
+                courseName: course.name || course.course_name || '',
+                courseCode: course.code || course.course_code || '',
+                success: true,
+                source: 'drag-end',
+                timestamp: new Date().toISOString(),
+            });
+
+            console.log('✅ [Scheduler] Drop events emitted to parent component');
+        }
+
+        // Modal handler functions
+        function handleTeacherRoomSubmit(payload) {
+            console.log('🎯 [Modal] Teacher/room assignment submitted:', payload);
+
+            // Generate unique draft ID for new assignments
+            // Use existing draftId from props only as fallback - each assignment should have its own unique draft ID
+            const uniqueDraftId = generateUniqueDraftId();
+
+            // Emit the scheduled assignment event to parent component (wwElement.vue)
+            emit('scheduler-drop', {
+                schoolId: props.schoolId || null,
+                draftId: uniqueDraftId, // Generate unique draft ID for each new assignment
+                dayId: payload.dayId,
+                periodId: payload.periodId,
+                courseId: payload.courseId,
+                courseName: payload.courseName,
+                courseCode: modalCourseData.value?.courseCode || '',
+                teacherIds: payload.teacherIds,
+                primaryTeacherId: payload.primaryTeacherId,
+                roomId: payload.roomId,
+                source: 'modal-assignment',
+                timestamp: payload.timestamp,
+            });
+
+            // Close the modal
+            showTeacherRoomModal.value = false;
+            modalCourseData.value = null;
+        }
+
+        function handleTeacherRoomCancel() {
+            console.log('❌ [Modal] Teacher/room assignment cancelled');
+            showTeacherRoomModal.value = false;
+            modalCourseData.value = null;
+        }
+
+        // Course Selection Modal handlers
+        function handleCourseSelectionSubmit(payload) {
+            console.log('🎯 [CourseSelection] Course selected:', payload);
+
+            // Close course selection modal
+            showCourseSelectionModal.value = false;
+
+            // Set up teacher/room selection modal data
+            modalCourseData.value = {
+                courseId: payload.courseId,
+                courseName: payload.courseName,
+                courseCode: payload.courseCode,
+                dayId: payload.dayId,
+                periodId: payload.periodId,
+            };
+
+            // Show teacher/room selection modal
+            showTeacherRoomModal.value = true;
+
+            // Clear course selection data
+            courseSelectionData.value = null;
+        }
+
+        function handleCourseSelectionCancel() {
+            console.log('❌ [CourseSelection] Course selection cancelled');
+            showCourseSelectionModal.value = false;
+            courseSelectionData.value = null;
+        }
+
+        function getNoPreferredDaysCourses() {
+            // Get courses that have no possible_time_slots restrictions for the focused period
+            const coursesWithoutRestrictions = props.courses.filter(course => {
+                // Course has no time slot restrictions
+                return !course.possible_time_slots || safeLength(course.possible_time_slots) === 0;
+            });
+
+            // Filter by current search term and class filter for consistency
+            let filteredCourses = coursesWithoutRestrictions;
+
+            if (debouncedSearchTerm.value) {
+                const search = debouncedSearchTerm.value.toLowerCase();
+                filteredCourses = filteredCourses.filter(course => {
+                    return (
+                        (course.name && course.name.toLowerCase().includes(search)) ||
+                        (course.course_name && course.course_name.toLowerCase().includes(search)) ||
+                        (course.title && course.title.toLowerCase().includes(search)) ||
+                        (course.course_code && course.course_code.toLowerCase().includes(search)) ||
+                        (course.subject_name && course.subject_name.toLowerCase().includes(search))
+                    );
+                });
+            }
+
+            // Filter by selected class if a class filter is applied
+            if (selectedClassFilter.value) {
+                // Check if the course is available for the selected class
+                filteredCourses = filteredCourses.filter(course => {
+                    // If course has is_for_year_groups, check if it includes the selected class's year
+                    const selectedClass = props.classes.find(cls => cls.id === selectedClassFilter.value);
+                    if (selectedClass && course.is_for_year_groups) {
+                        return course.is_for_year_groups.includes(selectedClass.year_group);
+                    }
+                    return true; // If no year restrictions, course is available
+                });
+            }
+
+            console.log('📅 [NoPreferredDays] Filtered courses:', {
+                total: safeLength(coursesWithoutRestrictions),
+                afterSearch: safeLength(filteredCourses),
+                searchTerm: debouncedSearchTerm.value,
+                classFilter: selectedClassFilter.value,
+            });
+
+            return filteredCourses;
+        }
+
+        function assignCourseToFocusedSlot(course) {
+            if (props.isReadOnly || !focusedPeriodId.value) return;
+
+            // For no-preferred-days courses, we could assign to any day
+            // Let's just show the assignment modal for the first day
+            const firstDay = visibleDays.value[0];
+            if (firstDay) {
+                assignCourseToSlot(course, firstDay.id, focusedPeriodId.value);
+            }
+        }
+
+        // Drag and Drop State
+        const draggedCourse = ref(null);
+        const draggedAssignment = ref(null);
+        const dragOverCell = ref(null);
+
+        // Drag and Drop Methods
+        function handleCourseDragStart(event, course) {
+            console.log(
+                '🚀 [Scheduler] Drag started:',
+                course.name || course.course_name,
+                props.isReadOnly ? '(READ-ONLY MODE)' : '(EDITABLE MODE)'
+            );
+            draggedCourse.value = course;
+
+            // Emit Vue event to parent for drag-start
+            emit('scheduler-drag-start', {
+                courseId: course.id,
+                courseName: course.name || course.course_name || '',
+                courseCode: course.code || course.course_code || '',
+                source: 'drag-start',
+                timestamp: new Date().toISOString(),
+            });
+
+            // Set drag data
+            event.dataTransfer.setData(
+                'text/plain',
+                JSON.stringify({
+                    type: 'course',
+                    course: course,
+                    id: course.id,
+                })
+            );
+
+            event.dataTransfer.effectAllowed = 'copy';
+
+            // Add visual feedback
+            event.target.style.opacity = '0.5';
+        }
+
+        function handleCourseDragEnd(event) {
+            console.log('🎯 [DragDrop] Course drag ended');
+            const course = draggedCourse.value;
+
+            // Emit Vue event to parent for drag-end
+            emit('scheduler-drag-end', {
+                courseId: course?.id || null,
+                courseName: course?.name || course?.course_name || null,
+                courseCode: course?.code || course?.course_code || null,
+                success: false, // Will be updated to true in assignCourseToSlot if successful
+                source: 'drag-end',
+                timestamp: new Date().toISOString(),
+            });
+
+            draggedCourse.value = null;
+            event.target.style.opacity = '1';
+        }
+
+        function handleAssignmentDragStart(event, assignment, dayId, periodId) {
+            console.log(
+                '🎯 [DragDrop] Assignment drag started:',
+                assignment.course_name || assignment.subject_name,
+                props.isReadOnly ? '(READ-ONLY MODE)' : '(EDITABLE MODE)'
+            );
+            draggedAssignment.value = {
+                assignment,
+                originalDayId: dayId,
+                originalPeriodId: periodId,
+            };
+
+            // Set drag data
+            event.dataTransfer.setData(
+                'text/plain',
+                JSON.stringify({
+                    type: 'assignment',
+                    assignment: assignment,
+                    originalDayId: dayId,
+                    originalPeriodId: periodId,
+                })
+            );
+
+            event.dataTransfer.effectAllowed = 'move';
+
+            // Add visual feedback
+            event.target.style.opacity = '0.5';
+        }
+
+        function handleAssignmentDragEnd(event) {
+            console.log('🎯 [DragDrop] Assignment drag ended');
+            draggedAssignment.value = null;
+            event.target.style.opacity = '1';
+
+            // Clear any drag over effects
+            dragOverCell.value = null;
+        }
+
+        function handleCellDragOver(event, dayId, periodId) {
+            event.preventDefault();
+
+            if (!draggedCourse.value && !draggedAssignment.value) return;
+
+            // Show drop allowed effect
+            event.dataTransfer.dropEffect = draggedAssignment.value ? 'move' : 'copy';
+
+            return false;
+        }
+
+        function handleCellDragEnter(event, dayId, periodId) {
+            event.preventDefault();
+
+            if (!draggedCourse.value && !draggedAssignment.value) return;
+
+            // Add visual feedback to cell
+            dragOverCell.value = `${dayId}-${periodId}`;
+
+            // Add CSS class for visual feedback
+            event.currentTarget.classList.add('drag-over');
+        }
+
+        function handleCellDragLeave(event, dayId, periodId) {
+            // Only remove feedback if we're actually leaving the cell
+            if (!event.currentTarget.contains(event.relatedTarget)) {
+                dragOverCell.value = null;
+                event.currentTarget.classList.remove('drag-over');
+            }
+        }
+
+        function handleCellDrop(event, dayId, periodId) {
+            event.preventDefault();
+
+            // Clear visual feedback
+            dragOverCell.value = null;
+            event.currentTarget.classList.remove('drag-over');
+
+            try {
+                const dragData = JSON.parse(event.dataTransfer.getData('text/plain'));
+
+                if (dragData.type === 'course') {
+                    // Assign new course to cell
+                    const course = dragData.course;
+                    console.log(
+                        '🎯 [Scheduler] Dropping:',
+                        course.name || course.course_name,
+                        'to day:',
+                        dayId,
+                        'period:',
+                        periodId
+                    );
+
+                    assignCourseToSlot(course, dayId, periodId);
+                } else if (dragData.type === 'assignment') {
+                    // Move existing assignment to new cell
+                    const assignment = dragData.assignment;
+                    const originalDayId = dragData.originalDayId;
+                    const originalPeriodId = dragData.originalPeriodId;
+
+                    console.log(
+                        '🎯 [DragDrop] Moving assignment from:',
+                        originalDayId,
+                        originalPeriodId,
+                        'to:',
+                        dayId,
+                        periodId
+                    );
+
+                    // Check if it's actually moving to a different cell
+                    if (originalDayId !== dayId || originalPeriodId !== periodId) {
+                        // Emit scheduler-drop event for WeWeb workflows (assignment move)
+                        // For moves, preserve the original assignment's draft ID
+                        emit('scheduler-drop', {
+                            schoolId: props.schoolId || null,
+                            draftId: assignment.draft_id || assignment.draftId || assignment.id, // Preserve original assignment's draft ID
+                            dayId: dayId,
+                            periodId: periodId,
+                            courseId: assignment.course_id || '',
+                            courseName: assignment.course_name || assignment.display_cell || '',
+                            courseCode: assignment.course_code || '',
+                            teacherIds: assignment.teacher_ids || [],
+                            primaryTeacherId: assignment.primary_teacher_id || null,
+                            roomId: assignment.room_id || null,
+                            source: 'assignment-move',
+                            timestamp: new Date().toISOString(),
+                            // Additional fields for move operation
+                            fromDayId: originalDayId,
+                            fromPeriodId: originalPeriodId,
+                            action: 'move',
+                        });
+
+                        // Emit update to move the assignment in the data
+                        emit('update-assignments', {
+                            action: 'move',
+                            assignment: assignment,
+                            fromDayId: originalDayId,
+                            fromPeriodId: originalPeriodId,
+                            toDayId: dayId,
+                            toPeriodId: periodId,
+                        });
+                    }
+                }
+            } catch (error) {
+                console.error('🚨 [DragDrop] Error handling drop:', error);
+            }
+        }
+
+        // Inline Editing Methods
+        function isEditing(assignmentId) {
+            return editingAssignment.value?.id === assignmentId;
+        }
+
+        function handleAssignmentClick(assignment, dayId, periodId) {
+            console.log('👆 [Left-Click] Assignment clicked:', {
+                assignment: assignment.display_cell || assignment.course_name,
+                dayId,
+                periodId,
+                isReadOnly: props.isReadOnly,
+            });
+
+            if (props.isReadOnly) {
+                console.log('📖 [Left-Click] Read-only mode - emitting assignment details');
+                // In read-only mode, just emit the assignment details event for external handling
+                emit('assignment-details', assignment);
+                return;
+            }
+
+            // Close context menu if open
+            contextMenu.value.show = false;
+
+            // For planning mode, emit assignment details for workflow testing
+            emit('assignment-details', assignment);
+        }
+
+        function handleAssignmentRightClick(event, assignment, dayId, periodId) {
+            console.log('🖱️ [Right-Click] Assignment right-click detected:', {
+                assignment: assignment.display_cell || assignment.course_name,
+                dayId,
+                periodId,
+                isReadOnly: props.isReadOnly,
+                event: event.type,
+            });
+
+            // Close any existing inline edit first
+            if (editingAssignment.value) {
+                console.log('📝 [Right-Click] Canceling existing inline edit');
+                cancelInlineEdit();
+            }
+
+            // Show context menu in both read-only and editable modes for testing purposes
+            console.log('📋 [Right-Click] Showing context menu at:', { x: event.clientX, y: event.clientY });
+            contextMenu.value = {
+                show: true,
+                x: event.clientX,
+                y: event.clientY,
+                assignment,
+                dayId,
+                periodId,
+            };
+        }
+
+        function closeContextMenu() {
+            console.log('❌ [Context Menu] Closing context menu');
+            contextMenu.value.show = false;
+        }
+
+        function editAssignmentFromContext() {
+            console.log('✏️ [Context Menu] Edit assignment selected');
+            if (contextMenu.value.assignment) {
+                if (props.isReadOnly) {
+                    // In read-only mode, show inline editor in view-only mode for assignment details
+                    console.log('📖 [Context Menu] Read-only mode - showing assignment details in inline editor');
+                    startInlineEditReadOnly(
+                        contextMenu.value.assignment,
+                        contextMenu.value.dayId,
+                        contextMenu.value.periodId
+                    );
+                } else {
+                    // In editable mode, start inline editing
+                    startInlineEdit(contextMenu.value.assignment, contextMenu.value.dayId, contextMenu.value.periodId);
+                }
+            }
+            closeContextMenu();
+        }
+
+        function deleteAssignmentFromContext() {
+            console.log('🗑️ [Context Menu] Delete assignment selected');
+            if (contextMenu.value.assignment) {
+                if (props.isReadOnly) {
+                    // In read-only mode, emit scheduler:remove event for testing workflows
+                    console.log('📖 [Context Menu] Read-only mode - emitting scheduler:remove for testing');
+                    const assignment = contextMenu.value.assignment;
+                    const emitFunction = props.parentEmit || emit;
+                    emitSchedulerRemoveEvent(emitFunction, {
+                        schoolId: props.schoolId,
+                        draftId: assignment.id, // Use assignment's unique draft ID instead of overall draft schedule ID
+                        dayId: assignment.day_id,
+                        periodId: assignment.period_id,
+                        assignmentId: assignment.id,
+                        courseId: assignment.course_id,
+                        courseName: assignment.course_name || assignment.display_cell || '',
+                    });
+                } else {
+                    // In editable mode, delete the assignment
+                    deleteInlineAssignment(contextMenu.value.assignment);
+                }
+            }
+            closeContextMenu();
+        }
+
+        function startInlineEdit(assignment, dayId, periodId) {
+            if (props.isReadOnly) return;
+
+            console.log('✏️ [InlineEdit] Starting edit for assignment:', assignment.id);
+
+            // Close any existing edit
+            if (editingAssignment.value) {
+                cancelInlineEdit();
+            }
+
+            editingAssignment.value = assignment;
+            editingCell.value = { dayId, periodId };
+        }
+
+        function startInlineEditReadOnly(assignment, dayId, periodId) {
+            console.log('👁️ [InlineEdit] Starting read-only view for assignment:', assignment.id);
+
+            // Close any existing edit
+            if (editingAssignment.value) {
+                cancelInlineEdit();
+            }
+
+            editingAssignment.value = assignment;
+            editingCell.value = { dayId, periodId };
+        }
+
+        function saveInlineEdit(updatedAssignment) {
+            console.log('💾 [InlineEdit] Saving changes for assignment:', updatedAssignment.id);
+
+            // Create updated assignments array
+            const currentSchedules = isLiveMode.value ? props.liveSchedules : props.draftSchedules;
+            const updatedSchedules = currentSchedules.map(schedule =>
+                schedule.id === updatedAssignment.id ? updatedAssignment : schedule
+            );
+
+            // Emit update
+            emit('update-assignments', updatedSchedules);
+
+            // Clear editing state
+            editingAssignment.value = null;
+            editingCell.value = null;
+        }
+
+        function cancelInlineEdit() {
+            console.log('❌ [InlineEdit] Cancelling edit');
+            editingAssignment.value = null;
+            editingCell.value = null;
+        }
+
+        function deleteInlineAssignment(assignment) {
+            console.log('🗑️ [InlineEdit] Deleting assignment:', assignment.id);
+
+            // Emit scheduler:remove event if configured
+            if (props.emitDropEvents) {
+                const emitFunction = props.parentEmit || emit;
+                emitSchedulerRemoveEvent(emitFunction, {
+                    schoolId: props.schoolId,
+                    draftId: assignment.id, // Use assignment's unique draft ID instead of overall draft schedule ID
+                    dayId: assignment.day_id,
+                    periodId: assignment.period_id,
+                    assignmentId: assignment.id,
+                    courseId: assignment.course_id,
+                    courseName: assignment.course_name || assignment.display_cell || '',
+                });
+            }
+
+            // Create updated assignments array without this assignment
+            const currentSchedules = isLiveMode.value ? props.liveSchedules : props.draftSchedules;
+            const updatedSchedules = currentSchedules.filter(schedule => schedule.id !== assignment.id);
+
+            // Emit update
+            emit('update-assignments', updatedSchedules);
+
+            // Clear editing state
+            editingAssignment.value = null;
+            editingCell.value = null;
+        }
+
+        function handleCourseEdit(courseData) {
+            console.log('📝 [CourseEdit] Emitting course edit event:', courseData);
+
+            // Emit the course edit event for external navigation
+            emit('course-edit', courseData);
+        }
+
+        // Grade Statistics Functions (moved from GradeStatistics component)
+
+        // Parse grade from is_for_year_g object
+        function parseGrades(course) {
+            const grades = [];
+
+            if (course.is_for_year_g && typeof course.is_for_year_g === 'object') {
+                // Handle format like { 0: 6, 1: 5, 2: 4 } where keys are indices and values are grades
+                for (const [index, grade] of Object.entries(course.is_for_year_g)) {
+                    if (grade && grade > 0) {
+                        grades.push(Number(grade));
+                    }
+                }
+            } else if (course.is_for_year_groups && Array.isArray(course.is_for_year_groups)) {
+                // Handle array format like [4, 5, 6]
+                grades.push(...course.is_for_year_groups.map(g => Number(g)).filter(g => g > 0));
+            } else if (course.year_groups && Array.isArray(course.year_groups)) {
+                // Handle alternative year_groups format
+                grades.push(...course.year_groups.map(g => Number(g)).filter(g => g > 0));
+            }
+
+            return [...new Set(grades)].sort((a, b) => a - b); // Remove duplicates and sort
+        }
+
+        // Find course by courseId in courses array
+        function findCourseById(courseId) {
+            return safeArray(props.courses).find(course => course.id === courseId);
+        }
+
+        // Get scheduled courses for a specific day and period from draft schedules
+        function getScheduledCoursesForSlot(dayId, periodId) {
+            const scheduledCourses = [];
+
+            // Find all draft schedule entries for this specific day and period
+            const scheduledEntries = safeArray(props.draftSchedules).filter(
+                entry => entry.day_id === dayId && entry.period_id === periodId
+            );
+
+            // For each scheduled entry, find the corresponding course and calculate remaining spots
+            scheduledEntries.forEach(entry => {
+                const course = findCourseById(entry.course_id);
+                if (course) {
+                    // Calculate remaining spots (free_spaces if available, otherwise max_students)
+                    const totalSpots = course.max_students || course.capacity || 0;
+                    const usedSpots = 0; // For now, assume all spots are available as we're looking at free_spaces
+                    const freeSpots = entry.free_spaces !== undefined ? entry.free_spaces : totalSpots;
+
+                    scheduledCourses.push({
+                        ...course,
+                        scheduledEntry: entry,
+                        freeSpots: freeSpots,
+                        totalSpots: totalSpots,
+                    });
+                }
+            });
+
+            return scheduledCourses;
+        }
+
+        // Get all unique grades from all courses
+        const allGrades = computed(() => {
+            const gradesSet = new Set();
+
+            safeArray(props.courses).forEach(course => {
+                const courseGrades = parseGrades(course);
+                courseGrades.forEach(grade => gradesSet.add(grade));
+            });
+
+            return Array.from(gradesSet).sort((a, b) => a - b);
+        });
+
+        // Calculate daily grade statistics for a specific day using draft schedules
+        function getDailyGradeStats(dayId, periodId) {
+            if (!periodId) return [];
+
+            // Get courses that are actually scheduled in this day/period from draft schedules
+            const scheduledCourses = getScheduledCoursesForSlot(dayId, periodId);
+            const gradeStats = [];
+
+            allGrades.value.forEach(grade => {
+                let totalSpots = 0;
+                let coursesCount = 0;
+                let totalGradeAllocation = 0; // For calculating average
+
+                scheduledCourses.forEach(course => {
+                    const courseGrades = parseGrades(course);
+                    if (courseGrades.includes(grade)) {
+                        coursesCount++;
+                        const freeSpots = course.freeSpots || 0;
+
+                        if (courseGrades.length === 1) {
+                            // Course is exclusively for this grade
+                            totalSpots += freeSpots;
+                            totalGradeAllocation += freeSpots;
+                        } else {
+                            // Course is shared between multiple grades
+                            const spotsPerGrade = freeSpots / courseGrades.length;
+                            totalSpots += freeSpots; // Total spots available for this grade
+                            totalGradeAllocation += spotsPerGrade; // Average spots allocated to this grade
+                        }
+                    }
+                });
+
+                if (coursesCount > 0 || totalSpots > 0) {
+                    gradeStats.push({
+                        grade,
+                        totalSpots,
+                        averageSpots: totalGradeAllocation,
+                        coursesCount,
+                    });
+                }
+            });
+
+            return gradeStats;
+        }
+
+        return {
+            // State
+            showNonInstructional,
+            showLessonSchedules,
+            isLiveMode,
+            selectedYearFilter,
+            selectedClassFilter,
+            focusedPeriodId,
+            draggedCourse,
+            draggedAssignment,
+            dragOverCell,
+            editingAssignment,
+            editingCell,
+            showTeacherRoomModal,
+            modalCourseData,
+            showCourseSelectionModal,
+            courseSelectionData,
+            searchTerm,
+            debouncedSearchTerm,
+
+            // Computed
+            visibleDays,
+            visiblePeriods,
+            filteredEntries,
+            yearGroups,
+            availableClasses,
+
+            // Methods
+            formatTime,
+            formatDate,
+            getCellAssignments,
+            getCellClasses,
+            getCellAriaLabel,
+            getAssignmentClasses,
+            getAssignmentStyles,
+            getCourseName,
+            getSubjectName,
+            getDisplayName,
+            getClassName,
+            getTeacherNames,
+            getAssignmentTeachers,
+            getRoomName,
+            hasConflicts,
+            hasDeletedEntities,
+            handleCellClick,
+            openAssignmentModal,
+            openAssignmentDetails,
+            handleLessonScheduleToggle,
+            handleClassFilterChange,
+            handleModeSwitch,
+            togglePeriodFocus,
+            clearPeriodFocus,
+            getFocusedPeriodName,
+            getAvailableCoursesForSlot,
+            getCourseCardStyle,
+            assignCourseToSlot,
+            getNoPreferredDaysCourses,
+            assignCourseToFocusedSlot,
+
+            // Drag and Drop Methods
+            handleCourseDragStart,
+            handleCourseDragEnd,
+            handleAssignmentDragStart,
+            handleAssignmentDragEnd,
+            handleCellDragOver,
+            handleCellDragEnter,
+            handleCellDragLeave,
+            handleCellDrop,
+
+            // Inline Editing Methods
+            isEditing,
+            handleAssignmentClick,
+            handleAssignmentRightClick,
+            startInlineEdit,
+            startInlineEditReadOnly,
+            saveInlineEdit,
+            cancelInlineEdit,
+            deleteInlineAssignment,
+            handleCourseEdit,
+
+            // Context Menu Methods
+            closeContextMenu,
+            editAssignmentFromContext,
+            deleteAssignmentFromContext,
+            contextMenu,
+
+            // Modal handlers
+            handleTeacherRoomSubmit,
+            handleTeacherRoomCancel,
+            handleCourseSelectionSubmit,
+            handleCourseSelectionCancel,
+
+            // Utility functions
+            safeLength,
+            safeArray,
+
+            // Grade Statistics functions
+            getDailyGradeStats,
+            allGrades,
+        };
+    },
+};
+</script>
+
+<style scoped>
+.scheduler-grid {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    overflow: hidden;
+    background: white;
+}
+
+/* Emergency recovery mode styling */
+.main-grid-container.emergency-mode {
+    border: 3px solid #e74c3c;
+    box-shadow: 0 0 10px rgba(231, 76, 60, 0.3);
+}
+
+.main-grid-container.normal-mode {
+    border: 2px solid #27ae60;
+    box-shadow: 0 0 5px rgba(39, 174, 96, 0.2);
+}
+
+.emergency-recovery-notice {
+    background: #ffe6e6;
+    border: 2px solid #e74c3c;
+    padding: 12px;
+    margin: 8px;
+    border-radius: 4px;
+    text-align: center;
+}
+
+.emergency-message {
+    color: #c0392b;
+    font-weight: bold;
+}
+
+.emergency-recover-btn {
+    background: #e74c3c;
+    color: white;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 4px;
+    margin-left: 10px;
+    cursor: pointer;
+    font-size: 0.9em;
+}
+
+.emergency-recover-btn:hover {
+    background: #c0392b;
+}
+
+.scheduler-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    background: #f8f9fa;
+    border-bottom: 1px solid #ddd;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.toolbar-section {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    position: relative;
+}
+
+.search-input {
+    padding: 6px 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+    width: 200px;
+    transition: border-color 0.2s ease;
+}
+
+.search-input:focus {
+    outline: none;
+    border-color: #007cba;
+    box-shadow: 0 0 0 2px rgba(0, 123, 186, 0.2);
+}
+
+.clear-search-btn {
+    background: #6c757d;
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 20px;
+    height: 20px;
+    font-size: 12px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: -30px;
+    z-index: 2;
+}
+
+.clear-search-btn:hover {
+    background: #5a6268;
+}
+
+.filter-status {
+    margin-left: 8px;
+    padding: 4px 8px;
+    background: rgba(0, 123, 186, 0.1);
+    border: 1px solid rgba(0, 123, 186, 0.3);
+    border-radius: 4px;
+}
+
+.filter-tag {
+    display: inline-block;
+    background: #007cba;
+    color: white;
+    padding: 2px 6px;
+    margin: 0 2px;
+    border-radius: 3px;
+    font-size: 11px;
+}
+
+.filter-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.9em;
+    cursor: pointer;
+}
+
+.toolbar-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.undo-button,
+.save-button {
+    padding: 6px 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    background: white;
+    cursor: pointer;
+    font-size: 0.9em;
+    transition: all 0.2s;
+}
+
+.undo-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.save-button {
+    background: #007cba;
+    color: white;
+    border-color: #007cba;
+}
+
+.save-button.saving {
+    opacity: 0.7;
+}
+
+.grid-header {
+    display: flex;
+    background: #f5f5f5;
+    border-bottom: 1px solid #ddd;
+    font-weight: 600;
+}
+
+.period-header-cell {
+    width: 140px;
+    padding: 12px 8px;
+    border-right: 1px solid #ddd;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.day-header-cell {
+    flex: 1;
+    padding: 12px 8px;
+    border-right: 1px solid #ddd;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.day-name {
+    font-size: 0.95em;
+}
+
+.day-date {
+    font-size: 0.8em;
+    color: #666;
+    font-weight: normal;
+}
+
+.grid-body {
+    display: flex;
+    flex-direction: column;
+}
+
+.grid-row {
+    display: flex;
+    border-bottom: 1px solid #ddd;
+    min-height: 80px;
+}
+
+.grid-row.non-instructional {
+    background: #f8f9fa;
+}
+
+.period-label-cell {
+    width: 140px;
+    padding: 8px;
+    border-right: 1px solid #ddd;
+    background: #f9f9f9;
+    display: flex;
+    align-items: center;
+}
+
+.period-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.period-name {
+    font-weight: 500;
+    font-size: 0.9em;
+}
+
+.period-time {
+    font-size: 0.8em;
+    color: #666;
+}
+
+.non-instructional-badge {
+    font-size: 0.75em;
+    color: #888;
+    background: #e9ecef;
+    padding: 2px 4px;
+    border-radius: 3px;
+}
+
+.schedule-cell {
+    flex: 1;
+    border-right: 1px solid #ddd;
+    position: relative;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    min-height: 80px;
+}
+
+.schedule-cell:hover {
+    background: #f0f7ff;
+}
+
+.schedule-cell.has-assignments {
+    background: #e6f7ff;
+}
+
+.schedule-cell.multiple-assignments {
+    background: #d6f3ff;
+}
+
+.schedule-cell.has-conflicts {
+    background: #fff2f0;
+    border-left: 3px solid #ff4d4f;
+}
+
+.assignments-container {
+    padding: 4px;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    position: relative;
+}
+
+.assignment-item {
+    padding: 4px 6px;
+    border-radius: 3px;
+    border: 1px solid #e0e0e0;
+    position: relative;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.assignment-item:hover {
+    transform: translateX(1px);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.assignment-item.has-conflict {
+    border-color: #ff4d4f;
+    background: #fff2f0;
+}
+
+.assignment-item.has-deleted-entities {
+    border-color: #faad14;
+    background: #fff7e6;
+}
+
+.assignment-item.lesson-schedule {
+    opacity: 0.6;
+    border-style: dashed;
+    background: #f5f5f5 !important;
+    font-style: italic;
+    font-size: 0.8em; /* Make text smaller */
+    transform: scale(0.95); /* Make overall size smaller */
+    margin: 1px; /* Add small margin for visual separation */
+}
+
+.assignment-content {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+.course-name {
+    font-weight: 500;
+    font-size: 0.85em;
+    line-height: 1.2;
+}
+
+.class-name,
+.teacher-names,
+.room-name {
+    font-size: 0.75em;
+    color: #666;
+    line-height: 1.1;
+}
+
+.conflict-indicator,
+.deleted-warning {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    font-size: 0.7em;
+}
+
+.add-more-button {
+    margin-top: 2px;
+    padding: 2px 4px;
+    background: #f0f0f0;
+    border: 1px dashed #ccc;
+    border-radius: 2px;
+    cursor: pointer;
+    font-size: 0.8em;
+    align-self: stretch;
+}
+
+.add-more-button:hover {
+    background: #e0e0e0;
+}
+
+.empty-cell {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: #ccc;
+    font-size: 0.85em;
+    gap: 4px;
+}
+
+.add-icon {
+    font-size: 20px;
+    opacity: 0.6;
+}
+
+.add-text {
+    opacity: 0.8;
+}
+
+/* Available Courses Panel */
+.available-courses-panel {
+    padding: 16px;
+    background: #f0f8ff;
+    border-top: 1px solid #007cba;
+    border-bottom: 1px solid #ddd;
+}
+
+.available-courses-panel h3 {
+    margin: 0 0 8px 0;
+    color: #007cba;
+    font-size: 1.1em;
+}
+
+.focused-period-info {
+    margin: 0 0 16px 0;
+    color: #666;
+    font-size: 0.9em;
+}
+
+.day-courses-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+}
+
+.day-courses-column h4 {
+    margin: 0 0 12px 0;
+    padding: 8px 12px;
+    background: #007cba;
+    color: white;
+    border-radius: 4px;
+    text-align: center;
+    font-size: 0.9em;
+}
+
+.available-courses-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.course-card {
+    padding: 10px;
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 0.85em;
+}
+
+.course-card:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0, 124, 186, 0.15);
+    border-color: #007cba;
+}
+
+.course-card .course-name {
+    font-weight: 500;
+    color: #333;
+    margin-bottom: 4px;
+    display: block;
+}
+
+.course-card .course-details {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.course-card .course-details small {
+    color: #666;
+    font-size: 0.8em;
+}
+
+.no-courses {
+    padding: 16px;
+    text-align: center;
+    color: #999;
+    font-style: italic;
+    background: #f9f9f9;
+    border: 1px dashed #ddd;
+    border-radius: 4px;
+}
+
+/* No Preferred Days Panel */
+.no-preferred-days-panel {
+    padding: 16px;
+    background: #f0f8e6;
+    border: 1px solid #52c41a;
+    border-radius: 4px;
+    margin-top: 16px;
+}
+
+.no-preferred-days-panel h4 {
+    margin: 0 0 8px 0;
+    color: #52c41a;
+    font-size: 1em;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.panel-description {
+    margin: 0 0 12px 0;
+    color: #666;
+    font-size: 0.9em;
+    font-style: italic;
+}
+
+.no-preferred-courses-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 12px;
+}
+
+.flexible-tag {
+    color: #52c41a !important;
+    font-weight: 500;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .period-header-cell,
+    .period-label-cell {
+        width: 100px;
+        font-size: 0.8em;
+    }
+
+    .day-header-cell {
+        font-size: 0.8em;
+    }
+
+    .scheduler-toolbar {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+    }
+
+    .stats-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Keyboard Navigation */
+.schedule-cell:focus {
+    outline: 2px solid #007cba;
+    outline-offset: -2px;
+}
+
+/* Debug message panel */
+.debug-message-panel {
+    padding: 20px;
+    background: #fff3cd;
+    border: 1px solid #ffeaa7;
+    border-radius: 4px;
+    margin: 16px;
+}
+
+.debug-message-panel h3 {
+    margin: 0 0 12px 0;
+    color: #856404;
+}
+
+.debug-warning {
+    margin-bottom: 16px;
+    padding: 12px;
+    background: #fff;
+    border-left: 4px solid #ffc107;
+    border-radius: 4px;
+}
+
+.debug-warning strong {
+    display: block;
+    margin-bottom: 8px;
+    color: #856404;
+}
+
+.debug-warning ul {
+    margin: 8px 0 0 16px;
+    color: #6c757d;
+    font-family: monospace;
+    font-size: 0.9em;
+}
+
+.debug-warning li {
+    margin-bottom: 4px;
+    word-break: break-all;
+}
+
+/* Debug info styling */
+.debug-info {
+    font-size: 0.7em;
+    color: #888;
+    margin-top: 2px;
+    padding: 2px;
+    background: rgba(0, 0, 0, 0.05);
+    border-radius: 2px;
+}
+
+/* Read-only mode */
+.scheduler-grid[data-readonly='true'] .schedule-cell {
+    cursor: default;
+}
+
+.scheduler-grid[data-readonly='true'] .schedule-cell:hover {
+    background: inherit;
+}
+
+/* New styles for enhanced functionality */
+.filter-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.9em;
+    margin-right: 16px;
+}
+
+.mode-switcher {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.9em;
+}
+
+.mode-toggle {
+    width: 40px;
+    height: 20px;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    background: #ccc;
+    border-radius: 10px;
+    position: relative;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+
+.mode-toggle:checked {
+    background: #007cba;
+}
+
+.mode-toggle::before {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 16px;
+    height: 16px;
+    background: white;
+    border-radius: 50%;
+    transition: left 0.3s;
+}
+
+.mode-toggle:checked::before {
+    left: 22px;
+}
+
+.focus-button {
+    padding: 6px 12px;
+    border: 1px solid #007cba;
+    border-radius: 4px;
+    background: white;
+    color: #007cba;
+    cursor: pointer;
+    font-size: 0.9em;
+    transition: all 0.2s;
+}
+
+.focus-button:hover {
+    background: #007cba;
+    color: white;
+}
+
+.focus-button.active {
+    background: #007cba;
+    color: white;
+}
+
+.focus-hint {
+    font-size: 0.85em;
+    color: #666;
+    font-style: italic;
+}
+
+.period-label-cell.focused {
+    background: #e6f7ff !important;
+    border-left: 4px solid #007cba;
+}
+
+.period-label-cell {
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.period-label-cell:hover {
+    background: #f0f7ff !important;
+}
+
+/* New debug styles for grid visibility issues */
+.debug-grid-info {
+    padding: 8px 16px;
+    background: #e8f5e8;
+    border: 1px solid #4caf50;
+    border-radius: 4px;
+    margin-bottom: 8px;
+    font-family: monospace;
+}
+
+.grid-hidden-debug {
+    padding: 20px;
+    background: #ffebee;
+    border: 2px solid #f44336;
+    border-radius: 8px;
+    margin: 16px;
+    text-align: center;
+}
+
+.grid-hidden-message {
+    color: #c62828;
+    font-weight: bold;
+    font-size: 1.1em;
+}
+
+.grid-hidden-message ul {
+    text-align: left;
+    display: inline-block;
+    margin: 12px 0;
+    color: #666;
+    font-weight: normal;
+    font-size: 0.9em;
+    font-family: monospace;
+}
+
+.grid-hidden-message li {
+    margin-bottom: 6px;
+}
+
+.emergency-show-btn {
+    padding: 12px 24px;
+    background: #f44336;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-size: 1em;
+    font-weight: bold;
+    cursor: pointer;
+    margin-top: 16px;
+    transition: all 0.2s;
+}
+
+.emergency-show-btn:hover {
+    background: #d32f2f;
+    transform: scale(1.05);
+}
+
+.main-grid-container {
+    border: 2px solid #4caf50;
+    border-radius: 6px;
+    padding: 4px;
+}
+
+/* Drag and Drop Styles */
+.draggable-course {
+    cursor: grab;
+    transition: all 0.2s ease;
+    border: 1px solid rgba(0, 123, 186, 0.3);
+}
+
+.draggable-course:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+    border-color: #007cba;
+}
+
+.draggable-course:active {
+    cursor: grabbing;
+}
+
+.draggable-assignment {
+    cursor: grab;
+    transition: all 0.2s ease;
+}
+
+.draggable-assignment:hover {
+    transform: scale(1.02);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+.draggable-assignment:active {
+    cursor: grabbing;
+}
+
+.drop-zone {
+    position: relative;
+    transition: all 0.2s ease;
+}
+
+.drop-zone.drag-over {
+    background: rgba(0, 123, 186, 0.1) !important;
+    border: 2px dashed #007cba !important;
+    transform: scale(1.02);
+}
+
+.drop-zone.drag-over::after {
+    content: '📋 Drop here';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(0, 123, 186, 0.9);
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: bold;
+    pointer-events: none;
+    z-index: 10;
+}
+
+.assignment-item.dragging {
+    opacity: 0.5;
+    transform: rotate(5deg);
+}
+
+.course-card.dragging {
+    opacity: 0.5;
+    transform: rotate(-3deg) scale(1.05);
+}
+
+/* Enhanced visual feedback for drag operations */
+.scheduler-grid:has(.dragging) .drop-zone:not(.drag-over) {
+    background: rgba(255, 255, 255, 0.8);
+    border: 1px dashed #ddd;
+}
+
+.scheduler-grid:has(.dragging) .assignment-item:not(.dragging) {
+    opacity: 0.7;
+}
+
+/* Inline Editing Styles */
+.assignment-content {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.quick-edit-btn {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    background: rgba(0, 123, 186, 0.8);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 16px;
+    height: 16px;
+    font-size: 10px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: all 0.2s ease;
+    z-index: 2;
+}
+
+.assignment-item:hover .quick-edit-btn {
+    opacity: 1;
+}
+
+.quick-edit-btn:hover {
+    background: #007cba;
+    transform: scale(1.1);
+}
+
+/* Grade Statistics Row Styles */
+.statistics-row {
+    display: flex;
+    border-bottom: 2px solid #007cba;
+    background: #f0f8ff;
+    border-top: 2px solid #007cba;
+}
+
+.stats-label-cell {
+    background: #007cba !important;
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.stats-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.85em;
+    font-weight: 600;
+}
+
+.stats-emoji {
+    font-size: 1.1em;
+}
+
+.day-statistics-cell {
+    flex: 1;
+    border-right: 1px solid #ddd;
+    padding: 8px;
+    background: white;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-height: 100px;
+}
+
+.stats-headers {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 2px;
+    margin-bottom: 4px;
+    padding: 2px;
+    background: rgba(0, 124, 186, 0.1);
+    border-radius: 3px;
+}
+
+.stat-header {
+    font-size: 0.9em;
+    text-align: center;
+    cursor: help;
+    padding: 2px 4px;
+    border-radius: 2px;
+    flex: 1;
+}
+
+.stat-header:hover {
+    background: rgba(0, 124, 186, 0.2);
+}
+
+.stats-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex-grow: 1;
+}
+
+.grade-stats-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 4px;
+    background: #f8f9fa;
+    border: 1px solid #e0e0e0;
+    border-radius: 2px;
+    padding: 2px 4px;
+    font-size: 0.75em;
+}
+
+.grade-number {
+    font-weight: 600;
+    color: #333;
+    min-width: 20px;
+    font-size: 0.8em;
+}
+
+.stat-value {
+    text-align: center;
+    padding: 1px 2px;
+    background: white;
+    border-radius: 2px;
+    font-size: 0.7em;
+    color: #666;
+    min-width: 18px;
+    flex: 1;
+}
+
+.no-stats {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-grow: 1;
+    color: #999;
+}
+
+.no-stats-text {
+    font-size: 0.7em;
+    font-style: italic;
+    text-align: center;
+}
+
+.assignment-item.editing {
+    z-index: 100;
+    position: relative;
+}
+
+.assignment-item.editing .assignment-content {
+    display: none;
+}
+
+/* Context Menu Styles */
+.context-menu {
+    position: fixed;
+    background: white;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    z-index: 2000;
+    min-width: 150px;
+    padding: 4px 0;
+}
+
+.context-menu-item {
+    padding: 8px 12px;
+    cursor: pointer;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: background-color 0.2s;
+}
+
+.context-menu-item:hover {
+    background-color: #f5f5f5;
+}
+
+.context-menu-item.delete:hover {
+    background-color: #ffe6e6;
+    color: #d32f2f;
+}
+
+.context-menu-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1999;
+}
+</style>
