@@ -1,40 +1,22 @@
 <template>
     <div class="course-scheduler-wrapper">
-        <!-- Header with Planning Mode Controls -->
+        <!-- Header -->
         <div class="scheduler-header">
             <h2>Course Scheduler</h2>
             <div class="scheduler-controls">
                 <div class="mode-indicator" :class="{ 'read-only': isReadOnly }">
-                    {{ isReadOnly ? 'Published Schedule (Read-Only) - Event Testing Available' : 'Planning Mode' }}
+                    {{ isReadOnly ? 'Published Schedule (Read-Only)' : 'Planning Mode' }}
                 </div>
-                <div class="header-actions">
-                    <!-- Always show test button for WeWeb event testing -->
+
+                <div class="header-actions" v-if="!isReadOnly">
+                    <button @click="undo" :disabled="!canUndo" class="btn">↶ Undo</button>
                     <button
-                        @click="testEventEmission"
-                        class="test-btn"
-                        style="
-                            background: #007bff;
-                            color: white;
-                            border: none;
-                            padding: 8px 12px;
-                            border-radius: 4px;
-                            margin-right: 8px;
-                        "
-                        title="Test WeWeb events (always available)"
+                        @click="showConflicts = !showConflicts"
+                        class="btn"
+                        :class="{ active: showConflicts }"
                     >
-                        🧪 Test Event
+                        ⚠️ Conflicts ({{ safeLength(allConflicts) }})
                     </button>
-                    <!-- Only show editing controls when not read-only -->
-                    <div v-if="!isReadOnly" class="editing-controls">
-                        <button @click="undo" :disabled="!canUndo" class="undo-btn">↶ Undo</button>
-                        <button
-                            @click="showConflicts = !showConflicts"
-                            class="conflicts-btn"
-                            :class="{ active: showConflicts }"
-                        >
-                            ⚠️ Conflicts ({{ safeLength(allConflicts) }})
-                        </button>
-                    </div>
                 </div>
             </div>
         </div>
@@ -61,10 +43,6 @@
                 @cell-click="handleCellClick"
                 @assignment-details="handleAssignmentDetails"
                 @course-edit="handleCourseEdit"
-                @toggle-non-instructional="handleToggleNonInstructional"
-                @toggle-lesson-schedules="handleToggleLessonSchedules"
-                @period-focus-changed="handlePeriodFocusChanged"
-                @filter-year="handleFilterYear"
                 @scheduler-drop="handleSchedulerDrop"
                 @scheduler-drag-start="handleSchedulerDragStart"
                 @scheduler-drag-end="handleSchedulerDragEnd"
@@ -114,58 +92,24 @@
                 @auto-resolve-all="autoResolveConflicts"
             />
         </div>
-
-        <!-- Hidden test section for development -->
-        <div v-if="showTestData" class="test-data-section">
-            <button @click="showTestData = false" class="close-test">×</button>
-            <h3>Component Test Data</h3>
-            <div class="test-info">
-                <div><strong>Read Only:</strong> {{ isReadOnly ? 'Yes' : 'No' }}</div>
-                <div>
-                    <strong>Data Counts:</strong> {{ safeLength(periods) }} periods, {{ safeLength(courses) }} courses,
-                    {{ safeLength(teachers) }} teachers
-                </div>
-                <button @click="emitTestEvent" class="test-button">Test Event Emission</button>
-            </div>
-        </div>
-
-        <!-- Show test data toggle -->
-        <button @click="showTestData = !showTestData" class="test-toggle" title="Toggle test data">🧪</button>
-
-        <!-- Debug data button -->
-        <button @click="logCurrentData" class="debug-toggle" title="Log current data to console">🐛</button>
     </div>
 </template>
 
 <script>
-import { ref, computed, watch, onMounted } from 'vue';
+import { ref, computed, watch, onMounted, reactive } from 'vue';
 import SchedulerGrid from './components/scheduler/SchedulerGrid.vue';
 import AssignmentModal from './components/scheduler/AssignmentModal.vue';
 import ConflictPanel from './components/scheduler/ConflictPanel.vue';
 
-// NOTE: We avoid importing a conflicting safeLength. We define a local one below.
-import {
-    // validateAndUnwrapArray, // not used currently
-    // safeLength,            // DO NOT import; we define local to avoid "not a function"
-    // safeArray,             // not used currently
-    toArray,
-    // len,                   // not used currently
-    nonEmpty,
-    normalizePeriods,
-    normalizeCourse,
-} from './utils/arrayUtils.js';
-
+// Keep imports minimal; filtering happens externally
+import { toArray, nonEmpty, normalizePeriods, normalizeCourse } from './utils/arrayUtils.js';
 import { emitSchedulerRemoveEvent } from './utils/events.js';
 import { detectConflicts } from './utils/conflictDetection.js';
 import { useSchedulerStore } from './state/schedulerState';
 
 export default {
     name: 'CourseScheduler',
-    components: {
-        SchedulerGrid,
-        AssignmentModal,
-        ConflictPanel,
-    },
+    components: { SchedulerGrid, AssignmentModal, ConflictPanel },
     props: {
         content: {
             type: Object,
@@ -183,7 +127,7 @@ export default {
                 emitDropEvents: false,
             }),
         },
-        // Accept draft schedules directly via prop(s)
+        // Optional external drafts props (WeWeb workflows)
         draftSchedules: { type: [Array, Object], default: () => [] },
         draftSchedule: { type: [Array, Object], default: () => [] },
 
@@ -193,43 +137,19 @@ export default {
         /* wwEditor:end */
     },
     setup(props, { emit }) {
-        // Local helpers (avoid external mismatch)
+        // Local helper to avoid mismatched import issues
         const safeLength = v => (Array.isArray(v) ? v.length : 0);
 
-        // Optional debug logger to prevent ReferenceError
-        function logCurrentData() {
-            try {
-                console.log('[wwElement] Debug data snapshot:', {
-                    counts: {
-                        periods: safeLength(periods.value),
-                        courses: safeLength(courses.value),
-                        teachers: safeLength(teachers.value),
-                        classes: safeLength(classes.value),
-                        rooms: safeLength(rooms.value),
-                        subjects: safeLength(subjects.value),
-                        schoolDays: safeLength(schoolDays.value),
-                        draftSchedules: safeLength(draftSchedules.value),
-                        liveSchedules: safeLength(liveSchedules.value),
-                        conflicts: safeLength(allConflicts.value),
-                    },
-                    sampleDraft: draftSchedules.value?.[0] || null,
-                });
-            } catch (e) {
-                console.warn('logCurrentData error:', e);
-            }
-        }
-
-        // Initialize scheduler store
+        // Store (optional initialization hints)
         const store = useSchedulerStore();
 
-        // Initialize store with component data (periods + initial drafts)
+        // Initialize store with basic hints
         watch(
             () => props.content,
             newContent => {
-                if (newContent && store.initialize) {
+                if (newContent && store?.initialize) {
                     store.initialize(null, null, null, {
                         periods: toArray(newContent.periods),
-                        // For initial store state; component uses computed draftSchedules below
                         draftSchedules: toArray(newContent.draftSchedules),
                     });
                 }
@@ -237,17 +157,16 @@ export default {
             { immediate: true, deep: true }
         );
 
-        // Local state
+        // UI state
         const showAssignmentModal = ref(false);
         const showConflicts = ref(false);
-        const showTestData = ref(false);
         const isSaving = ref(false);
 
-        // Undo system
+        // Undo
         const undoStack = ref([]);
         const maxUndoSteps = 10;
 
-        // Selected cell for modal
+        // Selected cell
         const selectedCell = ref({
             dayId: null,
             periodId: null,
@@ -257,39 +176,25 @@ export default {
             preSelectedCourse: null,
         });
 
-        // Safe array computed properties
+        // Data (assume filtering is done upstream)
         const periods = computed(() => {
-            const rawPeriodsData = props.content.periods;
-            const normalized = normalizePeriods(rawPeriodsData);
-            if (!nonEmpty(normalized)) {
-                console.log('📋 [Periods] No periods data available');
-                return [];
-            }
-            return normalized;
+            const normalized = normalizePeriods(props.content.periods);
+            return nonEmpty(normalized) ? normalized : [];
         });
 
-        const courses = computed(() => {
-            const rawCourses = props.content.courses;
-            const arr = toArray(rawCourses);
-            if (!nonEmpty(arr)) {
-                console.log('🎯 [wwElement] Courses processing: no data available');
-            }
-            return arr.map((course, idx) => normalizeCourse(course, idx));
-        });
+        const courses = computed(() =>
+            toArray(props.content.courses).map((course, idx) => normalizeCourse(course, idx))
+        );
 
-        const teachers = computed(() => toArray(props.content.teachers || []));
-        const classes = computed(() => toArray(props.content.classes || []));
-        const rooms = computed(() => toArray(props.content.rooms || []));
+        const teachers = computed(() => toArray(props.content.teachers));
+        const classes = computed(() => toArray(props.content.classes));
+        const rooms = computed(() => toArray(props.content.rooms));
+        const subjects = computed(() => toArray(props.content.subjects));
 
         const schoolDays = computed(() => {
-            const validatedDays = toArray(props.content.schoolDays || []);
-            if (!nonEmpty(validatedDays)) {
-                console.log('📅 [wwElement] SchoolDays processing: no data available');
-                return [];
-            }
-
+            const validatedDays = toArray(props.content.schoolDays);
+            if (!nonEmpty(validatedDays)) return [];
             const defaultDayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-
             return validatedDays.map((day, index) => {
                 const dayName = day.name || day.name_en || day.day_name || defaultDayNames[index] || `Day ${index + 1}`;
                 return {
@@ -304,19 +209,19 @@ export default {
             });
         });
 
-        // Prefer draftSchedules/draftSchedule props; fallback to content.draftSchedules; normalize + dedupe
+        // Prefer direct draft props (if provided) else fallback to content
         const draftSchedules = computed(() => {
-            const propDraftsA = toArray(props.draftSchedules);
-            const propDraftsB = toArray(props.draftSchedule);
-            const fromProp = nonEmpty(propDraftsA) ? propDraftsA : propDraftsB;
+            const propA = toArray(props.draftSchedules);
+            const propB = toArray(props.draftSchedule);
+            const fromProp = nonEmpty(propA) ? propA : propB;
             const source = nonEmpty(fromProp) ? fromProp : toArray(props.content.draftSchedules);
 
+            // Minimal normalization + dedupe
             const normalized = source
                 .filter(v => v && typeof v === 'object')
                 .map(n => {
                     const fallbackId = `${n.class_id ?? ''}:${n.day_id ?? ''}:${n.period_id ?? ''}`;
                     const id = String(n.id ?? fallbackId);
-
                     return {
                         ...n,
                         id,
@@ -343,36 +248,26 @@ export default {
                         subject_color: n.subject_color ?? null,
                         subject_icon_id: n.subject_icon_id ?? null,
                         class_grade_level:
-                            typeof n.class_grade_level === 'number'
-                                ? n.class_grade_level
-                                : n.class_grade_level ?? null,
+                            typeof n.class_grade_level === 'number' ? n.class_grade_level : n.class_grade_level ?? null,
                         currentlyScheduled: n.currentlyScheduled === true,
                     };
                 });
 
-            // Deduplicate by id (last one wins)
             const byId = new Map();
             for (const item of normalized) byId.set(item.id, item);
-            const out = Array.from(byId.values());
-
-            if (!nonEmpty(out)) {
-                console.log('📝 [wwElement] Draft Schedules processing: no data available');
-            }
-
-            return out;
+            return Array.from(byId.values());
         });
 
-        const liveSchedules = computed(() => toArray(props.content.liveSchedules || []));
-        const subjects = computed(() => toArray(props.content.subjects || []));
+        const liveSchedules = computed(() => toArray(props.content.liveSchedules));
 
-        // Computed state
-        const isReadOnly = computed(() => false); // always editable here
+        // Flags
+        const isReadOnly = computed(() => false);
         const canUndo = computed(() => safeLength(undoStack.value) > 0);
 
-        // Conflict detection
+        // Conflicts
         const allConflicts = computed(() => detectConflicts(draftSchedules.value));
 
-        // Available courses for selected slot
+        // Courses available for current slot (keep time-slot logic; upstream filtering already applied)
         const availableCoursesForSlot = computed(() => {
             if (!selectedCell.value.dayId || !selectedCell.value.periodId) {
                 return courses.value;
@@ -381,8 +276,9 @@ export default {
             const currentPeriodId = selectedCell.value.periodId;
 
             const filteredCourses = courses.value.filter(course => {
-                if (safeLength(course.possibleSlots) === 0) return true;
-                return course.possibleSlots.some(slot => slot.dayId === currentDayId && slot.periodId === currentPeriodId);
+                const slots = Array.isArray(course.possibleSlots) ? course.possibleSlots : [];
+                if (slots.length === 0) return true;
+                return slots.some(slot => slot.dayId === currentDayId && slot.periodId === currentPeriodId);
             });
 
             return filteredCourses;
@@ -390,23 +286,15 @@ export default {
 
         // Methods
         function saveToUndoStack() {
-            const currentState = JSON.stringify(draftSchedules.value);
-            undoStack.value.push(currentState);
-            if (safeLength(undoStack.value) > maxUndoSteps) {
-                undoStack.value.shift();
-            }
+            undoStack.value.push(JSON.stringify(draftSchedules.value));
+            if (safeLength(undoStack.value) > maxUndoSteps) undoStack.value.shift();
         }
 
-        function handleCellClick({ dayId, periodId, period, mode, preSelectedCourse }) {
+        function handleCellClick({ dayId, periodId, period, preSelectedCourse }) {
             if (isReadOnly.value) return;
 
-            const assignments = draftSchedules.value.filter(
-                assignment => assignment.day_id === dayId && assignment.period_id === periodId
-            );
-
-            const conflicts = allConflicts.value.filter(
-                conflict => conflict.day_id === dayId && conflict.period_id === periodId
-            );
+            const assignments = draftSchedules.value.filter(a => a.day_id === dayId && a.period_id === periodId);
+            const conflicts = allConflicts.value.filter(c => c.day_id === dayId && c.period_id === periodId);
 
             selectedCell.value = {
                 dayId,
@@ -416,7 +304,6 @@ export default {
                 conflicts,
                 preSelectedCourse,
             };
-
             showAssignmentModal.value = true;
         }
 
@@ -434,8 +321,7 @@ export default {
 
         function addAssignment(newAssignment) {
             saveToUndoStack();
-            const updatedSchedules = [...draftSchedules.value, newAssignment];
-            updateDraftSchedules(updatedSchedules);
+            updateDraftSchedules([...draftSchedules.value, newAssignment]);
             closeAssignmentModal();
         }
 
@@ -457,16 +343,16 @@ export default {
                 });
             }
 
-            const updatedSchedules = draftSchedules.value.filter(
-                assignment =>
+            const updated = draftSchedules.value.filter(
+                a =>
                     !(
-                        assignment.day_id === assignmentToRemove.day_id &&
-                        assignment.period_id === assignmentToRemove.period_id &&
-                        assignment.course_id === assignmentToRemove.course_id &&
-                        assignment.class_id === assignmentToRemove.class_id
+                        a.day_id === assignmentToRemove.day_id &&
+                        a.period_id === assignmentToRemove.period_id &&
+                        a.course_id === assignmentToRemove.course_id &&
+                        a.class_id === assignmentToRemove.class_id
                     )
             );
-            updateDraftSchedules(updatedSchedules);
+            updateDraftSchedules(updated);
         }
 
         function updateDraftSchedules(newSchedules) {
@@ -477,13 +363,14 @@ export default {
         }
 
         function undo() {
-            if (safeLength(undoStack.value) === 0) return;
-            const previousState = undoStack.value.pop();
-            const previousSchedules = JSON.parse(previousState);
-            updateDraftSchedules(previousSchedules);
+            if (!safeLength(undoStack.value)) return;
+            const prev = JSON.parse(undoStack.value.pop());
+            updateDraftSchedules(prev);
         }
 
         async function saveDraft() {
+            if (isReadOnly.value) return;
+
             isSaving.value = true;
             try {
                 emit('trigger-event', {
@@ -500,10 +387,10 @@ export default {
                     timestamp: new Date().toISOString(),
                 });
 
-                await new Promise(resolve => setTimeout(resolve, 500));
-                console.log('💾 [wwElement] Draft saved successfully');
-            } catch (error) {
-                console.error('❌ [wwElement] Error saving draft:', error);
+                await new Promise(r => setTimeout(r, 500));
+                console.log('💾 Draft saved');
+            } catch (e) {
+                console.error('❌ saveDraft failed:', e);
             } finally {
                 isSaving.value = false;
             }
@@ -539,35 +426,7 @@ export default {
             });
         }
 
-        function handleToggleNonInstructional(show) {
-            emit('trigger-event', {
-                name: 'toggleNonInstructional',
-                event: { showNonInstructional: show },
-            });
-        }
-
-        function handleToggleLessonSchedules(show) {
-            emit('trigger-event', {
-                name: 'toggleLessonSchedules',
-                event: { showLessonSchedules: show },
-            });
-        }
-
-        function handlePeriodFocusChanged(periodId) {
-            emit('trigger-event', {
-                name: 'periodFocusChanged',
-                event: { focusedPeriodId: periodId },
-            });
-        }
-
-        function handleFilterYear(year) {
-            emit('trigger-event', {
-                name: 'filterYear',
-                event: { selectedYear: year },
-            });
-        }
-
-        // WeWeb Element Event Handlers
+        // WeWeb Events passthrough
         function handleSchedulerDrop(eventData) {
             const safeEventData = {
                 dayId: eventData?.dayId || 0,
@@ -586,12 +445,9 @@ export default {
             };
 
             try {
-                emit('trigger-event', {
-                    name: 'scheduler:drop',
-                    event: safeEventData,
-                });
+                emit('trigger-event', { name: 'scheduler:drop', event: safeEventData });
             } catch (error) {
-                console.error('❌ [WeWeb Event] scheduler:drop emission failed:', error);
+                console.error('❌ scheduler:drop emission failed:', error);
             }
         }
 
@@ -605,12 +461,9 @@ export default {
             };
 
             try {
-                emit('trigger-event', {
-                    name: 'scheduler:drag-start',
-                    event: safeEventData,
-                });
+                emit('trigger-event', { name: 'scheduler:drag-start', event: safeEventData });
             } catch (error) {
-                console.error('❌ [WeWeb Event] scheduler:drag-start emission failed:', error);
+                console.error('❌ scheduler:drag-start emission failed:', error);
             }
         }
 
@@ -625,57 +478,28 @@ export default {
             };
 
             try {
-                emit('trigger-event', {
-                    name: 'scheduler:drag-end',
-                    event: safeEventData,
-                });
+                emit('trigger-event', { name: 'scheduler:drag-end', event: safeEventData });
             } catch (error) {
-                console.error('❌ [WeWeb Event] scheduler:drag-end emission failed:', error);
-            }
-        }
-
-        // Test function for manual event emission debugging
-        function testEventEmission() {
-            const testData = {
-                dayId: 1,
-                periodId: 'test-period-id',
-                courseId: 'test-course-id',
-                courseName: 'Test Course',
-                courseCode: 'TEST101',
-                source: 'manual-test',
-                timestamp: new Date().toISOString(),
-            };
-
-            try {
-                emit('trigger-event', {
-                    name: 'scheduler:drop',
-                    event: testData,
-                });
-                console.log('✅ [WeWeb Event Test] scheduler:drop emitted');
-            } catch (error) {
-                console.error('❌ [WeWeb Event Test] scheduler:drop test failed:', error);
+                console.error('❌ scheduler:drag-end emission failed:', error);
             }
         }
 
         function updateAssignments(payload) {
             if (payload.action === 'move' && payload.assignment) {
-                const updatedSchedules = [...draftSchedules.value];
-                const idx = updatedSchedules.findIndex(a => a.id === payload.assignment.id);
-
+                const updated = [...draftSchedules.value];
+                const idx = updated.findIndex(a => a.id === payload.assignment.id);
                 if (idx !== -1) {
-                    const updatedAssignment = {
-                        ...updatedSchedules[idx],
+                    updated[idx] = {
+                        ...updated[idx],
                         day_id: payload.toDayId,
                         period_id: payload.toPeriodId,
                         day_name_de: schoolDays.value.find(d => d.id === payload.toDayId)?.name_de,
                         day_name_en: schoolDays.value.find(d => d.id === payload.toDayId)?.name_en,
                     };
-
-                    updatedSchedules[idx] = updatedAssignment;
                     undoStack.value.push(JSON.stringify(draftSchedules.value));
-                    updateDraftSchedules(updatedSchedules);
+                    updateDraftSchedules(updated);
                 } else {
-                    console.warn('⚠️ [DragDrop] Could not find assignment to move:', payload.assignment.id);
+                    console.warn('⚠️ Move: assignment not found:', payload.assignment.id);
                 }
             } else {
                 updateDraftSchedules(payload);
@@ -698,17 +522,11 @@ export default {
         }
 
         function applySuggestion(suggestion) {
-            emit('trigger-event', {
-                name: 'applySuggestion',
-                event: { suggestion },
-            });
+            emit('trigger-event', { name: 'applySuggestion', event: { suggestion } });
         }
 
         function ignoreConflict(conflict) {
-            emit('trigger-event', {
-                name: 'ignoreConflict',
-                event: { conflictId: conflict.id },
-            });
+            emit('trigger-event', { name: 'ignoreConflict', event: { conflictId: conflict.id } });
         }
 
         function autoResolveConflicts() {
@@ -718,29 +536,27 @@ export default {
             });
         }
 
-        // Auto-save functionality
+        // Auto-save (debounced)
         let saveTimeout;
         watch(
             draftSchedules,
             () => {
                 if (isReadOnly.value) return;
                 clearTimeout(saveTimeout);
-                saveTimeout = setTimeout(() => {
-                    saveDraft();
-                }, 2000);
+                saveTimeout = setTimeout(() => saveDraft(), 2000);
             },
             { deep: true }
         );
 
         onMounted(() => {
-            console.log('🚀 [wwElement] Component mounted - Course Scheduler loaded successfully');
+            console.log('🚀 Course Scheduler mounted');
         });
 
-        // Also react if the direct draftSchedules prop changes, to keep store hints in sync
+        // Keep store hints in sync when external draft props change
         watch(
             () => [props.draftSchedules, props.draftSchedule],
             () => {
-                if (store.initialize) {
+                if (store?.initialize) {
                     store.initialize(null, null, null, {
                         periods: toArray(props.content.periods),
                         draftSchedules: draftSchedules.value,
@@ -748,27 +564,6 @@ export default {
                 }
             },
             { immediate: true, deep: true }
-        );
-
-        // Watch for significant structural changes in content for debug
-        watch(
-            () => props.content,
-            (newContent, oldContent) => {
-                if (
-                    newContent &&
-                    oldContent &&
-                    (newContent?.periods?.length !== oldContent?.periods?.length ||
-                        newContent?.schoolDays?.length !== oldContent?.schoolDays?.length ||
-                        newContent?.courses?.length !== oldContent?.courses?.length)
-                ) {
-                    console.log('🔄 [wwElement] Content structure changed:', {
-                        periods: newContent?.periods?.length || 0,
-                        schoolDays: newContent?.schoolDays?.length || 0,
-                        courses: newContent?.courses?.length || 0,
-                    });
-                }
-            },
-            { deep: true }
         );
 
         return {
@@ -786,13 +581,14 @@ export default {
             // State
             showAssignmentModal,
             showConflicts,
-            showTestData,
-            selectedCell,
             isSaving,
+            selectedCell,
 
-            // Computed
+            // Flags
             isReadOnly,
             canUndo,
+
+            // Derived
             allConflicts,
             availableCoursesForSlot,
 
@@ -807,30 +603,15 @@ export default {
             saveDraft,
             handleAssignmentDetails,
             handleCourseEdit,
-            handleToggleNonInstructional,
-            handleToggleLessonSchedules,
-            handlePeriodFocusChanged,
-            handleFilterYear,
             handleSchedulerDrop,
             handleSchedulerDragStart,
             handleSchedulerDragEnd,
-            testEventEmission,
             navigateToConflict,
             applySuggestion,
             ignoreConflict,
             autoResolveConflicts,
-            logCurrentData,
 
-            // Public API methods for programmatic control (from store)
-            setViewMode: store.setViewMode,
-            toggleTeacher: store.toggleTeacher,
-            setSelectedClass: store.setSelectedClass,
-            setSelectedRoom: store.setSelectedRoom,
-            clearFilters: store.clearFilters,
-            persistDraft: store.persistDraft,
-            publish: store.publish,
-
-            // Local helpers
+            // Utils
             safeLength,
         };
     },
@@ -849,7 +630,7 @@ export default {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 16px 20px;
+    padding: 12px 16px;
     background: #f8f9fa;
     border-bottom: 1px solid #e0e0e0;
     border-radius: 6px 6px 0 0;
@@ -857,17 +638,17 @@ export default {
     h2 {
         margin: 0;
         color: #333;
-        font-size: 1.3em;
+        font-size: 1.1em;
     }
 
     .scheduler-controls {
         display: flex;
         align-items: center;
-        gap: 16px;
+        gap: 12px;
     }
 
     .mode-indicator {
-        padding: 6px 12px;
+        padding: 4px 10px;
         border-radius: 4px;
         font-size: 0.9em;
         font-weight: 500;
@@ -879,26 +660,35 @@ export default {
             color: #ff4d4f;
         }
     }
+
+    .header-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .btn {
+        background: #eef1f5;
+        color: #333;
+        border: 1px solid #dcdfe6;
+        padding: 6px 10px;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+
+    .btn.active {
+        background: #fff0f0;
+        border-color: #ffcccc;
+    }
+
+    .btn:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
 }
 
 .scheduler-content {
     padding: 12px 0;
-}
-
-.test-toggle,
-.debug-toggle {
-    position: fixed;
-    bottom: 16px;
-    right: 16px;
-    margin-left: 8px;
-    background: #eee;
-    border: 1px solid #ddd;
-    padding: 8px 10px;
-    border-radius: 4px;
-}
-
-.test-toggle {
-    right: 56px;
 }
 
 .conflicts-sidebar {
@@ -913,5 +703,15 @@ export default {
     border-radius: 6px;
     box-shadow: 0 6px 20px rgba(0,0,0,0.08);
     padding: 12px;
+}
+
+/* Responsive tweaks */
+@media (max-width: 900px) {
+    .conflicts-sidebar {
+        position: static;
+        width: 100%;
+        max-height: none;
+        box-shadow: none;
+    }
 }
 </style>
