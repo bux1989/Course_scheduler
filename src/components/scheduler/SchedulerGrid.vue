@@ -253,7 +253,7 @@
       @cancel="handleCourseSelectionCancel"
     />
 
-    <!-- Context Menu (fixed to viewport; high z-index) -->
+    <!-- Context Menu (fixed, high z-index) -->
     <div
       v-if="contextMenu.show"
       class="context-menu"
@@ -337,14 +337,12 @@ export default {
     'course-edit',
   ],
   setup(props, { emit }) {
-    // Local helpers
+    // Local helpers (no external deps)
     const safeArray = (v) => (Array.isArray(v) ? v : []);
     const safeLength = (v) => (Array.isArray(v) ? v.length : 0);
     const normId = (v) => String(v ?? '');
 
-    onMounted(() => {
-      console.log('✅ SchedulerGrid mounted');
-    });
+    onMounted(() => console.log('✅ SchedulerGrid mounted'));
 
     // State
     const focusedPeriodId = ref(null);
@@ -357,44 +355,30 @@ export default {
     const showCourseSelectionModal = ref(false);
     const courseSelectionData = ref(null);
 
-    const contextMenu = ref({
-      show: false,
-      x: 0,
-      y: 0,
-      assignment: null,
-      dayId: null,
-      periodId: null,
-    });
+    const contextMenu = ref({ show: false, x: 0, y: 0, assignment: null, dayId: null, periodId: null });
 
     // Visible data
-    const visibleDays = computed(() => {
-      const days = safeArray(props.schoolDays);
-      return days.slice(0, props.maxDays || 7);
-    });
-
+    const visibleDays = computed(() => safeArray(props.schoolDays).slice(0, props.maxDays || 7));
     const visiblePeriods = computed(() => {
       const all = safeArray(props.periods);
       if (!focusedPeriodId.value) return all;
       const match = all.filter((p) => p.id === focusedPeriodId.value);
       if (safeLength(match) === 0) {
+        console.warn('Focused period not found, clearing focus', { focused: focusedPeriodId.value });
         focusedPeriodId.value = null;
         return all;
       }
       return match;
     });
-
     const currentSchedules = computed(() => (props.isLiveMode ? props.liveSchedules : props.draftSchedules));
 
     // Formatting
-    function formatTime(timeString) {
-      if (!timeString) return '';
-      const parts = String(timeString).split(':');
-      return parts.length >= 2 ? `${parts[0]}:${parts[1]}` : String(timeString);
-    }
-    function formatDate(date) {
-      if (!date) return '';
-      return new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-    }
+    const formatTime = (t) => {
+      if (!t) return '';
+      const parts = String(t).split(':');
+      return parts.length >= 2 ? `${parts[0]}:${parts[1]}` : String(t);
+    };
+    const formatDate = (d) => (d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '');
 
     // Lookups
     const findCourse = (id) => props.courses.find((c) => c.id === id);
@@ -402,141 +386,110 @@ export default {
     const findRoom = (id) => props.rooms.find((r) => r.id === id);
     const findSubject = (id) => props.subjects.find((s) => s.id === id);
 
-    function getCourseName(courseId) {
-      if (!courseId) return null;
-      const course = findCourse(courseId);
-      return course?.name || course?.course_name || course?.title || null;
-    }
-    function getSubjectName(subjectId) {
-      if (!subjectId) return null;
-      const subject = findSubject(subjectId);
-      return subject?.name || subject?.title || subject?.subject_name || null;
-    }
-    function getDisplayName(assignment) {
-      return getCourseName(assignment.course_id) || getSubjectName(assignment.subject_id) || 'No Course';
-    }
-    function getClassName(classId) {
-      if (!classId) return '';
-      const cls = findClass(classId);
-      return cls?.name || 'No Class';
-    }
-    function getTeacherNames(teacherIds) {
-      if (!teacherIds?.length) return 'No Teacher';
-      return teacherIds.map((id) => props.teachers.find((t) => t.id === id)?.name || 'Unknown Teacher').join(', ');
-    }
-    function getAssignmentTeachers(assignment) {
-      if (Array.isArray(assignment.teacher_names) && assignment.teacher_names.length) return assignment.teacher_names.join(', ');
-      const ids = assignment.staff_ids || assignment.teacher_ids;
+    const getCourseName = (courseId) => (courseId ? (findCourse(courseId)?.name || findCourse(courseId)?.course_name || findCourse(courseId)?.title || null) : null);
+    const getSubjectName = (subjectId) => (subjectId ? (findSubject(subjectId)?.name || findSubject(subjectId)?.title || findSubject(subjectId)?.subject_name || null) : null);
+    const getDisplayName = (a) => getCourseName(a.course_id) || getSubjectName(a.subject_id) || 'No Course';
+    const getClassName = (classId) => (classId ? findClass(classId)?.name || 'No Class' : '');
+    const getTeacherNames = (ids) => (!ids?.length ? 'No Teacher' : ids.map((id) => props.teachers.find((t) => t.id === id)?.name || 'Unknown Teacher').join(', '));
+    const getAssignmentTeachers = (a) => {
+      if (Array.isArray(a.teacher_names) && a.teacher_names.length) return a.teacher_names.join(', ');
+      const ids = a.staff_ids || a.teacher_ids;
       return ids?.length ? getTeacherNames(ids) : '';
-    }
-    function getRoomName(roomId) {
-      if (!roomId) return 'No Room';
-      const room = findRoom(roomId);
-      return room?.name || 'Unknown Room';
-    }
+    };
+    const getRoomName = (roomId) => (roomId ? findRoom(roomId)?.name || 'Unknown Room' : 'No Room');
 
-    function hasConflicts(assignment) {
-      return props.conflicts.some(
-        (conflict) =>
-          conflict.day_id === assignment.day_id &&
-          conflict.period_id === assignment.period_id &&
-          (conflict.assignment_id === assignment.id ||
-            conflict.teacher_ids?.some((id) => assignment.teacher_ids?.includes(id)) ||
-            conflict.class_id === assignment.class_id ||
-            conflict.room_id === assignment.room_id)
+    const hasConflicts = (a) =>
+      props.conflicts.some(
+        (c) =>
+          c.day_id === a.day_id &&
+          c.period_id === a.period_id &&
+          (c.assignment_id === a.id ||
+            c.teacher_ids?.some((id) => a.teacher_ids?.includes(id)) ||
+            c.class_id === a.class_id ||
+            c.room_id === a.room_id)
       );
-    }
-    function hasDeletedEntities(assignment) {
-      const courseExists = !assignment.course_id || !!findCourse(assignment.course_id);
-      const classExists = !assignment.class_id || !!findClass(assignment.class_id);
-      const roomExists = !assignment.room_id || !!findRoom(assignment.room_id);
-      const teachersExist = !assignment.teacher_ids?.length || assignment.teacher_ids.every((id) => props.teachers.some((t) => t.id === id));
-      return !(courseExists && classExists && roomExists && teachersExist);
-    }
+    const hasDeletedEntities = (a) => {
+      const courseOk = !a.course_id || !!findCourse(a.course_id);
+      const classOk = !a.class_id || !!findClass(a.class_id);
+      const roomOk = !a.room_id || !!findRoom(a.room_id);
+      const teachersOk = !a.teacher_ids?.length || a.teacher_ids.every((id) => props.teachers.some((t) => t.id === id));
+      return !(courseOk && classOk && roomOk && teachersOk);
+    };
 
-    // Assignment listing per cell
-    function getCellAssignments(dayId, periodId) {
+    // Cells
+    const getCellAssignments = (dayId, periodId) => {
       const entries = currentSchedules.value;
-      const assignments = entries.filter((assignment) => {
-        const currentDay = props.schoolDays.find((d) => d.id === dayId || d.day_id === dayId);
+      const list = entries.filter((a) => {
+        const d = props.schoolDays.find((x) => x.id === dayId || x.day_id === dayId);
+        const dayMatch =
+          a.day_id === dayId ||
+          a.day_id === d?.day_id ||
+          a.day_id === d?.id ||
+          a.day_number === d?.day_number ||
+          a.day_number === d?.id ||
+          (d?.name && a.day_name_en === d.name) ||
+          (d?.name_en && a.day_name_en === d.name_en);
 
-        const assignmentDayMatch =
-          assignment.day_id === dayId ||
-          assignment.day_id === currentDay?.day_id ||
-          assignment.day_id === currentDay?.id ||
-          assignment.day_number === currentDay?.day_number ||
-          assignment.day_number === currentDay?.id ||
-          (currentDay?.name && assignment.day_name_en === currentDay.name) ||
-          (currentDay?.name_en && assignment.day_name_en === currentDay.name_en);
-
-        const currentPeriod = props.periods.find((p) => p.id === periodId);
-        const periodMatch =
-          assignment.period_id === periodId ||
-          (assignment.block_number && currentPeriod?.blockNumber && assignment.block_number === currentPeriod.blockNumber);
-
-        return assignmentDayMatch && periodMatch;
+        const p = props.periods.find((x) => x.id === periodId);
+        const periodMatch = a.period_id === periodId || (a.block_number && p?.blockNumber && a.block_number === p.blockNumber);
+        return dayMatch && periodMatch;
       });
 
-      return assignments.sort((a, b) => {
-        const classA = getClassName(a.class_id);
-        const classB = getClassName(b.class_id);
-        if (classA !== classB) return classA.localeCompare(classB);
-        const courseA = getDisplayName(a);
-        const courseB = getDisplayName(b);
-        return courseA.localeCompare(courseB);
+      return list.sort((a, b) => {
+        const ca = getClassName(a.class_id);
+        const cb = getClassName(b.class_id);
+        if (ca !== cb) return ca.localeCompare(cb);
+        const na = getDisplayName(a);
+        const nb = getDisplayName(b);
+        return na.localeCompare(nb);
       });
-    }
+    };
 
-    function getCellClasses(dayId, periodId) {
-      const assignments = getCellAssignments(dayId, periodId);
+    const getCellClasses = (dayId, periodId) => {
+      const as = getCellAssignments(dayId, periodId);
       const classes = [];
-      if (safeLength(assignments) > 0) {
+      if (safeLength(as) > 0) {
         classes.push('has-assignments');
-        if (safeLength(assignments) > 1) classes.push('multiple-assignments');
+        if (safeLength(as) > 1) classes.push('multiple-assignments');
       }
-      const hasConflict = assignments.some((a) =>
-        props.conflicts.some((c) => c.day_id === dayId && c.period_id === periodId)
-      );
-      if (hasConflict) classes.push('has-conflicts');
+      if (as.some((a) => props.conflicts.some((c) => c.day_id === dayId && c.period_id === periodId))) classes.push('has-conflicts');
       return classes;
-    }
+    };
 
-    function getCellAriaLabel(day, period) {
-      const assignments = getCellAssignments(day.id, period.id);
-      if (safeLength(assignments) === 0) return `${day.name} ${period.name}: Empty, click to add assignment`;
-      const courseNames = assignments.map((a) => getDisplayName(a)).join(', ');
-      return `${day.name} ${period.name}: ${courseNames}, ${safeLength(assignments)} assignment${safeLength(assignments) > 1 ? 's' : ''}`;
-    }
+    const getCellAriaLabel = (day, period) => {
+      const as = getCellAssignments(day.id, period.id);
+      if (safeLength(as) === 0) return `${day.name} ${period.name}: Empty, click to add assignment`;
+      const names = as.map((a) => getDisplayName(a)).join(', ');
+      return `${day.name} ${period.name}: ${names}, ${safeLength(as)} assignment${safeLength(as) > 1 ? 's' : ''}`;
+    };
 
-    function getAssignmentClasses(assignment) {
+    const getAssignmentClasses = (assignment) => {
       const classes = [];
       if (hasConflicts(assignment)) classes.push('has-conflict');
       if (hasDeletedEntities(assignment)) classes.push('has-deleted-entities');
       if (!getCourseName(assignment.course_id) && assignment.subject_id) classes.push('lesson-schedule');
       return classes;
-    }
-    function getAssignmentStyles(assignment) {
+    };
+
+    const getAssignmentStyles = (assignment) => {
       const course = findCourse(assignment.course_id);
       const cls = findClass(assignment.class_id);
       return {
         borderLeft: `4px solid ${course?.color || cls?.color || '#e0e0e0'}`,
         backgroundColor: course?.color ? `${course.color}15` : cls?.color ? `${cls.color}15` : '#f9f9f9',
       };
-    }
+    };
 
     // Clicks
-    function handleCellClick(dayId, periodId, period) {
+    const handleCellClick = (dayId, periodId, period) => {
       if (props.isReadOnly) return;
-      const assignments = getCellAssignments(dayId, periodId);
-      if (assignments.length === 0) return;
+      if (getCellAssignments(dayId, periodId).length === 0) return;
       emit('cell-click', { dayId, periodId, period });
-    }
-    function handleAssignmentClick(assignment) {
-      emit('assignment-details', assignment);
-    }
+    };
+    const handleAssignmentClick = (assignment) => emit('assignment-details', assignment);
 
-    // Context menu
-    function computeContextMenuPosition(evt, menuSize = { w: 220, h: 96 }) {
+    // Context menu (fixed to cursor position)
+    const computeContextMenuPosition = (evt, menuSize = { w: 220, h: 96 }) => {
       const vw = window.innerWidth || 1024;
       const vh = window.innerHeight || 768;
       let x = (evt?.clientX ?? 0) + 6;
@@ -544,88 +497,78 @@ export default {
       if (x + menuSize.w > vw) x = Math.max(8, vw - menuSize.w - 8);
       if (y + menuSize.h > vh) y = Math.max(8, vh - menuSize.h - 8);
       return { x, y };
-    }
-    function handleAssignmentRightClick(event, assignment, dayId, periodId) {
+    };
+    const handleAssignmentRightClick = (event, assignment, dayId, periodId) => {
       const pos = computeContextMenuPosition(event);
-      contextMenu.value = {
-        show: true,
-        x: pos.x,
-        y: pos.y,
-        assignment,
-        dayId,
-        periodId,
-      };
-    }
-    function closeContextMenu() {
-      contextMenu.value.show = false;
-    }
-    function editAssignmentFromContext() {
+      contextMenu.value = { show: true, x: pos.x, y: pos.y, assignment, dayId, periodId };
+    };
+    const closeContextMenu = () => (contextMenu.value.show = false);
+    const editAssignmentFromContext = () => {
       if (!contextMenu.value.assignment) return;
-      if (props.isReadOnly || props.isLiveMode) {
-        startInlineEditReadOnly(contextMenu.value.assignment, contextMenu.value.dayId, contextMenu.value.periodId);
-      } else {
-        startInlineEdit(contextMenu.value.assignment, contextMenu.value.dayId, contextMenu.value.periodId);
-      }
+      if (props.isReadOnly || props.isLiveMode) startInlineEditReadOnly(contextMenu.value.assignment, contextMenu.value.dayId, contextMenu.value.periodId);
+      else startInlineEdit(contextMenu.value.assignment, contextMenu.value.dayId, contextMenu.value.periodId);
       closeContextMenu();
-    }
-    function deleteAssignmentFromContext() {
+    };
+    const deleteAssignmentFromContext = () => {
       const a = contextMenu.value.assignment;
-      if (!a) { closeContextMenu(); return; }
+      if (!a) return closeContextMenu();
       if (props.isReadOnly || props.isLiveMode) {
         const fn = props.parentEmit || emit;
         emitSchedulerRemoveEvent(fn, {
-          dayId: a.day_id, periodId: a.period_id, assignmentId: a.id,
-          courseId: a.course_id, courseName: a.course_name || a.display_cell || '',
+          dayId: a.day_id,
+          periodId: a.period_id,
+          assignmentId: a.id,
+          courseId: a.course_id,
+          courseName: a.course_name || a.display_cell || '',
         });
       } else {
         deleteInlineAssignment(a);
       }
       closeContextMenu();
-    }
+    };
 
-    // Inline editor
-    const isEditing = (assignmentId) => editingAssignment.value?.id === assignmentId;
-    function startInlineEdit(a, dayId, periodId) {
+    // Inline edit
+    const isEditing = (id) => editingAssignment.value?.id === id;
+    const startInlineEdit = (a, dayId, periodId) => {
       if (props.isReadOnly) return;
       editingAssignment.value = a;
       editingCell.value = { dayId, periodId };
-    }
-    function startInlineEditReadOnly(a, dayId, periodId) {
+    };
+    const startInlineEditReadOnly = (a, dayId, periodId) => {
       editingAssignment.value = a;
       editingCell.value = { dayId, periodId };
-    }
-    function saveInlineEdit(updatedAssignment) {
-      const current = currentSchedules.value;
-      const updated = current.map((s) => (s.id === updatedAssignment.id ? updatedAssignment : s));
-      emit('update-assignments', updated);
+    };
+    const saveInlineEdit = (updated) => {
+      const data = currentSchedules.value;
+      const updatedList = data.map((s) => (s.id === updated.id ? updated : s));
+      emit('update-assignments', updatedList);
       editingAssignment.value = null;
       editingCell.value = null;
-    }
-    function cancelInlineEdit() {
+    };
+    const cancelInlineEdit = () => {
       editingAssignment.value = null;
       editingCell.value = null;
-    }
-    function deleteInlineAssignment(assignment) {
+    };
+    const deleteInlineAssignment = (a) => {
       if (props.emitDropEvents) {
         const fn = props.parentEmit || emit;
         emitSchedulerRemoveEvent(fn, {
-          dayId: assignment.day_id,
-          periodId: assignment.period_id,
-          assignmentId: assignment.id,
-          courseId: assignment.course_id,
-          courseName: assignment.course_name || assignment.display_cell || '',
+          dayId: a.day_id,
+          periodId: a.period_id,
+          assignmentId: a.id,
+          courseId: a.course_id,
+          courseName: a.course_name || a.display_cell || '',
         });
       }
-      const current = currentSchedules.value;
-      const updated = current.filter((s) => s.id !== assignment.id);
+      const data = currentSchedules.value;
+      const updated = data.filter((s) => s.id !== a.id);
       emit('update-assignments', updated);
       editingAssignment.value = null;
       editingCell.value = null;
-    }
+    };
 
     // Available courses
-    function normalizeCourseLight(course) {
-      // Try to normalize into course.possibleSlots: [{dayId, periodId}]
+    const normalizeCourseLight = (course) => {
       let slots = [];
       if (Array.isArray(course.possibleSlots)) {
         slots = course.possibleSlots;
@@ -636,29 +579,26 @@ export default {
         }));
       }
       return { ...course, possibleSlots: slots.filter((s) => s && s.dayId != null && s.periodId != null) };
-    }
+    };
 
-    function getAvailableCoursesForSlot(dayId, periodId) {
+    const getAvailableCoursesForSlot = (dayId, periodId) => {
       const normalized = props.courses.map(normalizeCourseLight);
       return normalized.filter((course) => {
         const slots = Array.isArray(course.possibleSlots) ? course.possibleSlots : [];
         if (slots.length === 0) return true;
         return slots.some((slot) => normId(slot.dayId) === normId(dayId) && normId(slot.periodId) === normId(periodId));
       });
-    }
+    };
 
-    function getNoPreferredDaysCourses() {
-      return props.courses.filter((c) => !Array.isArray(c.possible_time_slots) || c.possible_time_slots.length === 0);
-    }
+    const getNoPreferredDaysCourses = () =>
+      props.courses.filter((c) => !Array.isArray(c.possible_time_slots) || c.possible_time_slots.length === 0);
 
-    function getCourseCardStyle(course) {
-      return {
-        borderLeft: `4px solid ${course.color || '#007cba'}`,
-        backgroundColor: course.color ? `${course.color}15` : '#f0f8ff',
-      };
-    }
+    const getCourseCardStyle = (course) => ({
+      borderLeft: `4px solid ${course.color || '#007cba'}`,
+      backgroundColor: course.color ? `${course.color}15` : '#f0f8ff',
+    });
 
-    function assignCourseToSlot(course, dayId, periodId) {
+    const assignCourseToSlot = (course, dayId, periodId) => {
       if (props.isReadOnly) return;
       modalCourseData.value = {
         courseId: course.id,
@@ -676,9 +616,16 @@ export default {
         source: 'drag-end',
         timestamp: new Date().toISOString(),
       });
-    }
+    };
 
-    function handleTeacherRoomSubmit(payload) {
+    // "No preferred days" quick assign: uses first visible day
+    const assignCourseToFocusedSlot = (course) => {
+      if (props.isReadOnly || !focusedPeriodId.value) return;
+      const firstDay = visibleDays.value[0];
+      if (firstDay) assignCourseToSlot(course, firstDay.id, focusedPeriodId.value);
+    };
+
+    const handleTeacherRoomSubmit = (payload) => {
       emit('scheduler-drop', {
         dayId: payload.dayId,
         periodId: payload.periodId,
@@ -693,14 +640,14 @@ export default {
       });
       showTeacherRoomModal.value = false;
       modalCourseData.value = null;
-    }
+    };
 
-    function handleTeacherRoomCancel() {
+    const handleTeacherRoomCancel = () => {
       showTeacherRoomModal.value = false;
       modalCourseData.value = null;
-    }
+    };
 
-    function handleCourseSelectionSubmit(payload) {
+    const handleCourseSelectionSubmit = (payload) => {
       showCourseSelectionModal.value = false;
       modalCourseData.value = {
         courseId: payload.courseId,
@@ -711,19 +658,19 @@ export default {
       };
       showTeacherRoomModal.value = true;
       courseSelectionData.value = null;
-    }
+    };
 
-    function handleCourseSelectionCancel() {
+    const handleCourseSelectionCancel = () => {
       showCourseSelectionModal.value = false;
       courseSelectionData.value = null;
-    }
+    };
 
-    // Drag and Drop (minimal)
+    // DnD (minimal)
     const draggedCourse = ref(null);
     const draggedAssignment = ref(null);
     const dragOverCell = ref(null);
 
-    function handleCourseDragStart(event, course) {
+    const handleCourseDragStart = (event, course) => {
       draggedCourse.value = course;
       emit('scheduler-drag-start', {
         courseId: course.id,
@@ -735,8 +682,8 @@ export default {
       event.dataTransfer.setData('text/plain', JSON.stringify({ type: 'course', course, id: course.id }));
       event.dataTransfer.effectAllowed = 'copy';
       event.target.style.opacity = '0.5';
-    }
-    function handleCourseDragEnd(event) {
+    };
+    const handleCourseDragEnd = (event) => {
       emit('scheduler-drag-end', {
         courseId: draggedCourse.value?.id || null,
         courseName: draggedCourse.value?.name || draggedCourse.value?.course_name || null,
@@ -747,9 +694,9 @@ export default {
       });
       draggedCourse.value = null;
       event.target.style.opacity = '1';
-    }
+    };
 
-    function handleAssignmentDragStart(event, assignment, dayId, periodId) {
+    const handleAssignmentDragStart = (event, assignment, dayId, periodId) => {
       draggedAssignment.value = { assignment, originalDayId: dayId, originalPeriodId: periodId };
       emit('scheduler-drag-start', {
         courseId: assignment.course_id || '',
@@ -764,14 +711,12 @@ export default {
       );
       event.dataTransfer.effectAllowed = 'move';
       event.target.style.opacity = '0.5';
-    }
-    function handleAssignmentDragEnd(event) {
+    };
+    const handleAssignmentDragEnd = (event) => {
       emit('scheduler-drag-end', {
         courseId: draggedAssignment.value?.assignment?.course_id || null,
         courseName:
-          draggedAssignment.value?.assignment?.course_name ||
-          draggedAssignment.value?.assignment?.display_cell ||
-          null,
+          draggedAssignment.value?.assignment?.course_name || draggedAssignment.value?.assignment?.display_cell || null,
         courseCode: draggedAssignment.value?.assignment?.course_code || null,
         success: false,
         source: 'drag-end',
@@ -780,25 +725,25 @@ export default {
       draggedAssignment.value = null;
       event.target.style.opacity = '1';
       dragOverCell.value = null;
-    }
+    };
 
-    function handleCellDragOver(event) {
+    const handleCellDragOver = (event) => {
       if (!draggedCourse.value && !draggedAssignment.value) return false;
       event.dataTransfer.dropEffect = draggedAssignment.value ? 'move' : 'copy';
       return false;
-    }
-    function handleCellDragEnter(event, dayId, periodId) {
+    };
+    const handleCellDragEnter = (event, dayId, periodId) => {
       if (!draggedCourse.value && !draggedAssignment.value) return;
       dragOverCell.value = `${dayId}-${periodId}`;
       event.currentTarget.classList.add('drag-over');
-    }
-    function handleCellDragLeave(event) {
+    };
+    const handleCellDragLeave = (event) => {
       if (!event.currentTarget.contains(event.relatedTarget)) {
         dragOverCell.value = null;
         event.currentTarget.classList.remove('drag-over');
       }
-    }
-    function handleCellDrop(event, dayId, periodId) {
+    };
+    const handleCellDrop = (event, dayId, periodId) => {
       event.preventDefault();
       dragOverCell.value = null;
       event.currentTarget.classList.remove('drag-over');
@@ -834,56 +779,49 @@ export default {
             });
           }
         }
-      } catch (error) {
-        console.error('🚨 [DragDrop] Error handling drop:', error);
+      } catch (e) {
+        console.error('🚨 [DragDrop] Error handling drop:', e);
       }
-    }
+    };
 
     // Focus + stats
-    function togglePeriodFocus(periodId) {
+    const togglePeriodFocus = (periodId) => {
       focusedPeriodId.value = focusedPeriodId.value === periodId ? null : periodId;
       emit('period-focus-changed', focusedPeriodId.value);
-    }
-    function getFocusedPeriodName() {
-      const period = props.periods.find((p) => p.id === focusedPeriodId.value);
-      return period?.name || period?.label || 'Unknown Period';
-    }
+    };
+    const getFocusedPeriodName = () => props.periods.find((p) => p.id === focusedPeriodId.value)?.name || 'Unknown Period';
 
-    function parseGrades(course) {
+    const parseGrades = (course) => {
       const grades = [];
       if (course.is_for_year_g && typeof course.is_for_year_g === 'object') {
-        for (const [, grade] of Object.entries(course.is_for_year_g)) if (grade && grade > 0) grades.push(Number(grade));
+        for (const [, g] of Object.entries(course.is_for_year_g)) if (g && g > 0) grades.push(Number(g));
       } else if (Array.isArray(course.is_for_year_groups)) {
         grades.push(...course.is_for_year_groups.map((g) => Number(g)).filter((g) => g > 0));
       } else if (Array.isArray(course.year_groups)) {
         grades.push(...course.year_groups.map((g) => Number(g)).filter((g) => g > 0));
       }
       return [...new Set(grades)].sort((a, b) => a - b);
-    }
+    };
     const allGrades = computed(() => {
       const set = new Set();
       safeArray(props.courses).forEach((c) => parseGrades(c).forEach((g) => set.add(g)));
       return Array.from(set).sort((a, b) => a - b);
     });
-    function findCourseById(courseId) {
-      return safeArray(props.courses).find((course) => course.id === courseId);
-    }
-    function getScheduledCoursesForSlot(dayId, periodId) {
-      const scheduled = [];
-      const scheduledEntries = safeArray(currentSchedules.value).filter(
-        (e) => e.day_id === dayId && e.period_id === periodId
-      );
+    const findCourseById = (courseId) => safeArray(props.courses).find((course) => course.id === courseId);
+    const getScheduledCoursesForSlot = (dayId, periodId) => {
+      const out = [];
+      const scheduledEntries = safeArray(currentSchedules.value).filter((e) => e.day_id === dayId && e.period_id === periodId);
       scheduledEntries.forEach((entry) => {
         const course = findCourseById(entry.course_id);
         if (course) {
           const totalSpots = course.max_students || course.capacity || 0;
           const freeSpots = entry.free_spaces !== undefined ? entry.free_spaces : totalSpots;
-          scheduled.push({ ...course, scheduledEntry: entry, freeSpots, totalSpots });
+          out.push({ ...course, scheduledEntry: entry, freeSpots, totalSpots });
         }
       });
-      return scheduled;
-    }
-    function getDailyGradeStats(dayId, periodId) {
+      return out;
+    };
+    const getDailyGradeStats = (dayId, periodId) => {
       if (!periodId) return [];
       const scheduledCourses = getScheduledCoursesForSlot(dayId, periodId);
       const out = [];
@@ -892,32 +830,28 @@ export default {
         let coursesCount = 0;
         let totalGradeAllocation = 0;
         scheduledCourses.forEach((course) => {
-          const courseGrades = parseGrades(course);
-          if (courseGrades.includes(grade)) {
+          const grades = parseGrades(course);
+          if (grades.includes(grade)) {
             coursesCount++;
             const free = course.freeSpots || 0;
-            if (courseGrades.length === 1) {
+            if (grades.length === 1) {
               totalSpots += free;
               totalGradeAllocation += free;
             } else {
               totalSpots += free;
-              totalGradeAllocation += free / courseGrades.length;
+              totalGradeAllocation += free / grades.length;
             }
           }
         });
-        if (coursesCount > 0 || totalSpots > 0) {
-          out.push({ grade, totalSpots, averageSpots: totalGradeAllocation, coursesCount });
-        }
+        if (coursesCount > 0 || totalSpots > 0) out.push({ grade, totalSpots, averageSpots: totalGradeAllocation, coursesCount });
       });
       return out;
-    }
+    };
 
     // Course edit passthrough
-    function handleCourseEdit(courseData) {
-      emit('course-edit', courseData);
-    }
+    const handleCourseEdit = (courseData) => emit('course-edit', courseData);
 
-    // Mode logs
+    // Mode log
     watch(
       () => props.isLiveMode,
       (newMode, oldMode) => {
@@ -953,7 +887,7 @@ export default {
       safeArray,
       safeLength,
 
-      // Formatters and lookups
+      // Formatters/lookups
       formatTime,
       formatDate,
       getDisplayName,
@@ -1035,7 +969,7 @@ export default {
   background: white;
 }
 
-/* Header row (force flex) */
+/* Header row */
 .grid-header {
   display: flex !important;
   align-items: stretch;
@@ -1043,29 +977,14 @@ export default {
   border-bottom: 1px solid #ddd;
   font-weight: 600;
 }
-
 .period-header-cell {
-  width: 140px;
-  min-width: 140px;
-  max-width: 140px;
-  padding: 12px 8px;
-  border-right: 1px solid #ddd;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-sizing: border-box;
+  width: 140px; min-width: 140px; max-width: 140px;
+  padding: 12px 8px; border-right: 1px solid #ddd;
+  display: flex; align-items: center; justify-content: center; box-sizing: border-box;
 }
-
 .day-header-cell {
-  flex: 1 1 0;
-  min-width: 160px;
-  padding: 12px 8px;
-  border-right: 1px solid #ddd;
-  text-align: center;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  box-sizing: border-box;
+  flex: 1 1 0; min-width: 160px; padding: 12px 8px; border-right: 1px solid #ddd;
+  text-align: center; display: flex; flex-direction: column; gap: 2px; box-sizing: border-box;
 }
 .day-header-cell:last-child { border-right: 0; }
 .day-name { font-size: 0.95em; }
@@ -1073,29 +992,17 @@ export default {
 
 /* Body */
 .grid-body { display: block; }
-
 .grid-row {
-  display: flex !important;
-  align-items: stretch;
-  border-bottom: 1px solid #ddd;
-  min-height: 80px;
+  display: flex !important; align-items: stretch;
+  border-bottom: 1px solid #ddd; min-height: 80px;
 }
 .grid-row:last-child { border-bottom: 0; }
 .grid-row.non-instructional { background: #f8f9fa; }
 
-/* Period label cell */
 .period-label-cell {
-  width: 140px;
-  min-width: 140px;
-  max-width: 140px;
-  padding: 8px;
-  border-right: 1px solid #ddd;
-  background: #f9f9f9;
-  display: flex;
-  align-items: center;
-  cursor: pointer;
-  transition: background-color 0.2s;
-  box-sizing: border-box;
+  width: 140px; min-width: 140px; max-width: 140px;
+  padding: 8px; border-right: 1px solid #ddd; background: #f9f9f9;
+  display: flex; align-items: center; cursor: pointer; transition: background-color 0.2s; box-sizing: border-box;
 }
 .period-label-cell:hover { background: #f0f7ff !important; }
 .period-label-cell.focused { background: #e6f7ff !important; border-left: 4px solid #007cba; }
@@ -1106,14 +1013,8 @@ export default {
 
 /* Cells */
 .schedule-cell {
-  flex: 1 1 0;
-  min-width: 160px;
-  border-right: 1px solid #ddd;
-  position: relative;
-  cursor: pointer;
-  transition: background-color 0.2s;
-  min-height: 80px;
-  box-sizing: border-box;
+  flex: 1 1 0; min-width: 160px; border-right: 1px solid #ddd;
+  position: relative; cursor: pointer; transition: background-color 0.2s; min-height: 80px; box-sizing: border-box;
 }
 .schedule-cell:last-child { border-right: 0; }
 .schedule-cell:hover { background: #f0f7ff; }
@@ -1123,22 +1024,10 @@ export default {
 
 /* Assignment items */
 .assignments-container {
-  padding: 4px;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  position: relative;
-  box-sizing: border-box;
+  padding: 4px; height: 100%; display: flex; flex-direction: column; gap: 2px; position: relative; box-sizing: border-box;
 }
 .assignment-item {
-  padding: 4px 6px;
-  border-radius: 3px;
-  border: 1px solid #e0e0e0;
-  position: relative;
-  cursor: pointer;
-  transition: all 0.2s;
-  background: white;
+  padding: 4px 6px; border-radius: 3px; border: 1px solid #e0e0e0; position: relative; cursor: pointer; transition: all 0.2s; background: white;
 }
 .assignment-item:hover { transform: translateX(1px); box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
 .assignment-item.has-conflict { border-color: #ff4d4f; background: #fff2f0; }
@@ -1150,21 +1039,10 @@ export default {
 .course-name { font-weight: 500; font-size: 0.85em; line-height: 1.2; }
 .class-name, .teacher-names, .room-name { font-size: 0.75em; color: #666; line-height: 1.1; }
 
-.conflict-indicator, .deleted-warning {
-  position: absolute; top: 2px; right: 2px; font-size: 0.7em;
-}
+.conflict-indicator, .deleted-warning { position: absolute; top: 2px; right: 2px; font-size: 0.7em; }
 
 /* Empty cell */
-.empty-cell {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  color: #ccc;
-  font-size: 0.85em;
-  gap: 4px;
-}
+.empty-cell { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #ccc; font-size: 0.85em; gap: 4px; }
 .add-text { opacity: 0.8; }
 
 /* Drag targets */
@@ -1186,26 +1064,18 @@ export default {
 .stats-emoji { font-size: 1.1em; }
 
 .day-statistics-cell {
-  flex: 1 1 0;
-  min-width: 160px;
-  border-right: 1px solid #ddd;
-  padding: 8px; background: white;
+  flex: 1 1 0; min-width: 160px; border-right: 1px solid #ddd; padding: 8px; background: white;
   display: flex; flex-direction: column; gap: 4px; min-height: 100px; box-sizing: border-box;
 }
 .day-statistics-cell:last-child { border-right: 0; }
-
 .stats-headers {
-  display: flex; justify-content: space-between; align-items: center; gap: 2px;
-  margin-bottom: 4px; padding: 2px; background: rgba(0,124,186,0.1); border-radius: 3px;
+  display: flex; justify-content: space-between; align-items: center; gap: 2px; margin-bottom: 4px;
+  padding: 2px; background: rgba(0,124,186,0.1); border-radius: 3px;
 }
 .stat-header { font-size: 0.9em; text-align: center; cursor: help; padding: 2px 4px; border-radius: 2px; flex: 1; }
 .stat-header:hover { background: rgba(0,124,186,0.2); }
-
 .stats-rows { display: flex; flex-direction: column; gap: 2px; flex-grow: 1; }
-.grade-stats-row {
-  display: flex; align-items: center; justify-content: space-between; gap: 4px;
-  background: #f8f9fa; border: 1px solid #e0e0e0; border-radius: 2px; padding: 2px 4px; font-size: 0.75em;
-}
+.grade-stats-row { display: flex; align-items: center; justify-content: space-between; gap: 4px; background: #f8f9fa; border: 1px solid #e0e0e0; border-radius: 2px; padding: 2px 4px; font-size: 0.75em; }
 .grade-number { font-weight: 600; color: #333; min-width: 20px; font-size: 0.8em; }
 .stat-value { text-align: center; padding: 1px 2px; background: white; border-radius: 2px; font-size: 0.7em; color: #666; min-width: 18px; flex: 1; }
 
@@ -1255,10 +1125,9 @@ export default {
   .day-header-cell, .schedule-cell, .day-statistics-cell { min-width: 180px; }
 }
 
-/* Context Menu (not scoped to avoid teleport issues) remains below */
+/* Context Menu (unscoped styles at bottom ensure visibility) */
 </style>
 
-<!-- Unscoped styles for context menu/backdrop -->
 <style>
 .context-menu {
   position: fixed;
