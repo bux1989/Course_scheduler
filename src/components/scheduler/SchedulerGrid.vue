@@ -67,10 +67,10 @@
             @keydown.enter="handleCellClick(day.id, period.id, period)"
             @keydown.space.prevent="handleCellClick(day.id, period.id, period)"
             :aria-label="getCellAriaLabel(day, period)"
-            @dragover.prevent="!isReadOnly ? handleCellDragOver($event, day.id, period.id) : null"
-            @dragenter.prevent="!isReadOnly ? handleCellDragEnter($event, day.id, period.id) : null"
-            @dragleave="!isReadOnly ? handleCellDragLeave($event, day.id, period.id) : null"
-            @drop="!isReadOnly ? handleCellDrop($event, day.id, period.id) : null"
+            @dragover.prevent="(!isReadOnly && !isLiveMode) ? handleCellDragOver($event, day.id, period.id) : null"
+            @dragenter.prevent="(!isReadOnly && !isLiveMode) ? handleCellDragEnter($event, day.id, period.id) : null"
+            @dragleave="(!isReadOnly && !isLiveMode) ? handleCellDragLeave($event, day.id, period.id) : null"
+            @drop="(!isReadOnly && !isLiveMode) ? handleCellDrop($event, day.id, period.id) : null"
             :data-day-id="day.id"
             :data-period-id="period.id"
           >
@@ -84,9 +84,9 @@
                 :style="getAssignmentStyles(assignment)"
                 @click.stop="handleAssignmentClick(assignment, day.id, period.id)"
                 @contextmenu.prevent="handleAssignmentRightClick($event, assignment, day.id, period.id)"
-                :draggable="!isReadOnly && !isEditing(assignment.id)"
-                @dragstart="!isReadOnly ? handleAssignmentDragStart($event, assignment, day.id, period.id) : null"
-                @dragend="!isReadOnly ? handleAssignmentDragEnd($event) : null"
+                :draggable="(!isReadOnly && !isLiveMode) && !isEditing(assignment.id)"
+                @dragstart="(!isReadOnly && !isLiveMode) ? handleAssignmentDragStart($event, assignment, day.id, period.id) : null"
+                @dragend="(!isReadOnly && !isLiveMode) ? handleAssignmentDragEnd($event) : null"
                 :data-assignment-id="assignment.id"
                 :data-day-id="day.id"
                 :data-period-id="period.id"
@@ -107,7 +107,7 @@
 
             <!-- Empty Cell -->
             <div v-else class="empty-cell">
-              <template v-if="!isReadOnly">
+              <template v-if="!isReadOnly && !isLiveMode">
                 <span class="add-text">Add Course</span>
               </template>
               <template v-else>
@@ -167,8 +167,8 @@
       </div>
     </div>
 
-    <!-- Available Courses Panel -->
-    <div v-if="focusedPeriodId && !isReadOnly" class="available-courses-panel">
+    <!-- Available Courses Panel: HIDDEN in live/read-only -->
+    <div v-if="focusedPeriodId && !isReadOnly && !isLiveMode" class="available-courses-panel">
       <h3>Available Courses for {{ getFocusedPeriodName() }}</h3>
       <div class="focused-period-info">
         <em>Courses that can be scheduled during this period on each day</em>
@@ -182,14 +182,14 @@
               :key="course.id"
               class="course-card draggable-course"
               :style="getCourseCardStyle(course)"
-              @click="!isReadOnly ? assignCourseToSlot(course, day.id, focusedPeriodId) : null"
+              @click="(!isReadOnly && !isLiveMode) ? assignCourseToSlot(course, day.id, focusedPeriodId) : null"
               :title="`${!isReadOnly ? 'Click to assign or drag' : 'Course:'} ${course.name || course.course_name} ${!isReadOnly ? 'to schedule' : ''}`"
-              :draggable="!isReadOnly"
+              :draggable="!isReadOnly && !isLiveMode"
               :data-course-id="course.id"
               :data-day-id="day.id"
               :data-period-id="focusedPeriodId"
-              @dragstart="!isReadOnly ? handleCourseDragStart($event, course) : null"
-              @dragend="!isReadOnly ? handleCourseDragEnd($event) : null"
+              @dragstart="(!isReadOnly && !isLiveMode) ? handleCourseDragStart($event, course) : null"
+              @dragend="(!isReadOnly && !isLiveMode) ? handleCourseDragEnd($event) : null"
             >
               <div class="course-name">{{ course.name || course.course_name || course.title }}</div>
               <div class="course-details">
@@ -205,6 +205,7 @@
         </div>
       </div>
 
+      <!-- No Preferred Days Panel -->
       <div v-if="safeLength(getNoPreferredDaysCourses()) > 0" class="no-preferred-days-panel">
         <h4>📅 Courses with No Preferred Days</h4>
         <p class="panel-description">These courses have no time slot restrictions and can be scheduled on any day:</p>
@@ -214,7 +215,8 @@
             :key="`no-pref-${course.id}`"
             class="course-card"
             :style="getCourseCardStyle(course)"
-            @click="!isReadOnly ? assignCourseToFocusedSlot(course) : null"
+            @click="(!isReadOnly && !isLiveMode) ? assignCourseToFocusedSlot(course) : null"
+            :title="`${course.name || course.course_name} - ${!isReadOnly ? 'Can be scheduled on any day' : 'Available on any day'}`"
           >
             <div class="course-name">{{ course.name || course.course_name || course.title }}</div>
             <div class="course-details">
@@ -241,7 +243,7 @@
       @cancel="handleTeacherRoomCancel"
     />
 
-    <!-- Course Selection Modal -->
+    <!-- Course Selection Modal (kept for compatibility, not used if you don't call it) -->
     <CourseSelectionModal
       v-if="showCourseSelectionModal && courseSelectionData"
       :dayId="courseSelectionData.dayId"
@@ -253,7 +255,7 @@
       @cancel="handleCourseSelectionCancel"
     />
 
-    <!-- Context Menu (fixed, high z-index) -->
+    <!-- Context Menu -->
     <div
       v-if="contextMenu.show"
       class="context-menu"
@@ -261,10 +263,15 @@
       @click.stop
     >
       <div class="context-menu-item" @click="editAssignmentFromContext">
-        {{ isReadOnly ? '📄 View Assignment Details' : '✏️ Edit Assignment' }}
+        {{ (isReadOnly || isLiveMode) ? '📄 View Assignment Details' : '✏️ Edit Assignment' }}
       </div>
-      <div class="context-menu-item delete" @click="deleteAssignmentFromContext">
-        {{ isReadOnly ? '🔍 Test Delete Event' : '🗑️ Delete Assignment' }}
+      <!-- Delete is hidden in live or read-only mode -->
+      <div
+        v-if="!(isReadOnly || isLiveMode)"
+        class="context-menu-item delete"
+        @click="deleteAssignmentFromContext"
+      >
+        🗑️ Delete Assignment
       </div>
     </div>
     <div v-if="contextMenu.show" class="context-menu-backdrop" @click="closeContextMenu"></div>
@@ -337,7 +344,7 @@ export default {
     'course-edit',
   ],
   setup(props, { emit }) {
-    // Local helpers (no external deps)
+    // Local helpers
     const safeArray = (v) => (Array.isArray(v) ? v : []);
     const safeLength = (v) => (Array.isArray(v) ? v.length : 0);
     const normId = (v) => String(v ?? '');
@@ -357,6 +364,19 @@ export default {
 
     const contextMenu = ref({ show: false, x: 0, y: 0, assignment: null, dayId: null, periodId: null });
 
+    // Mode change log/emit
+    watch(
+      () => props.isLiveMode,
+      (newMode, oldMode) => {
+        if (newMode !== oldMode) {
+          const mode = newMode ? 'live' : 'planner';
+          console.log('🔄 [SchedulerGrid] Mode changed to:', mode);
+          emit('mode-changed', mode);
+        }
+      },
+      { immediate: true }
+    );
+
     // Visible data
     const visibleDays = computed(() => safeArray(props.schoolDays).slice(0, props.maxDays || 7));
     const visiblePeriods = computed(() => {
@@ -364,7 +384,10 @@ export default {
       if (!focusedPeriodId.value) return all;
       const match = all.filter((p) => p.id === focusedPeriodId.value);
       if (safeLength(match) === 0) {
-        console.warn('Focused period not found, clearing focus', { focused: focusedPeriodId.value });
+        console.warn('🚨 [SchedulerGrid] Focused period not found, clearing.', {
+          focusedId: focusedPeriodId.value,
+          availableIds: all.slice(0, 5).map((p) => p.id),
+        });
         focusedPeriodId.value = null;
         return all;
       }
@@ -483,12 +506,13 @@ export default {
     // Clicks
     const handleCellClick = (dayId, periodId, period) => {
       if (props.isReadOnly) return;
-      if (getCellAssignments(dayId, periodId).length === 0) return;
+      const assignments = getCellAssignments(dayId, periodId);
+      if (assignments.length === 0) return;
       emit('cell-click', { dayId, periodId, period });
     };
     const handleAssignmentClick = (assignment) => emit('assignment-details', assignment);
 
-    // Context menu (fixed to cursor position)
+    // Context menu
     const computeContextMenuPosition = (evt, menuSize = { w: 220, h: 96 }) => {
       const vw = window.innerWidth || 1024;
       const vh = window.innerHeight || 768;
@@ -513,17 +537,11 @@ export default {
       const a = contextMenu.value.assignment;
       if (!a) return closeContextMenu();
       if (props.isReadOnly || props.isLiveMode) {
-        const fn = props.parentEmit || emit;
-        emitSchedulerRemoveEvent(fn, {
-          dayId: a.day_id,
-          periodId: a.period_id,
-          assignmentId: a.id,
-          courseId: a.course_id,
-          courseName: a.course_name || a.display_cell || '',
-        });
-      } else {
-        deleteInlineAssignment(a);
+        // Hidden in the UI, but keep a safe guard
+        closeContextMenu();
+        return;
       }
+      deleteInlineAssignment(a);
       closeContextMenu();
     };
 
@@ -589,17 +607,15 @@ export default {
         return slots.some((slot) => normId(slot.dayId) === normId(dayId) && normId(slot.periodId) === normId(periodId));
       });
     };
-
     const getNoPreferredDaysCourses = () =>
       props.courses.filter((c) => !Array.isArray(c.possible_time_slots) || c.possible_time_slots.length === 0);
-
     const getCourseCardStyle = (course) => ({
       borderLeft: `4px solid ${course.color || '#007cba'}`,
       backgroundColor: course.color ? `${course.color}15` : '#f0f8ff',
     });
 
     const assignCourseToSlot = (course, dayId, periodId) => {
-      if (props.isReadOnly) return;
+      if (props.isReadOnly || props.isLiveMode) return;
       modalCourseData.value = {
         courseId: course.id,
         courseName: course.name || course.course_name || '',
@@ -618,13 +634,7 @@ export default {
       });
     };
 
-    // "No preferred days" quick assign: uses first visible day
-    const assignCourseToFocusedSlot = (course) => {
-      if (props.isReadOnly || !focusedPeriodId.value) return;
-      const firstDay = visibleDays.value[0];
-      if (firstDay) assignCourseToSlot(course, firstDay.id, focusedPeriodId.value);
-    };
-
+    // Teacher/Room Modal handlers (now includes frequency from modal)
     const handleTeacherRoomSubmit = (payload) => {
       emit('scheduler-drop', {
         dayId: payload.dayId,
@@ -635,18 +645,19 @@ export default {
         teacherIds: payload.teacherIds,
         primaryTeacherId: payload.primaryTeacherId,
         roomId: payload.roomId,
+        frequency: payload.frequency || 'one-off', // NEW: pass through to parent
         source: 'modal-assignment',
         timestamp: payload.timestamp,
       });
       showTeacherRoomModal.value = false;
       modalCourseData.value = null;
     };
-
     const handleTeacherRoomCancel = () => {
       showTeacherRoomModal.value = false;
       modalCourseData.value = null;
     };
 
+    // CourseSelectionModal (optional flow)
     const handleCourseSelectionSubmit = (payload) => {
       showCourseSelectionModal.value = false;
       modalCourseData.value = {
@@ -659,13 +670,19 @@ export default {
       showTeacherRoomModal.value = true;
       courseSelectionData.value = null;
     };
-
     const handleCourseSelectionCancel = () => {
       showCourseSelectionModal.value = false;
       courseSelectionData.value = null;
     };
 
-    // DnD (minimal)
+    // Quick assign for no-preferred-days
+    const assignCourseToFocusedSlot = (course) => {
+      if (props.isReadOnly || props.isLiveMode || !focusedPeriodId.value) return;
+      const firstDay = visibleDays.value[0];
+      if (firstDay) assignCourseToSlot(course, firstDay.id, focusedPeriodId.value);
+    };
+
+    // Drag & drop (guarded in template by mode flags)
     const draggedCourse = ref(null);
     const draggedAssignment = ref(null);
     const dragOverCell = ref(null);
@@ -850,19 +867,6 @@ export default {
 
     // Course edit passthrough
     const handleCourseEdit = (courseData) => emit('course-edit', courseData);
-
-    // Mode log
-    watch(
-      () => props.isLiveMode,
-      (newMode, oldMode) => {
-        if (newMode !== oldMode) {
-          const mode = newMode ? 'live' : 'planner';
-          console.log('🔄 [SchedulerGrid] Mode changed to:', mode);
-          emit('mode-changed', mode);
-        }
-      },
-      { immediate: true }
-    );
 
     return {
       // State
@@ -1108,7 +1112,7 @@ export default {
 .emergency-show-btn { padding: 12px 24px; background: #f44336; color: white; border: none; border-radius: 6px; font-size: 1em; font-weight: bold; cursor: pointer; margin-top: 16px; transition: all 0.2s; }
 .emergency-show-btn:hover { background: #d32f2f; transform: scale(1.05); }
 
-/* Read-only */
+/* Read-only/live */
 .scheduler-grid[data-readonly='true'] .schedule-cell { cursor: default; }
 .scheduler-grid[data-readonly='true'] .schedule-cell:hover { background: inherit; }
 .scheduler-grid[data-readonly='true'] .draggable-course,
@@ -1125,10 +1129,7 @@ export default {
   .day-header-cell, .schedule-cell, .day-statistics-cell { min-width: 180px; }
 }
 
-/* Context Menu (unscoped styles at bottom ensure visibility) */
-</style>
-
-<style>
+/* Context Menu */
 .context-menu {
   position: fixed;
   background: white;
