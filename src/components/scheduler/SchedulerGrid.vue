@@ -487,15 +487,28 @@ export default {
       emit('assignment-details', assignment);
     }
 
+    // Robust positioning: anchor to clicked element's rect; clamp to viewport
     function computeContextMenuPosition(evt, menuSize = { w: 220, h: 96 }) {
       const vw = window.innerWidth || document.documentElement.clientWidth || 1024;
       const vh = window.innerHeight || document.documentElement.clientHeight || 768;
-      let x = (evt?.clientX ?? 0) + 6;
-      let y = (evt?.clientY ?? 0) + 6;
+      const rect = evt?.currentTarget?.getBoundingClientRect?.();
+      let x = 0;
+      let y = 0;
+
+      if (rect && rect.width >= 0 && rect.height >= 0) {
+        x = rect.left + 8;
+        y = rect.bottom + 6;
+      } else {
+        // Fallback to cursor
+        x = (evt?.clientX ?? 0) + 6;
+        y = (evt?.clientY ?? 0) + 6;
+      }
+
       if (x + menuSize.w > vw) x = Math.max(8, vw - menuSize.w - 8);
       if (y + menuSize.h > vh) y = Math.max(8, vh - menuSize.h - 8);
       return { x, y };
     }
+
     function handleAssignmentRightClick(event, assignment, dayId, periodId) {
       const pos = computeContextMenuPosition(event);
       contextMenu.value = {
@@ -870,7 +883,7 @@ export default {
   background: #fff;
 }
 
-/* Header row (force horizontal layout) */
+/* Header row */
 .grid-header {
   display: flex !important;
   align-items: stretch;
@@ -878,64 +891,32 @@ export default {
   border-bottom: 1px solid #ddd;
   font-weight: 600;
 }
-
-/* Period header (left column) */
 .period-header-cell {
-  width: 140px;
-  min-width: 140px;
-  max-width: 140px;
-  padding: 10px 8px;
-  border-right: 1px solid #ddd;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-sizing: border-box;
+  width: 140px; min-width: 140px; max-width: 140px;
+  padding: 10px 8px; border-right: 1px solid #ddd;
+  display: flex; align-items: center; justify-content: center; box-sizing: border-box;
 }
-
-/* Day headers (columns) */
 .day-header-cell {
-  flex: 1 1 0;
-  min-width: 160px;
-  padding: 10px 8px;
-  border-right: 1px solid #ddd;
-  text-align: center;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  box-sizing: border-box;
+  flex: 1 1 0; min-width: 160px; padding: 10px 8px; border-right: 1px solid #ddd;
+  text-align: center; display: flex; flex-direction: column; gap: 2px; box-sizing: border-box;
 }
 .day-header-cell:last-child { border-right: 0; }
 .day-name { font-size: 0.95em; }
-.day-date { font-size: 0.8em; color: #666; font-weight: normal; }
+.day-date { font-size: 0.8em; color: #666; }
 
-/* Body container */
-.grid-body {
-  display: block;
-}
-
-/* Each period row (force horizontal layout) */
+/* Body */
+.grid-body { display: block; }
 .grid-row {
-  display: flex !important;
-  align-items: stretch;
-  border-bottom: 1px solid #ddd;
-  min-height: 72px;
+  display: flex !important; align-items: stretch;
+  border-bottom: 1px solid #ddd; min-height: 72px;
 }
 .grid-row:last-child { border-bottom: 0; }
 .grid-row.non-instructional { background: #f8f9fa; }
 
-/* Period label cell (left column in body) */
 .period-label-cell {
-  width: 140px;
-  min-width: 140px;
-  max-width: 140px;
-  padding: 8px;
-  border-right: 1px solid #ddd;
-  background: #f9f9f9;
-  display: flex;
-  align-items: center;
-  cursor: pointer;
-  transition: background-color 0.2s;
-  box-sizing: border-box;
+  width: 140px; min-width: 140px; max-width: 140px;
+  padding: 8px; border-right: 1px solid #ddd; background: #f9f9f9;
+  display: flex; align-items: center; cursor: pointer; transition: background-color 0.2s; box-sizing: border-box;
 }
 .period-label-cell:hover { background: #f0f7ff !important; }
 .period-label-cell.focused { background: #e6f7ff !important; border-left: 4px solid #007cba; }
@@ -944,16 +925,9 @@ export default {
 .period-time { font-size: 0.78em; color: #666; }
 .non-instructional-badge { font-size: 0.72em; color: #888; background: #e9ecef; padding: 1px 4px; border-radius: 3px; align-self: flex-start; }
 
-/* Schedule cells (day columns) */
 .schedule-cell {
-  flex: 1 1 0;
-  min-width: 160px;
-  border-right: 1px solid #ddd;
-  position: relative;
-  cursor: pointer;
-  transition: background-color 0.2s;
-  min-height: 72px;
-  box-sizing: border-box;
+  flex: 1 1 0; min-width: 160px; border-right: 1px solid #ddd;
+  position: relative; cursor: pointer; transition: background-color 0.2s; min-height: 72px; box-sizing: border-box;
 }
 .schedule-cell:last-child { border-right: 0; }
 .schedule-cell:hover { background: #f0f7ff; }
@@ -961,23 +935,12 @@ export default {
 .schedule-cell.multiple-assignments { background: #def3ff; }
 .schedule-cell.has-conflicts { background: #fff2f0; border-left: 3px solid #ff4d4f; }
 
-/* Assignment items */
+/* Assignments */
 .assignments-container {
-  padding: 4px;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  position: relative;
-  box-sizing: border-box;
+  padding: 4px; height: 100%; display: flex; flex-direction: column; gap: 4px; position: relative; box-sizing: border-box;
 }
 .assignment-item {
-  padding: 4px 6px;
-  border-radius: 4px;
-  border: 1px solid #e0e0e0;
-  position: relative;
-  transition: all 0.2s;
-  background: #fff;
+  padding: 4px 6px; border-radius: 4px; border: 1px solid #e0e0e0; position: relative; transition: all 0.2s; background: #fff;
 }
 .assignment-item:hover { transform: translateX(1px); box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
 .assignment-item.has-conflict { border-color: #ff4d4f; background: #fff2f0; }
@@ -989,16 +952,7 @@ export default {
 .conflict-indicator, .deleted-warning { position: absolute; top: 4px; right: 4px; font-size: 0.8em; line-height: 1; }
 
 /* Empty cell */
-.empty-cell {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  color: #999;
-  font-size: 0.85em;
-  gap: 4px;
-}
+.empty-cell { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #999; font-size: 0.85em; gap: 4px; }
 
 /* Drag targets */
 .drop-zone { position: relative; transition: all 0.2s ease; }
@@ -1012,54 +966,29 @@ export default {
 .statistics-row { display: flex !important; border-bottom: 2px solid #007cba; background: #f0f8ff; border-top: 2px solid #007cba; }
 .stats-label-cell {
   width: 140px; min-width: 140px; max-width: 140px;
-  background: #007cba !important; color: white;
-  display: flex; align-items: center; justify-content: center;
-  border-right: 1px solid #ddd;
-  box-sizing: border-box;
+  background: #007cba !important; color: white; display: flex; align-items: center; justify-content: center;
+  border-right: 1px solid #ddd; box-sizing: border-box;
 }
 .stats-title { display: flex; align-items: center; gap: 6px; font-size: 0.95em; font-weight: 600; }
 .stats-emoji { font-size: 1.15em; }
 
 .day-statistics-cell {
   --grade-col: 28px;
-  flex: 1 1 0;
-  min-width: 160px;
-  border-right: 1px solid #ddd;
-  padding: 6px;
-  background: white;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-height: 96px;
-  box-sizing: border-box;
+  flex: 1 1 0; min-width: 160px; border-right: 1px solid #ddd; padding: 6px; background: white;
+  display: flex; flex-direction: column; gap: 6px; min-height: 96px; box-sizing: border-box;
 }
 .day-statistics-cell:last-child { border-right: 0; }
-
 .stats-headers {
-  display: grid;
-  grid-template-columns: var(--grade-col) 1fr 1fr 1fr;
-  align-items: center;
-  gap: 4px;
-  margin-bottom: 4px;
-  padding: 3px 4px;
-  background: rgba(0,124,186,0.1);
-  border-radius: 4px;
+  display: grid; grid-template-columns: var(--grade-col) 1fr 1fr 1fr; align-items: center; gap: 4px;
+  margin-bottom: 4px; padding: 3px 4px; background: rgba(0,124,186,0.1); border-radius: 4px;
 }
 .header-spacer { width: 100%; height: 1px; opacity: 0; }
 .stat-header { display: flex; align-items: center; justify-content: center; font-size: 0.95em; line-height: 1; padding: 2px 4px; border-radius: 3px; }
 .stat-header:hover { background: rgba(0,124,186,0.2); }
-
 .stats-rows { display: flex; flex-direction: column; gap: 3px; flex-grow: 1; }
 .grade-stats-row {
-  display: grid;
-  grid-template-columns: var(--grade-col) 1fr 1fr 1fr;
-  align-items: center;
-  gap: 6px;
-  background: #f8f9fa;
-  border: 1px solid #e0e0e0;
-  border-radius: 4px;
-  padding: 3px 4px;
-  font-size: 0.88em;
+  display: grid; grid-template-columns: var(--grade-col) 1fr 1fr 1fr; align-items: center; gap: 6px;
+  background: #f8f9fa; border: 1px solid #e0e0e0; border-radius: 4px; padding: 3px 4px; font-size: 0.88em;
 }
 .grade-number { font-weight: 700; color: #333; min-width: var(--grade-col); font-size: 0.95em; }
 .stat-value { text-align: center; padding: 2px 4px; background: white; border-radius: 3px; font-size: 0.88em; color: #333; }
