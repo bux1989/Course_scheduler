@@ -74,7 +74,7 @@
                 :class="getAssignmentClasses(assignment)"
                 :style="getAssignmentStyles(assignment)"
                 @click.stop="handleAssignmentClick(assignment, day.id, period.id)"
-                @contextmenu.prevent="emitAssignmentDetails(assignment)"
+                @contextmenu.prevent="openContextMenu($event, assignment)"
                 :draggable="!isReadOnly"
                 @dragstart="!isReadOnly ? handleAssignmentDragStart($event, assignment, day.id, period.id) : null"
                 @dragend="!isReadOnly ? handleAssignmentDragEnd($event) : null"
@@ -83,9 +83,13 @@
                 :data-period-id="period.id"
               >
                 <div class="assignment-content">
-                  <span class="course-name">{{ getDisplayName(assignment) }}</span>
+                  <span class="course-name">
+                    {{ getDisplayName(assignment) }}
+                    <small v-if="assignment.course_code" class="code">({{ assignment.course_code }})</small>
+                  </span>
                   <span class="meta-line">
                     <span class="class-name" v-if="assignment.class_id">{{ getClassName(assignment.class_id) }}</span>
+                    <span class="subject-name" v-if="assignment.subject_name">• {{ assignment.subject_name }}</span>
                     <span class="teacher-names" v-if="getAssignmentTeachers(assignment)">
                       • {{ getAssignmentTeachers(assignment) }}
                     </span>
@@ -120,10 +124,12 @@
           </div>
 
           <div v-for="day in visibleDays" :key="`stats-${day.id}`" class="day-statistics-cell">
-            <div class="stats-headers">
-              <div class="stat-header" title="Total free spots available">📊 <span>Free</span></div>
-              <div class="stat-header" title="Average spots available">⚖️ <span>Avg</span></div>
-              <div class="stat-header" title="Courses available">📚 <span>Courses</span></div>
+            <!-- Icons only; aligned to value columns via CSS grid (spacer + 3 equal columns) -->
+            <div class="stats-headers" role="presentation">
+              <div class="header-spacer" aria-hidden="true"></div>
+              <div class="stat-header" title="Total free spots available">📊</div>
+              <div class="stat-header" title="Average spots available">⚖️</div>
+              <div class="stat-header" title="Courses available">📚</div>
             </div>
 
             <div class="stats-rows">
@@ -216,6 +222,18 @@
         Grid hidden. Please provide schoolDays and periods.
       </div>
     </div>
+
+    <!-- Context Menu -->
+    <div
+      v-if="contextMenu.show"
+      class="context-menu"
+      :style="{ left: contextMenu.x + 'px', top: contextMenu.y + 'px' }"
+      @click.stop
+    >
+      <div class="context-menu-item" @click="editFromMenu">✏️ Edit</div>
+      <div class="context-menu-item delete" @click="deleteFromMenu">🗑️ Delete</div>
+    </div>
+    <div v-if="contextMenu.show" class="context-menu-backdrop" @click="closeContextMenu"></div>
   </div>
 </template>
 
@@ -260,12 +278,20 @@ export default {
 
     const focusedPeriodId = ref(null);
 
-    // Track currently dragging course for subtle UI feedback
+    // Drag state
     const draggedCourse = ref(null);
     const draggedAssignment = ref(null);
 
-    // Optimistic hide-after-schedule: courses removed from the list until parent updates
+    // Optimistic hide of assigned courses in the available list
     const optimisticallyScheduled = ref(new Set());
+
+    // Right-click context menu
+    const contextMenu = ref({
+      show: false,
+      x: 0,
+      y: 0,
+      assignment: null,
+    });
 
     const visibleDays = computed(() => safeArray(props.schoolDays).slice(0, props.maxDays || 7));
 
@@ -276,7 +302,7 @@ export default {
       return match.length ? match : all;
     });
 
-    // Parent passes draft data; this is what we render against
+    // Parent controls which schedules are passed; we render against draft by default
     const currentSchedules = computed(() => props.draftSchedules);
 
     // Formatting helpers
@@ -423,12 +449,32 @@ export default {
       emit('cell-click', { dayId, periodId, period, mode: 'add', preSelectedCourse: null });
     }
 
-    function emitAssignmentDetails(assignment) {
+    function handleAssignmentClick(assignment) {
       emit('assignment-details', assignment);
     }
 
-    function handleAssignmentClick(assignment) {
-      emit('assignment-details', assignment);
+    function openContextMenu(event, assignment) {
+      contextMenu.value = {
+        show: true,
+        x: event.clientX,
+        y: event.clientY,
+        assignment,
+      };
+    }
+    function closeContextMenu() {
+      contextMenu.value.show = false;
+    }
+    function editFromMenu() {
+      if (!contextMenu.value.assignment) return;
+      emit('assignment-details', contextMenu.value.assignment);
+      closeContextMenu();
+    }
+    function deleteFromMenu() {
+      if (!contextMenu.value.assignment) return;
+      // Remove from current schedules and let parent persist
+      const updated = safeArray(currentSchedules.value).filter((s) => !isSameId(s.id, contextMenu.value.assignment.id));
+      emit('update-assignments', updated);
+      closeContextMenu();
     }
 
     // Drag: courses
@@ -442,10 +488,7 @@ export default {
         timestamp: new Date().toISOString(),
       });
 
-      event.dataTransfer.setData(
-        'text/plain',
-        JSON.stringify({ type: 'course', course, id: course.id })
-      );
+      event.dataTransfer.setData('text/plain', JSON.stringify({ type: 'course', course, id: course.id }));
       event.dataTransfer.effectAllowed = 'copy';
       event.target.style.opacity = '0.5';
     }
@@ -744,6 +787,7 @@ export default {
       draggedCourse,
       draggedAssignment,
       optimisticallyScheduled,
+      contextMenu,
 
       // computed
       visibleDays,
@@ -777,8 +821,11 @@ export default {
 
       // interactions
       handleCellClick,
-      emitAssignmentDetails,
       handleAssignmentClick,
+      openContextMenu,
+      closeContextMenu,
+      editFromMenu,
+      deleteFromMenu,
       handleCourseDragStart,
       handleCourseDragEnd,
       handleAssignmentDragStart,
@@ -929,6 +976,7 @@ export default {
 
 .assignment-content { display: flex; flex-direction: column; gap: 2px; }
 .course-name { font-weight: 600; font-size: 0.88em; line-height: 1.2; }
+.course-name .code { font-weight: 500; color: #666; }
 .meta-line { font-size: 0.76em; color: #666; line-height: 1.2; display: inline-flex; gap: 4px; align-items: baseline; }
 
 .conflict-indicator,
@@ -985,6 +1033,7 @@ export default {
 .stats-emoji { font-size: 1.15em; }
 
 .day-statistics-cell {
+  --grade-col: 28px; /* used for header spacer + grade column */
   flex: 1;
   border-right: 1px solid #ddd;
   padding: 6px; /* tighter */
@@ -995,8 +1044,8 @@ export default {
   min-height: 96px; /* tighter */
 }
 .stats-headers {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: var(--grade-col) 1fr 1fr 1fr; /* align with value columns */
   align-items: center;
   gap: 4px;
   margin-bottom: 4px;
@@ -1004,26 +1053,24 @@ export default {
   background: rgba(0, 124, 186, 0.1);
   border-radius: 4px;
 }
+.header-spacer { width: 100%; height: 1px; opacity: 0; }
 .stat-header {
-  display: inline-flex;
-  align-items: center; /* vertical align icon with text */
+  display: flex;
+  align-items: center; /* vertical align icon with column */
   justify-content: center;
-  gap: 6px;
-  font-size: 0.9em;
+  font-size: 0.95em;
   line-height: 1;
   text-align: center;
   padding: 2px 4px;
   border-radius: 3px;
-  flex: 1;
 }
-.stat-header span { font-size: 0.88em; color: #333; }
 .stat-header:hover { background: rgba(0, 124, 186, 0.2); }
 
 .stats-rows { display: flex; flex-direction: column; gap: 3px; flex-grow: 1; }
 .grade-stats-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: var(--grade-col) 1fr 1fr 1fr; /* same grid as headers */
   align-items: center;
-  justify-content: space-between;
   gap: 6px;
   background: #f8f9fa;
   border: 1px solid #e0e0e0;
@@ -1031,7 +1078,12 @@ export default {
   padding: 3px 4px; /* tighter */
   font-size: 0.88em;
 }
-.grade-number { font-weight: 700; color: #333; min-width: 22px; font-size: 0.95em; }
+.grade-number {
+  font-weight: 700;
+  color: #333;
+  min-width: var(--grade-col);
+  font-size: 0.95em;
+}
 .stat-value {
   text-align: center;
   padding: 2px 4px;
@@ -1039,9 +1091,8 @@ export default {
   border-radius: 3px;
   font-size: 0.88em;
   color: #333;
-  min-width: 22px;
-  flex: 1;
 }
+
 .no-stats { display: flex; align-items: center; justify-content: center; flex-grow: 1; color: #999; }
 .no-stats-text { font-size: 0.85em; font-style: italic; text-align: center; }
 
@@ -1079,6 +1130,32 @@ export default {
 .panel-description { margin: 0 0 10px 0; color: #666; font-size: 0.9em; font-style: italic; }
 .no-preferred-courses-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; }
 .flexible-tag { color: #52c41a !important; font-weight: 600; }
+
+/* Context Menu */
+.context-menu {
+  position: fixed;
+  background: white;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+  z-index: 2000;
+  min-width: 160px;
+  padding: 4px 0;
+}
+.context-menu-item {
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: background-color 0.15s;
+}
+.context-menu-item:hover { background-color: #f5f5f5; }
+.context-menu-item.delete:hover { background-color: #ffe6e6; color: #d32f2f; }
+.context-menu-backdrop {
+  position: fixed; inset: 0; z-index: 1999;
+}
 
 /* Read-only mode */
 .scheduler-grid[data-readonly='true'] .schedule-cell { cursor: default; }
