@@ -117,7 +117,7 @@
           </div>
         </div>
 
-        <!-- Grade Statistics Row -->
+        <!-- Grade Statistics Row (when period is focused) -->
         <div v-if="showStatistics && focusedPeriodId" class="statistics-row">
           <div class="period-label-cell stats-label-cell">
             <div class="stats-title">
@@ -169,7 +169,7 @@
       </div>
     </div>
 
-    <!-- Available Courses for Focused Period -->
+    <!-- Available Courses for Focused Period (only in planner mode) -->
     <div v-if="focusedPeriodId && !isReadOnly" class="available-courses-panel">
       <h3>Available Courses for {{ getFocusedPeriodName() }}</h3>
       <div class="focused-period-info">
@@ -207,7 +207,7 @@
         </div>
       </div>
 
-      <!-- No Preferred Days Courses Panel -->
+      <!-- No Preferred Days Panel -->
       <div v-if="safeLength(getNoPreferredDaysCourses()) > 0" class="no-preferred-days-panel">
         <h4>📅 Courses with No Preferred Days</h4>
         <p class="panel-description">
@@ -259,14 +259,13 @@
       @cancel="handleCourseSelectionCancel"
     />
 
-    <!-- Context Menu teleported to body (prevents clipping/stacking issues) -->
+    <!-- Assignment Context Menu (teleported to body) -->
     <teleport to="body">
       <div
         v-if="contextMenu.show"
         class="context-menu"
         :style="{ left: contextMenu.x + 'px', top: contextMenu.y + 'px' }"
         @click.stop
-        data-debug="context-menu"
       >
         <div class="context-menu-item" @click="editAssignmentFromContext">
           {{ isReadOnly ? '📄 View Assignment Details' : '✏️ Edit Assignment' }}
@@ -347,7 +346,7 @@ export default {
     'course-edit',
   ],
   setup(props, { emit }) {
-    // Local safe helpers (avoid external module mismatch)
+    // Local robust helpers (don’t rely on external safe utils)
     const safeArray = (v) => (Array.isArray(v) ? v : []);
     const safeLength = (v) => (Array.isArray(v) ? v.length : 0);
 
@@ -362,21 +361,14 @@ export default {
     const showCourseSelectionModal = ref(false);
     const courseSelectionData = ref(null);
 
-    const contextMenu = ref({
-      show: false,
-      x: 0,
-      y: 0,
-      assignment: null,
-      dayId: null,
-      periodId: null,
-    });
+    const contextMenu = ref({ show: false, x: 0, y: 0, assignment: null, dayId: null, periodId: null });
 
-    // Mode logs
+    // Mode logging
     watch(
       () => props.isLiveMode,
-      (newMode, oldMode) => {
-        if (newMode !== oldMode) {
-          const mode = newMode ? 'live' : 'planner';
+      (n, o) => {
+        if (n !== o) {
+          const mode = n ? 'live' : 'planner';
           console.log('🔄 [SchedulerGrid] Mode changed to:', mode);
           emit('mode-changed', mode);
         }
@@ -442,11 +434,9 @@ export default {
       const cls = findClass(classId);
       return cls?.name || 'No Class';
     }
-    function getTeacherNames(teacherIds) {
-      if (!teacherIds?.length) return 'No Teacher';
-      return teacherIds
-        .map((id) => props.teachers.find((t) => t.id === id)?.name || 'Unknown Teacher')
-        .join(', ');
+    function getTeacherNames(ids) {
+      if (!ids?.length) return 'No Teacher';
+      return ids.map((id) => props.teachers.find((t) => t.id === id)?.name || 'Unknown Teacher').join(', ');
     }
     function getAssignmentTeachers(a) {
       if (Array.isArray(a.teacher_names) && a.teacher_names.length) return a.teacher_names.join(', ');
@@ -483,7 +473,7 @@ export default {
       const entries = currentSchedules.value;
       const assignments = entries.filter((assignment) => {
         const currentDay = props.schoolDays.find((d) => d.id === dayId || d.day_id === dayId);
-        const assignmentDayMatch =
+        const dayMatch =
           assignment.day_id === dayId ||
           assignment.day_id === currentDay?.day_id ||
           assignment.day_id === currentDay?.id ||
@@ -497,16 +487,16 @@ export default {
           assignment.period_id === periodId ||
           (assignment.block_number && currentPeriod?.blockNumber && assignment.block_number === currentPeriod.blockNumber);
 
-        return assignmentDayMatch && periodMatch;
+        return dayMatch && periodMatch;
       });
 
       return assignments.sort((a, b) => {
-        const classA = getClassName(a.class_id);
-        const classB = getClassName(b.class_id);
-        if (classA !== classB) return classA.localeCompare(classB);
-        const courseA = getDisplayName(a);
-        const courseB = getDisplayName(b);
-        return courseA.localeCompare(courseB);
+        const ca = getClassName(a.class_id);
+        const cb = getClassName(b.class_id);
+        if (ca !== cb) return ca.localeCompare(cb);
+        const pa = getDisplayName(a);
+        const pb = getDisplayName(b);
+        return pa.localeCompare(pb);
       });
     }
 
@@ -535,8 +525,7 @@ export default {
       const classes = [];
       if (hasConflicts(assignment)) classes.push('has-conflict');
       if (hasDeletedEntities(assignment)) classes.push('has-deleted-entities');
-      const courseName = getCourseName(assignment.course_id);
-      if (!courseName && assignment.subject_id) classes.push('lesson-schedule');
+      if (!getCourseName(assignment.course_id) && assignment.subject_id) classes.push('lesson-schedule');
       return classes;
     }
     function getAssignmentStyles(assignment) {
@@ -559,85 +548,38 @@ export default {
       emit('assignment-details', assignment);
     }
 
-    // Context menu positioning (clamp to viewport)
+    // Context menu
     function computeContextMenuPosition(evt, menuSize = { w: 220, h: 96 }) {
       const vw = window.innerWidth || 1024;
       const vh = window.innerHeight || 768;
-      const rect = evt?.currentTarget?.getBoundingClientRect?.();
-
-      console.log('🖱️ [ContextMenu] Right-click event:', {
-        clientX: evt?.clientX,
-        clientY: evt?.clientY,
-        targetTag: evt?.target?.tagName,
-        currentTargetTag: evt?.currentTarget?.tagName,
-      });
-
-      let x, y;
-      if (rect) {
-        console.log('📐 [ContextMenu] Using element rect:', rect);
-        x = rect.left + 8;
-        y = rect.bottom + 6;
-      } else {
-        x = (evt?.clientX ?? 0) + 6;
-        y = (evt?.clientY ?? 0) + 6;
-      }
-
-      const before = { x, y };
+      // Use cursor position (most robust with teleported + fixed)
+      let x = (evt?.clientX ?? 0) + 6;
+      let y = (evt?.clientY ?? 0) + 6;
       if (x + menuSize.w > vw) x = Math.max(8, vw - menuSize.w - 8);
       if (y + menuSize.h > vh) y = Math.max(8, vh - menuSize.h - 8);
-
-      console.log('🧮 [ContextMenu] Clamp:', { before, after: { x, y }, vw, vh });
       return { x, y };
     }
-
     function handleAssignmentRightClick(event, assignment, dayId, periodId) {
-      console.log('➡️ [ContextMenu] Right-click on assignment:', {
-        id: assignment?.id,
-        course: assignment?.course_name || assignment?.display_cell || getDisplayName(assignment),
-        dayId,
-        periodId,
-        isReadOnly: props.isReadOnly,
-      });
-
-      if (editingAssignment.value) cancelInlineEdit();
-
       const pos = computeContextMenuPosition(event);
-      contextMenu.value = {
-        show: true,
-        x: pos.x,
-        y: pos.y,
-        assignment,
-        dayId,
-        periodId,
-      };
+      contextMenu.value = { show: true, x: pos.x, y: pos.y, assignment, dayId, periodId };
     }
-
     function closeContextMenu() {
       contextMenu.value.show = false;
     }
     function editAssignmentFromContext() {
       if (!contextMenu.value.assignment) return;
-      if (props.isReadOnly || props.isLiveMode) {
-        startInlineEditReadOnly(contextMenu.value.assignment, contextMenu.value.dayId, contextMenu.value.periodId);
-      } else {
-        startInlineEdit(contextMenu.value.assignment, contextMenu.value.dayId, contextMenu.value.periodId);
-      }
+      if (props.isReadOnly || props.isLiveMode) startInlineEditReadOnly(contextMenu.value.assignment, contextMenu.value.dayId, contextMenu.value.periodId);
+      else startInlineEdit(contextMenu.value.assignment, contextMenu.value.dayId, contextMenu.value.periodId);
       closeContextMenu();
     }
     function deleteAssignmentFromContext() {
       const a = contextMenu.value.assignment;
-      if (!a) {
-        closeContextMenu();
-        return;
-      }
+      if (!a) { closeContextMenu(); return; }
       if (props.isReadOnly || props.isLiveMode) {
         const fn = props.parentEmit || emit;
         emitSchedulerRemoveEvent(fn, {
-          dayId: a.day_id,
-          periodId: a.period_id,
-          assignmentId: a.id,
-          courseId: a.course_id,
-          courseName: a.course_name || a.display_cell || '',
+          dayId: a.day_id, periodId: a.period_id, assignmentId: a.id,
+          courseId: a.course_id, courseName: a.course_name || a.display_cell || '',
         });
       } else {
         deleteInlineAssignment(a);
@@ -646,9 +588,7 @@ export default {
     }
 
     // Inline editor
-    function isEditing(id) {
-      return editingAssignment.value?.id === id;
-    }
+    const isEditing = (id) => editingAssignment.value?.id === id;
     function startInlineEdit(a, dayId, periodId) {
       if (props.isReadOnly) return;
       editingAssignment.value = a;
@@ -665,19 +605,13 @@ export default {
       editingAssignment.value = null;
       editingCell.value = null;
     }
-    function cancelInlineEdit() {
-      editingAssignment.value = null;
-      editingCell.value = null;
-    }
+    function cancelInlineEdit() { editingAssignment.value = null; editingCell.value = null; }
     function deleteInlineAssignment(a) {
       if (props.emitDropEvents) {
         const fn = props.parentEmit || emit;
         emitSchedulerRemoveEvent(fn, {
-          dayId: a.day_id,
-          periodId: a.period_id,
-          assignmentId: a.id,
-          courseId: a.course_id,
-          courseName: a.course_name || a.display_cell || '',
+          dayId: a.day_id, periodId: a.period_id, assignmentId: a.id,
+          courseId: a.course_id, courseName: a.course_name || a.display_cell || '',
         });
       }
       const data = currentSchedules.value;
@@ -689,209 +623,53 @@ export default {
 
     // Available courses
     function getAvailableCoursesForSlot(dayId, periodId) {
-      const normalized = props.courses.map((course, idx) => normalizeCourse(course, idx));
+      const normalized = props.courses.map((c, i) => normalizeCourse(c, i));
       const available = normalized.filter((course) => {
         const slots = Array.isArray(course.possibleSlots) ? course.possibleSlots : [];
         if (slots.length === 0) return true;
         return slots.some((slot) => slot.dayId === dayId && slot.periodId === periodId);
       });
-      console.log('🎯 [SchedulerGrid] Available courses for slot:', {
-        dayId,
-        periodId,
-        availableCount: safeLength(available),
-      });
+      console.log('🎯 [SchedulerGrid] Available courses for slot:', { dayId, periodId, availableCount: safeLength(available) });
       return available;
     }
     function getNoPreferredDaysCourses() {
       return props.courses.filter((course) => !course.possible_time_slots || safeLength(course.possible_time_slots) === 0);
     }
     function getCourseCardStyle(course) {
-      return {
-        borderLeft: `4px solid ${course.color || '#007cba'}`,
-        backgroundColor: course.color ? `${course.color}15` : '#f0f8ff',
-      };
+      return { borderLeft: `4px solid ${course.color || '#007cba'}`, backgroundColor: course.color ? `${course.color}15` : '#f0f8ff' };
     }
     function assignCourseToSlot(course, dayId, periodId) {
       if (props.isReadOnly) return;
-      modalCourseData.value = {
-        courseId: course.id,
-        courseName: course.name || course.course_name || '',
-        courseCode: course.code || course.course_code || '',
-        dayId,
-        periodId,
-      };
+      modalCourseData.value = { courseId: course.id, courseName: course.name || course.course_name || '', courseCode: course.code || course.course_code || '', dayId, periodId };
       showTeacherRoomModal.value = true;
       emit('scheduler-drag-end', {
         courseId: course.id,
         courseName: course.name || course.course_name || '',
         courseCode: course.code || course.course_code || '',
-        success: true,
-        source: 'drag-end',
-        timestamp: new Date().toISOString(),
+        success: true, source: 'drag-end', timestamp: new Date().toISOString(),
       });
     }
     function handleTeacherRoomSubmit(payload) {
       emit('scheduler-drop', {
-        dayId: payload.dayId,
-        periodId: payload.periodId,
-        courseId: payload.courseId,
-        courseName: payload.courseName,
+        dayId: payload.dayId, periodId: payload.periodId,
+        courseId: payload.courseId, courseName: payload.courseName,
         courseCode: modalCourseData.value?.courseCode || '',
-        teacherIds: payload.teacherIds,
-        primaryTeacherId: payload.primaryTeacherId,
-        roomId: payload.roomId,
-        source: 'modal-assignment',
-        timestamp: payload.timestamp,
+        teacherIds: payload.teacherIds, primaryTeacherId: payload.primaryTeacherId, roomId: payload.roomId,
+        source: 'modal-assignment', timestamp: payload.timestamp,
       });
-      showTeacherRoomModal.value = false;
-      modalCourseData.value = null;
+      showTeacherRoomModal.value = false; modalCourseData.value = null;
     }
-    function handleTeacherRoomCancel() {
-      showTeacherRoomModal.value = false;
-      modalCourseData.value = null;
-    }
+    function handleTeacherRoomCancel() { showTeacherRoomModal.value = false; modalCourseData.value = null; }
+
+    // Course selection modal (kept for compatibility)
     function handleCourseSelectionSubmit(payload) {
       showCourseSelectionModal.value = false;
-      modalCourseData.value = {
-        courseId: payload.courseId,
-        courseName: payload.courseName,
-        courseCode: payload.courseCode,
-        dayId: payload.dayId,
-        periodId: payload.periodId,
-      };
-      showTeacherRoomModal.value = true;
-      courseSelectionData.value = null;
+      modalCourseData.value = { courseId: payload.courseId, courseName: payload.courseName, courseCode: payload.courseCode, dayId: payload.dayId, periodId: payload.periodId };
+      showTeacherRoomModal.value = true; courseSelectionData.value = null;
     }
-    function handleCourseSelectionCancel() {
-      showCourseSelectionModal.value = false;
-      courseSelectionData.value = null;
-    }
-    function assignCourseToFocusedSlot(course) {
-      if (props.isReadOnly || !focusedPeriodId.value) return;
-      const firstDay = visibleDays.value[0];
-      if (firstDay) assignCourseToSlot(course, firstDay.id, focusedPeriodId.value);
-    }
+    function handleCourseSelectionCancel() { showCourseSelectionModal.value = false; courseSelectionData.value = null; }
 
-    // Drag/drop (kept minimal)
-    const draggedCourse = ref(null);
-    const draggedAssignment = ref(null);
-    const dragOverCell = ref(null);
-
-    function handleCourseDragStart(event, course) {
-      draggedCourse.value = course;
-      emit('scheduler-drag-start', {
-        courseId: course.id,
-        courseName: course.name || course.course_name || '',
-        courseCode: course.code || course.course_code || '',
-        source: 'drag-start',
-        timestamp: new Date().toISOString(),
-      });
-      event.dataTransfer.setData('text/plain', JSON.stringify({ type: 'course', course, id: course.id }));
-      event.dataTransfer.effectAllowed = 'copy';
-      event.target.style.opacity = '0.5';
-    }
-    function handleCourseDragEnd(event) {
-      const course = draggedCourse.value;
-      emit('scheduler-drag-end', {
-        courseId: course?.id || null,
-        courseName: course?.name || course?.course_name || null,
-        courseCode: course?.code || course?.course_code || null,
-        success: false,
-        source: 'drag-end',
-        timestamp: new Date().toISOString(),
-      });
-      draggedCourse.value = null;
-      event.target.style.opacity = '1';
-    }
-    function handleAssignmentDragStart(event, assignment, dayId, periodId) {
-      draggedAssignment.value = { assignment, originalDayId: dayId, originalPeriodId: periodId };
-      emit('scheduler-drag-start', {
-        courseId: assignment.course_id || '',
-        courseName: assignment.course_name || assignment.display_cell || '',
-        courseCode: assignment.course_code || '',
-        source: 'drag-start',
-        timestamp: new Date().toISOString(),
-      });
-      event.dataTransfer.setData(
-        'text/plain',
-        JSON.stringify({ type: 'assignment', assignment, originalDayId: dayId, originalPeriodId: periodId })
-      );
-      event.dataTransfer.effectAllowed = 'move';
-      event.target.style.opacity = '0.5';
-    }
-    function handleAssignmentDragEnd(event) {
-      emit('scheduler-drag-end', {
-        courseId: draggedAssignment.value?.assignment?.course_id || null,
-        courseName:
-          draggedAssignment.value?.assignment?.course_name || draggedAssignment.value?.assignment?.display_cell || null,
-        courseCode: draggedAssignment.value?.assignment?.course_code || null,
-        success: false,
-        source: 'drag-end',
-        timestamp: new Date().toISOString(),
-      });
-      draggedAssignment.value = null;
-      event.target.style.opacity = '1';
-      dragOverCell.value = null;
-    }
-    function handleCellDragOver(event) {
-      if (!draggedCourse.value && !draggedAssignment.value) return false;
-      event.dataTransfer.dropEffect = draggedAssignment.value ? 'move' : 'copy';
-      return false;
-    }
-    function handleCellDragEnter(event, dayId, periodId) {
-      if (!draggedCourse.value && !draggedAssignment.value) return;
-      dragOverCell.value = `${dayId}-${periodId}`;
-      event.currentTarget.classList.add('drag-over');
-    }
-    function handleCellDragLeave(event) {
-      if (!event.currentTarget.contains(event.relatedTarget)) {
-        dragOverCell.value = null;
-        event.currentTarget.classList.remove('drag-over');
-      }
-    }
-    function handleCellDrop(event, dayId, periodId) {
-      event.preventDefault();
-      dragOverCell.value = null;
-      event.currentTarget.classList.remove('drag-over');
-      try {
-        const dragData = JSON.parse(event.dataTransfer.getData('text/plain'));
-        if (dragData.type === 'course') {
-          const course = dragData.course;
-          assignCourseToSlot(course, dayId, periodId);
-        } else if (dragData.type === 'assignment') {
-          const a = dragData.assignment;
-          if (dragData.originalDayId !== dayId || dragData.originalPeriodId !== periodId) {
-            emit('scheduler-drop', {
-              dayId,
-              periodId,
-              courseId: a.course_id || '',
-              courseName: a.course_name || a.display_cell || '',
-              courseCode: a.course_code || '',
-              teacherIds: a.teacher_ids || [],
-              primaryTeacherId: a.primary_teacher_id || null,
-              roomId: a.room_id || null,
-              source: 'assignment-move',
-              timestamp: new Date().toISOString(),
-              fromDayId: dragData.originalDayId,
-              fromPeriodId: dragData.originalPeriodId,
-              action: 'move',
-            });
-            emit('update-assignments', {
-              action: 'move',
-              assignment: a,
-              fromDayId: dragData.originalDayId,
-              fromPeriodId: dragData.originalPeriodId,
-              toDayId: dayId,
-              toPeriodId: periodId,
-            });
-          }
-        }
-      } catch (error) {
-        console.error('🚨 [DragDrop] Error handling drop:', error);
-      }
-    }
-
-    // Focus helpers
+    // Focus + stats
     function togglePeriodFocus(periodId) {
       focusedPeriodId.value = focusedPeriodId.value === periodId ? null : periodId;
       emit('period-focus-changed', focusedPeriodId.value);
@@ -901,7 +679,6 @@ export default {
       return p?.name || p?.label || 'Unknown Period';
     }
 
-    // Grade stats helpers
     function parseGrades(course) {
       const grades = [];
       if (course.is_for_year_g && typeof course.is_for_year_g === 'object') {
@@ -918,152 +695,85 @@ export default {
       safeArray(props.courses).forEach((c) => parseGrades(c).forEach((g) => set.add(g)));
       return Array.from(set).sort((a, b) => a - b);
     });
-    function findCourseById(courseId) {
-      return safeArray(props.courses).find((course) => course.id === courseId);
-    }
+    function findCourseById(courseId) { return safeArray(props.courses).find((course) => course.id === courseId); }
     function getScheduledCoursesForSlot(dayId, periodId) {
-      const scheduled = [];
-      const scheduledEntries = safeArray(currentSchedules.value).filter(
-        (e) => e.day_id === dayId && e.period_id === periodId
-      );
+      const scheduledEntries = safeArray(currentSchedules.value).filter((e) => e.day_id === dayId && e.period_id === periodId);
+      const out = [];
       scheduledEntries.forEach((entry) => {
         const course = findCourseById(entry.course_id);
         if (course) {
           const totalSpots = course.max_students || course.capacity || 0;
           const freeSpots = entry.free_spaces !== undefined ? entry.free_spaces : totalSpots;
-          scheduled.push({ ...course, scheduledEntry: entry, freeSpots, totalSpots });
+          out.push({ ...course, scheduledEntry: entry, freeSpots, totalSpots });
         }
       });
-      return scheduled;
+      return out;
     }
     function getDailyGradeStats(dayId, periodId) {
       if (!periodId) return [];
       const scheduledCourses = getScheduledCoursesForSlot(dayId, periodId);
       const gradeStats = [];
       allGrades.value.forEach((grade) => {
-        let totalSpots = 0;
-        let coursesCount = 0;
-        let totalGradeAllocation = 0;
+        let totalSpots = 0, coursesCount = 0, totalGradeAllocation = 0;
         scheduledCourses.forEach((course) => {
-          const courseGrades = parseGrades(course);
-          if (courseGrades.includes(grade)) {
+          const grades = parseGrades(course);
+          if (grades.includes(grade)) {
             coursesCount++;
-            const freeSpots = course.freeSpots || 0;
-            if (courseGrades.length === 1) {
-              totalSpots += freeSpots;
-              totalGradeAllocation += freeSpots;
-            } else {
-              totalSpots += freeSpots;
-              totalGradeAllocation += freeSpots / courseGrades.length;
-            }
+            const free = course.freeSpots || 0;
+            if (grades.length === 1) { totalSpots += free; totalGradeAllocation += free; }
+            else { totalSpots += free; totalGradeAllocation += free / grades.length; }
           }
         });
-        if (coursesCount > 0 || totalSpots > 0) {
-          gradeStats.push({ grade, totalSpots, averageSpots: totalGradeAllocation, coursesCount });
-        }
+        if (coursesCount > 0 || totalSpots > 0) gradeStats.push({ grade, totalSpots, averageSpots: totalGradeAllocation, coursesCount });
       });
       return gradeStats;
     }
 
-    function handleCourseEdit(courseData) {
-      emit('course-edit', courseData);
-    }
+    // Course edit passthrough
+    function handleCourseEdit(courseData) { emit('course-edit', courseData); }
 
     return {
       // state
-      focusedPeriodId,
-      draggedCourse,
-      draggedAssignment,
-      dragOverCell,
-      editingAssignment,
-      editingCell,
-      showTeacherRoomModal,
-      modalCourseData,
-      showCourseSelectionModal,
-      courseSelectionData,
+      focusedPeriodId, editingAssignment, editingCell,
+      showTeacherRoomModal, modalCourseData, showCourseSelectionModal, courseSelectionData,
+      contextMenu,
 
       // computed
-      visibleDays,
-      visiblePeriods,
-      currentSchedules,
+      visibleDays, visiblePeriods, currentSchedules,
 
-      // utils
-      safeArray,
-      safeLength,
+      // helpers
+      safeArray, safeLength,
 
-      // formatters/lookups
-      formatTime,
-      formatDate,
-      getCellAssignments,
-      getCellClasses,
-      getCellAriaLabel,
-      getAssignmentClasses,
-      getAssignmentStyles,
-      getCourseName,
-      getSubjectName,
-      getDisplayName,
-      getClassName,
-      getTeacherNames,
-      getAssignmentTeachers,
-      getRoomName,
-      hasConflicts,
-      hasDeletedEntities,
+      // formatters and lookups
+      formatTime, formatDate, getDisplayName, getClassName, getCourseName, getSubjectName,
+      getTeacherNames, getAssignmentTeachers, getRoomName,
+      hasConflicts, hasDeletedEntities,
+
+      // cells
+      getCellAssignments, getCellClasses, getCellAriaLabel, getAssignmentClasses, getAssignmentStyles,
 
       // interactions
-      handleCellClick,
-      handleAssignmentClick,
-      handleAssignmentRightClick,
-      closeContextMenu,
-      editAssignmentFromContext,
-      deleteAssignmentFromContext,
+      handleCellClick, handleAssignmentClick, handleAssignmentRightClick,
+      closeContextMenu, editAssignmentFromContext, deleteAssignmentFromContext,
 
       // inline editor
-      isEditing,
-      startInlineEdit,
-      startInlineEditReadOnly,
-      saveInlineEdit,
-      cancelInlineEdit,
-      deleteInlineAssignment,
+      isEditing, startInlineEdit, startInlineEditReadOnly, saveInlineEdit, cancelInlineEdit, deleteInlineAssignment,
       handleCourseEdit,
 
-      // drag/drop
-      handleCourseDragStart,
-      handleCourseDragEnd,
-      handleAssignmentDragStart,
-      handleAssignmentDragEnd,
-      handleCellDragOver,
-      handleCellDragEnter,
-      handleCellDragLeave,
-      handleCellDrop,
-
-      // modals
-      assignCourseToSlot,
-      handleTeacherRoomSubmit,
-      handleTeacherRoomCancel,
-      handleCourseSelectionSubmit,
-      handleCourseSelectionCancel,
+      // drag/drop + available
+      handleCourseDragStart, handleCourseDragEnd, handleAssignmentDragStart, handleAssignmentDragEnd,
+      handleCellDragOver, handleCellDragEnter, handleCellDragLeave, handleCellDrop,
+      assignCourseToSlot, getAvailableCoursesForSlot, getNoPreferredDaysCourses, getCourseCardStyle, assignCourseToFocusedSlot,
 
       // focus + stats
-      togglePeriodFocus,
-      getFocusedPeriodName,
-      getDailyGradeStats,
-      allGrades,
-
-      // available courses
-      getAvailableCoursesForSlot,
-      getCourseCardStyle,
-      getNoPreferredDaysCourses,
-      assignCourseToFocusedSlot,
-
-      // context menu state
-      contextMenu,
+      togglePeriodFocus, getFocusedPeriodName, getDailyGradeStats, allGrades,
     };
   },
 };
 </script>
 
 <style scoped>
-/* All your existing scoped styles from pasted7 (unchanged) */
+/* Root */
 .scheduler-grid {
   display: flex;
   flex-direction: column;
@@ -1073,20 +783,244 @@ export default {
   overflow: hidden;
   background: white;
 }
-/* ... keep the rest of your pasted7 scoped styles exactly as-is ... */
 
-/* I removed the scoped .context-menu and .context-menu-backdrop rules here,
-   because teleported content is outside the component, so scoped CSS won't apply. */
+/* Header (force horizontal layout) */
+.grid-header {
+  display: flex !important;
+  align-items: stretch;
+  background: #f5f5f5;
+  border-bottom: 1px solid #ddd;
+  font-weight: 600;
+}
+
+/* Period header (left-most column) */
+.period-header-cell {
+  width: 140px;
+  min-width: 140px;
+  max-width: 140px;
+  padding: 12px 8px;
+  border-right: 1px solid #ddd;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+}
+
+/* Day headers (columns) */
+.day-header-cell {
+  flex: 1 1 0;
+  min-width: 160px;
+  padding: 12px 8px;
+  border-right: 1px solid #ddd;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  box-sizing: border-box;
+}
+.day-header-cell:last-child { border-right: 0; }
+.day-name { font-size: 0.95em; }
+.day-date { font-size: 0.8em; color: #666; font-weight: normal; }
+
+/* Body container */
+.grid-body { display: block; }
+
+/* Each period row (force horizontal layout) */
+.grid-row {
+  display: flex !important;
+  align-items: stretch;
+  border-bottom: 1px solid #ddd;
+  min-height: 80px;
+}
+.grid-row:last-child { border-bottom: 0; }
+.grid-row.non-instructional { background: #f8f9fa; }
+
+/* Period label cell (left column in body) */
+.period-label-cell {
+  width: 140px;
+  min-width: 140px;
+  max-width: 140px;
+  padding: 8px;
+  border-right: 1px solid #ddd;
+  background: #f9f9f9;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  box-sizing: border-box;
+}
+.period-label-cell:hover { background: #f0f7ff !important; }
+.period-label-cell.focused { background: #e6f7ff !important; border-left: 4px solid #007cba; }
+.period-info { display: flex; flex-direction: column; gap: 2px; }
+.period-name { font-weight: 500; font-size: 0.9em; }
+.period-time { font-size: 0.8em; color: #666; }
+.non-instructional-badge { font-size: 0.75em; color: #888; background: #e9ecef; padding: 2px 4px; border-radius: 3px; }
+
+/* Schedule cells (day columns) */
+.schedule-cell {
+  flex: 1 1 0;
+  min-width: 160px;
+  border-right: 1px solid #ddd;
+  position: relative;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  min-height: 80px;
+  box-sizing: border-box;
+}
+.schedule-cell:last-child { border-right: 0; }
+.schedule-cell:hover { background: #f0f7ff; }
+.schedule-cell.has-assignments { background: #e6f7ff; }
+.schedule-cell.multiple-assignments { background: #d6f3ff; }
+.schedule-cell.has-conflicts { background: #fff2f0; border-left: 3px solid #ff4d4f; }
+
+/* Assignment items */
+.assignments-container {
+  padding: 4px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  position: relative;
+  box-sizing: border-box;
+}
+.assignment-item {
+  padding: 4px 6px;
+  border-radius: 3px;
+  border: 1px solid #e0e0e0;
+  position: relative;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: white;
+}
+.assignment-item:hover { transform: translateX(1px); box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+.assignment-item.has-conflict { border-color: #ff4d4f; background: #fff2f0; }
+.assignment-item.has-deleted-entities { border-color: #faad14; background: #fff7e6; }
+.assignment-item.lesson-schedule { opacity: 0.6; border-style: dashed; background: #f5f5f5 !important; font-style: italic; font-size: 0.8em; transform: scale(0.98); }
+.assignment-content { display: flex; flex-direction: column; gap: 1px; }
+.course-name { font-weight: 500; font-size: 0.85em; line-height: 1.2; }
+.class-name, .teacher-names, .room-name { font-size: 0.75em; color: #666; line-height: 1.1; }
+.conflict-indicator, .deleted-warning { position: absolute; top: 2px; right: 2px; font-size: 0.7em; }
+
+/* Empty cell */
+.empty-cell {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #ccc;
+  font-size: 0.85em;
+  gap: 4px;
+}
+.add-text { opacity: 0.8; }
+
+/* Drag targets */
+.drop-zone { position: relative; transition: all 0.2s ease; }
+.drop-zone.drag-over { background: rgba(0,123,186,0.1) !important; border: 2px dashed #007cba !important; transform: scale(1.02); }
+.drop-zone.drag-over::after {
+  content: '📋 Drop here'; position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
+  background: rgba(0,123,186,0.9); color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; pointer-events: none; z-index: 10;
+}
+
+/* Grade Statistics */
+.statistics-row { display: flex !important; border-bottom: 2px solid #007cba; background: #f0f8ff; border-top: 2px solid #007cba; }
+.stats-label-cell {
+  width: 140px; min-width: 140px; max-width: 140px;
+  background: #007cba !important; color: white;
+  display: flex; align-items: center; justify-content: center;
+  border-right: 1px solid #ddd;
+  box-sizing: border-box;
+}
+.stats-title { display: flex; align-items: center; gap: 6px; font-size: 0.85em; font-weight: 600; }
+.stats-emoji { font-size: 1.1em; }
+
+.day-statistics-cell {
+  flex: 1 1 0;
+  min-width: 160px;
+  border-right: 1px solid #ddd;
+  padding: 8px;
+  background: white;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 100px;
+  box-sizing: border-box;
+}
+.day-statistics-cell:last-child { border-right: 0; }
+
+.stats-headers {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 2px;
+  margin-bottom: 4px;
+  padding: 2px;
+  background: rgba(0,124,186,0.1);
+  border-radius: 3px;
+}
+.stat-header { font-size: 0.9em; text-align: center; cursor: help; padding: 2px 4px; border-radius: 2px; flex: 1; }
+.stat-header:hover { background: rgba(0,124,186,0.2); }
+
+.stats-rows { display: flex; flex-direction: column; gap: 2px; flex-grow: 1; }
+.grade-stats-row { display: flex; align-items: center; justify-content: space-between; gap: 4px; background: #f8f9fa; border: 1px solid #e0e0e0; border-radius: 2px; padding: 2px 4px; font-size: 0.75em; }
+.grade-number { font-weight: 600; color: #333; min-width: 20px; font-size: 0.8em; }
+.stat-value { text-align: center; padding: 1px 2px; background: white; border-radius: 2px; font-size: 0.7em; color: #666; min-width: 18px; flex: 1; }
+
+/* Available Courses Panel */
+.available-courses-panel { padding: 16px; background: #f0f8ff; border-top: 1px solid #007cba; border-bottom: 1px solid #ddd; }
+.available-courses-panel h3 { margin: 0 0 8px 0; color: #007cba; font-size: 1.1em; }
+.focused-period-info { margin: 0 0 16px 0; color: #666; font-size: 0.9em; }
+.day-courses-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; }
+.day-courses-column h4 { margin: 0 0 12px 0; padding: 8px 12px; background: #007cba; color: white; border-radius: 4px; text-align: center; font-size: 0.9em; }
+.available-courses-list { display: flex; flex-direction: column; gap: 8px; max-height: 300px; overflow-y: auto; }
+.course-card { padding: 10px; background: white; border: 1px solid #ddd; border-radius: 4px; cursor: grab; transition: all 0.2s; font-size: 0.85em; }
+.course-card:hover { transform: translateY(-1px); box-shadow: 0 2px 4px rgba(0,124,186,0.15); border-color: #007cba; }
+.course-card .course-name { font-weight: 500; color: #333; margin-bottom: 4px; display: block; }
+.course-card .course-details { display: flex; flex-direction: column; gap: 2px; }
+.course-card .course-details small { color: #666; font-size: 0.8em; }
+.no-courses { padding: 16px; text-align: center; color: #999; font-style: italic; background: #f9f9f9; border: 1px dashed #ddd; border-radius: 4px; }
+
+/* No Preferred Days Panel */
+.no-preferred-days-panel { padding: 16px; background: #f0f8e6; border: 1px solid #52c41a; border-radius: 4px; margin-top: 16px; }
+.no-preferred-days-panel h4 { margin: 0 0 8px 0; color: #52c41a; font-size: 1em; display: flex; align-items: center; gap: 8px; }
+.panel-description { margin: 0 0 12px 0; color: #666; font-size: 0.9em; font-style: italic; }
+.no-preferred-courses-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px; }
+.flexible-tag { color: #52c41a !important; font-weight: 500; }
+
+/* Debug */
+.grid-hidden-debug { padding: 20px; background: #ffebee; border: 2px solid #f44336; border-radius: 8px; margin: 16px; text-align: center; }
+.grid-hidden-message { color: #c62828; font-weight: bold; font-size: 1.1em; }
+.grid-hidden-message ul { text-align: left; display: inline-block; margin: 12px 0; color: #666; font-weight: normal; font-size: 0.9em; font-family: monospace; }
+.grid-hidden-message li { margin-bottom: 6px; }
+.emergency-show-btn { padding: 12px 24px; background: #f44336; color: white; border: none; border-radius: 6px; font-size: 1em; font-weight: bold; cursor: pointer; margin-top: 16px; transition: all 0.2s; }
+.emergency-show-btn:hover { background: #d32f2f; transform: scale(1.05); }
+
+/* Read-only */
+.scheduler-grid[data-readonly='true'] .schedule-cell { cursor: default; }
+.scheduler-grid[data-readonly='true'] .schedule-cell:hover { background: inherit; }
+.scheduler-grid[data-readonly='true'] .draggable-course,
+.scheduler-grid[data-readonly='true'] .draggable-assignment { cursor: default; pointer-events: none; }
+.scheduler-grid[data-readonly='true'] .empty-cell { color: #999; }
+.scheduler-grid[data-readonly='true'] .empty-text { font-style: italic; color: #999; font-size: 0.8em; }
+
+/* Responsive */
+@media (max-width: 1024px) {
+  .day-header-cell, .schedule-cell, .day-statistics-cell { min-width: 200px; }
+}
+@media (max-width: 768px) {
+  .period-header-cell, .period-label-cell, .stats-label-cell { width: 120px; min-width: 120px; max-width: 120px; }
+  .day-header-cell, .schedule-cell, .day-statistics-cell { min-width: 180px; }
+}
 </style>
 
-<!-- Unscoped styles so teleported menu/backdrop are always styled -->
+<!-- Unscoped styles for teleported context menu -->
 <style>
 .context-menu {
   position: fixed;
   background: white;
   border: 1px solid #ccc;
   border-radius: 4px;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 12px 32px rgba(0,0,0,0.2);
   z-index: 99999;
   min-width: 180px;
   padding: 4px 0;
@@ -1103,9 +1037,5 @@ export default {
 }
 .context-menu-item:hover { background-color: #f5f5f5; }
 .context-menu-item.delete:hover { background-color: #ffe6e6; color: #d32f2f; }
-.context-menu-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 99998;
-}
+.context-menu-backdrop { position: fixed; inset: 0; z-index: 99998; }
 </style>
