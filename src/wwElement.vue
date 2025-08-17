@@ -341,16 +341,6 @@ export default {
             const currentDayId = selectedCell.value.dayId;
             const currentPeriodId = selectedCell.value.periodId;
 
-            // Only log if we have debug context and this is an actual filtering operation
-            if (currentDayId && currentPeriodId && filteredCourses.length !== courses.value.length) {
-                console.log('🎯 [wwElement] availableCoursesForSlot filtering:', {
-                    currentDayId,
-                    currentPeriodId,
-                    totalCourses: safeLength(courses.value),
-                    filteredCourses: filteredCourses.length,
-                });
-            }
-
             // Filter courses based on normalized possibleSlots (using dayId + periodId)
             const filteredCourses = courses.value.filter(course => {
                 // If no restrictions, course is available
@@ -370,6 +360,16 @@ export default {
 
                 return isAvailable;
             });
+
+            // Only log if this is an actual filtering operation
+            if (currentDayId && currentPeriodId && filteredCourses.length !== courses.value.length) {
+                console.log('🎯 [wwElement] availableCoursesForSlot filtering:', {
+                    currentDayId,
+                    currentPeriodId,
+                    totalCourses: safeLength(courses.value),
+                    filteredCourses: filteredCourses.length,
+                });
+            }
 
             return filteredCourses;
         });
