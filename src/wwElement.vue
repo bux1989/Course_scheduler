@@ -142,17 +142,19 @@ import { ref, computed, watch, onMounted } from 'vue';
 import SchedulerGrid from './components/scheduler/SchedulerGrid.vue';
 import AssignmentModal from './components/scheduler/AssignmentModal.vue';
 import ConflictPanel from './components/scheduler/ConflictPanel.vue';
+
+// NOTE: We avoid importing a conflicting safeLength. We define a local one below.
 import {
-    validateAndUnwrapArray,
-    safeLength,
-    safeArray,
+    // validateAndUnwrapArray, // not used currently
+    // safeLength,            // DO NOT import; we define local to avoid "not a function"
+    // safeArray,             // not used currently
     toArray,
-    len,
+    // len,                   // not used currently
     nonEmpty,
     normalizePeriods,
     normalizeCourse,
-    normalizePossibleSlots,
 } from './utils/arrayUtils.js';
+
 import { emitSchedulerRemoveEvent } from './utils/events.js';
 import { detectConflicts } from './utils/conflictDetection.js';
 import { useSchedulerStore } from './state/schedulerState';
@@ -181,7 +183,7 @@ export default {
                 emitDropEvents: false,
             }),
         },
-        // New: accept draft schedules directly via prop, if provided
+        // Accept draft schedules directly via prop(s)
         draftSchedules: { type: [Array, Object], default: () => [] },
         draftSchedule: { type: [Array, Object], default: () => [] },
 
@@ -191,7 +193,33 @@ export default {
         /* wwEditor:end */
     },
     setup(props, { emit }) {
-        // Initialize scheduler store - now using simple Vue reactivity
+        // Local helpers (avoid external mismatch)
+        const safeLength = v => (Array.isArray(v) ? v.length : 0);
+
+        // Optional debug logger to prevent ReferenceError
+        function logCurrentData() {
+            try {
+                console.log('[wwElement] Debug data snapshot:', {
+                    counts: {
+                        periods: safeLength(periods.value),
+                        courses: safeLength(courses.value),
+                        teachers: safeLength(teachers.value),
+                        classes: safeLength(classes.value),
+                        rooms: safeLength(rooms.value),
+                        subjects: safeLength(subjects.value),
+                        schoolDays: safeLength(schoolDays.value),
+                        draftSchedules: safeLength(draftSchedules.value),
+                        liveSchedules: safeLength(liveSchedules.value),
+                        conflicts: safeLength(allConflicts.value),
+                    },
+                    sampleDraft: draftSchedules.value?.[0] || null,
+                });
+            } catch (e) {
+                console.warn('logCurrentData error:', e);
+            }
+        }
+
+        // Initialize scheduler store
         const store = useSchedulerStore();
 
         // Initialize store with component data (periods + initial drafts)
@@ -201,7 +229,7 @@ export default {
                 if (newContent && store.initialize) {
                     store.initialize(null, null, null, {
                         periods: toArray(newContent.periods),
-                        // This is just for initial store state; the component uses computed draftSchedules below
+                        // For initial store state; component uses computed draftSchedules below
                         draftSchedules: toArray(newContent.draftSchedules),
                     });
                 }
@@ -226,81 +254,44 @@ export default {
             period: null,
             assignments: [],
             conflicts: [],
+            preSelectedCourse: null,
         });
 
-        // Safe array computed properties with enhanced WeWeb collection support
+        // Safe array computed properties
         const periods = computed(() => {
             const rawPeriodsData = props.content.periods;
-            const normalizedPeriods = normalizePeriods(rawPeriodsData);
-
-            if (!nonEmpty(normalizedPeriods)) {
+            const normalized = normalizePeriods(rawPeriodsData);
+            if (!nonEmpty(normalized)) {
                 console.log('📋 [Periods] No periods data available');
                 return [];
             }
-
-            return normalizedPeriods;
+            return normalized;
         });
 
         const courses = computed(() => {
             const rawCourses = props.content.courses;
-            const coursesArray = toArray(rawCourses);
-
-            if (!nonEmpty(coursesArray)) {
+            const arr = toArray(rawCourses);
+            if (!nonEmpty(arr)) {
                 console.log('🎯 [wwElement] Courses processing: no data available');
             }
-
-            // CRITICAL FIX: Apply normalizeCourse to handle possible_time_slots dayId parsing
-            return coursesArray.map((course, idx) => normalizeCourse(course, idx));
+            return arr.map((course, idx) => normalizeCourse(course, idx));
         });
 
-        const teachers = computed(() => {
-            const rawTeachers = props.content.teachers;
-            const teachersArray = toArray(rawTeachers);
-
-            if (!nonEmpty(teachersArray)) {
-                console.log('👥 [wwElement] Teachers processing: no data available');
-            }
-
-            return teachersArray;
-        });
-
-        const classes = computed(() => {
-            const rawClasses = props.content.classes;
-            const classesArray = toArray(rawClasses);
-
-            if (!nonEmpty(classesArray)) {
-                console.log('🏫 [wwElement] Classes processing: no data available');
-            }
-
-            return classesArray;
-        });
-
-        const rooms = computed(() => {
-            const rawRooms = props.content.rooms;
-            const roomsArray = toArray(rawRooms);
-
-            if (!nonEmpty(roomsArray)) {
-                console.log('🏠 [wwElement] Rooms processing: no data available');
-            }
-
-            return roomsArray;
-        });
+        const teachers = computed(() => toArray(props.content.teachers || []));
+        const classes = computed(() => toArray(props.content.classes || []));
+        const rooms = computed(() => toArray(props.content.rooms || []));
 
         const schoolDays = computed(() => {
-            const rawDaysData = props.content.schoolDays;
-            const validatedDays = toArray(rawDaysData);
-
+            const validatedDays = toArray(props.content.schoolDays || []);
             if (!nonEmpty(validatedDays)) {
                 console.log('📅 [wwElement] SchoolDays processing: no data available');
                 return [];
             }
 
-            // Create fallback day names if missing
             const defaultDayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
-            const processedDays = validatedDays.map((day, index) => {
+            return validatedDays.map((day, index) => {
                 const dayName = day.name || day.name_en || day.day_name || defaultDayNames[index] || `Day ${index + 1}`;
-
                 return {
                     ...day,
                     id: day.day_id || day.id,
@@ -311,11 +302,9 @@ export default {
                     day_id: day.day_id || day.id,
                 };
             });
-
-            return processedDays;
         });
 
-        // New: prefer draftSchedules/draftSchedule props; fallback to content.draftSchedules; normalize + dedupe
+        // Prefer draftSchedules/draftSchedule props; fallback to content.draftSchedules; normalize + dedupe
         const draftSchedules = computed(() => {
             const propDraftsA = toArray(props.draftSchedules);
             const propDraftsB = toArray(props.draftSchedule);
@@ -373,69 +362,27 @@ export default {
             return out;
         });
 
-        const liveSchedules = computed(() => {
-            const rawLive = props.content.liveSchedules;
-            const finalLiveArray = toArray(rawLive);
-
-            if (!nonEmpty(finalLiveArray)) {
-                console.log('📺 [wwElement] Live Schedules processing: no data available');
-            }
-
-            return finalLiveArray;
-        });
-
-        const subjects = computed(() => {
-            const rawSubjects = props.content.subjects;
-            const subjectsArray = toArray(rawSubjects);
-
-            if (!nonEmpty(subjectsArray)) {
-                console.log('📚 [wwElement] Subjects processing: no data available');
-            }
-
-            return subjectsArray;
-        });
+        const liveSchedules = computed(() => toArray(props.content.liveSchedules || []));
+        const subjects = computed(() => toArray(props.content.subjects || []));
 
         // Computed state
-        const isReadOnly = computed(() => false); // Component is always in edit mode now
+        const isReadOnly = computed(() => false); // always editable here
         const canUndo = computed(() => safeLength(undoStack.value) > 0);
 
         // Conflict detection
-        const allConflicts = computed(() => {
-            return detectConflicts(draftSchedules.value);
-        });
+        const allConflicts = computed(() => detectConflicts(draftSchedules.value));
 
         // Available courses for selected slot
         const availableCoursesForSlot = computed(() => {
             if (!selectedCell.value.dayId || !selectedCell.value.periodId) {
                 return courses.value;
             }
-
             const currentDayId = selectedCell.value.dayId;
             const currentPeriodId = selectedCell.value.periodId;
 
-            if (currentDayId && currentPeriodId) {
-                console.log('🎯 [wwElement] availableCoursesForSlot filtering:', {
-                    currentDayId,
-                    currentPeriodId,
-                    totalCourses: safeLength(courses.value),
-                });
-            }
-
             const filteredCourses = courses.value.filter(course => {
                 if (safeLength(course.possibleSlots) === 0) return true;
-
-                const isAvailable = course.possibleSlots.some(slot => {
-                    return slot.dayId === currentDayId && slot.periodId === currentPeriodId;
-                });
-
-                if (isAvailable) {
-                    console.log('  ✅ Available course:', {
-                        courseName: course.name,
-                        possibleSlots: course.possibleSlots,
-                    });
-                }
-
-                return isAvailable;
+                return course.possibleSlots.some(slot => slot.dayId === currentDayId && slot.periodId === currentPeriodId);
             });
 
             return filteredCourses;
@@ -445,8 +392,7 @@ export default {
         function saveToUndoStack() {
             const currentState = JSON.stringify(draftSchedules.value);
             undoStack.value.push(currentState);
-
-            if (safeLength(undoStack.value) > 0 && safeLength(undoStack.value) > maxUndoSteps) {
+            if (safeLength(undoStack.value) > maxUndoSteps) {
                 undoStack.value.shift();
             }
         }
@@ -488,7 +434,6 @@ export default {
 
         function addAssignment(newAssignment) {
             saveToUndoStack();
-
             const updatedSchedules = [...draftSchedules.value, newAssignment];
             updateDraftSchedules(updatedSchedules);
             closeAssignmentModal();
@@ -533,7 +478,6 @@ export default {
 
         function undo() {
             if (safeLength(undoStack.value) === 0) return;
-
             const previousState = undoStack.value.pop();
             const previousSchedules = JSON.parse(previousState);
             updateDraftSchedules(previousSchedules);
@@ -556,8 +500,7 @@ export default {
                     timestamp: new Date().toISOString(),
                 });
 
-                await new Promise(resolve => setTimeout(resolve, 1000));
-
+                await new Promise(resolve => setTimeout(resolve, 500));
                 console.log('💾 [wwElement] Draft saved successfully');
             } catch (error) {
                 console.error('❌ [wwElement] Error saving draft:', error);
@@ -642,13 +585,11 @@ export default {
                 ...(eventData?.action !== undefined && { action: eventData.action }),
             };
 
-            console.log('🚀 [WeWeb Event] scheduler:drop - Emitting trigger-event with data:', safeEventData);
             try {
                 emit('trigger-event', {
                     name: 'scheduler:drop',
                     event: safeEventData,
                 });
-                console.log('✅ [WeWeb Event] scheduler:drop emitted successfully');
             } catch (error) {
                 console.error('❌ [WeWeb Event] scheduler:drop emission failed:', error);
             }
@@ -663,13 +604,11 @@ export default {
                 timestamp: eventData?.timestamp || new Date().toISOString(),
             };
 
-            console.log('🚀 [WeWeb Event] scheduler:drag-start - Emitting trigger-event with data:', safeEventData);
             try {
                 emit('trigger-event', {
                     name: 'scheduler:drag-start',
                     event: safeEventData,
                 });
-                console.log('✅ [WeWeb Event] scheduler:drag-start emitted successfully');
             } catch (error) {
                 console.error('❌ [WeWeb Event] scheduler:drag-start emission failed:', error);
             }
@@ -685,13 +624,11 @@ export default {
                 timestamp: eventData?.timestamp || new Date().toISOString(),
             };
 
-            console.log('🚀 [WeWeb Event] scheduler:drag-end - Emitting trigger-event with data:', safeEventData);
             try {
                 emit('trigger-event', {
                     name: 'scheduler:drag-end',
                     event: safeEventData,
                 });
-                console.log('✅ [WeWeb Event] scheduler:drag-end emitted successfully');
             } catch (error) {
                 console.error('❌ [WeWeb Event] scheduler:drag-end emission failed:', error);
             }
@@ -699,10 +636,6 @@ export default {
 
         // Test function for manual event emission debugging
         function testEventEmission() {
-            console.log('🧪 [WeWeb Event Test] =================================');
-            console.log('🧪 [WeWeb Event Test] Manual scheduler:drop event test');
-            console.log('🧪 [WeWeb Event Test] =================================');
-
             const testData = {
                 dayId: 1,
                 periodId: 'test-period-id',
@@ -713,16 +646,12 @@ export default {
                 timestamp: new Date().toISOString(),
             };
 
-            console.log('📋 [WeWeb Event Test] Test event data:', testData);
-
             try {
-                console.log('🚀 [WeWeb Event Test] Attempting to emit scheduler:drop...');
                 emit('trigger-event', {
                     name: 'scheduler:drop',
                     event: testData,
                 });
-                console.log('✅ [WeWeb Event Test] ✅ SUCCESS: scheduler:drop trigger-event emitted!');
-                console.log('📌 [WeWeb Event Test] Event data should be accessible directly in workflows');
+                console.log('✅ [WeWeb Event Test] scheduler:drop emitted');
             } catch (error) {
                 console.error('❌ [WeWeb Event Test] scheduler:drop test failed:', error);
             }
@@ -731,29 +660,20 @@ export default {
         function updateAssignments(payload) {
             if (payload.action === 'move' && payload.assignment) {
                 const updatedSchedules = [...draftSchedules.value];
+                const idx = updatedSchedules.findIndex(a => a.id === payload.assignment.id);
 
-                const assignmentIndex = updatedSchedules.findIndex(a => a.id === payload.assignment.id);
-
-                if (assignmentIndex !== -1) {
+                if (idx !== -1) {
                     const updatedAssignment = {
-                        ...updatedSchedules[assignmentIndex],
+                        ...updatedSchedules[idx],
                         day_id: payload.toDayId,
                         period_id: payload.toPeriodId,
                         day_name_de: schoolDays.value.find(d => d.id === payload.toDayId)?.name_de,
                         day_name_en: schoolDays.value.find(d => d.id === payload.toDayId)?.name_en,
                     };
 
-                    updatedSchedules[assignmentIndex] = updatedAssignment;
-
+                    updatedSchedules[idx] = updatedAssignment;
                     undoStack.value.push(JSON.stringify(draftSchedules.value));
-
                     updateDraftSchedules(updatedSchedules);
-
-                    console.log('✅ [DragDrop] Assignment moved successfully:', {
-                        assignmentId: payload.assignment.id,
-                        from: `${payload.fromDayId}-${payload.fromPeriodId}`,
-                        to: `${payload.toDayId}-${payload.toPeriodId}`,
-                    });
                 } else {
                     console.warn('⚠️ [DragDrop] Could not find assignment to move:', payload.assignment.id);
                 }
@@ -771,6 +691,7 @@ export default {
                     a => a.day_id === conflict.day_id && a.period_id === conflict.period_id
                 ),
                 conflicts: [conflict],
+                preSelectedCourse: null,
             };
             showAssignmentModal.value = true;
             showConflicts.value = false;
@@ -797,41 +718,12 @@ export default {
             });
         }
 
-        function emitTestEvent() {
-            try {
-                emit('element-event', {
-                    name: 'scheduler:drop',
-                    event: 'scheduler:drop',
-                    data: {
-                        message: 'Test WeWeb element event from Course Scheduler!',
-                        timestamp: new Date().toISOString(),
-                        testData: {
-                            periods: safeLength(periods.value),
-                            courses: safeLength(courses.value),
-                            teachers: safeLength(teachers.value),
-                            classes: safeLength(classes.value),
-                            rooms: safeLength(rooms.value),
-                            draftSchedules: safeLength(draftSchedules.value),
-                            conflicts: safeLength(allConflicts.value),
-                            isReadOnly: isReadOnly.value,
-                        },
-                    },
-                });
-                console.log('✅ Test WeWeb element event emitted successfully!');
-                alert('Test WeWeb element event emitted successfully!');
-            } catch (error) {
-                console.error('❌ Failed to emit test WeWeb element event:', error);
-                alert('Error emitting WeWeb element event: ' + error.message);
-            }
-        }
-
         // Auto-save functionality
         let saveTimeout;
         watch(
             draftSchedules,
             () => {
                 if (isReadOnly.value) return;
-
                 clearTimeout(saveTimeout);
                 saveTimeout = setTimeout(() => {
                     saveDraft();
@@ -927,10 +819,9 @@ export default {
             applySuggestion,
             ignoreConflict,
             autoResolveConflicts,
-            emitTestEvent,
             logCurrentData,
 
-            // Public API methods for programmatic control
+            // Public API methods for programmatic control (from store)
             setViewMode: store.setViewMode,
             toggleTeacher: store.toggleTeacher,
             setSelectedClass: store.setSelectedClass,
@@ -939,16 +830,14 @@ export default {
             persistDraft: store.persistDraft,
             publish: store.publish,
 
-            // Utility functions
+            // Local helpers
             safeLength,
-            safeArray,
         };
     },
 };
 </script>
 
 <style lang="scss" scoped>
-/* Keeping styles minimal here; retain or merge with your existing styles as needed */
 .course-scheduler-wrapper {
     width: 100%;
     min-height: 500px;
@@ -996,5 +885,33 @@ export default {
     padding: 12px 0;
 }
 
-/* Add/merge any remaining styles from your existing file below */
+.test-toggle,
+.debug-toggle {
+    position: fixed;
+    bottom: 16px;
+    right: 16px;
+    margin-left: 8px;
+    background: #eee;
+    border: 1px solid #ddd;
+    padding: 8px 10px;
+    border-radius: 4px;
+}
+
+.test-toggle {
+    right: 56px;
+}
+
+.conflicts-sidebar {
+    position: fixed;
+    top: 80px;
+    right: 16px;
+    width: 360px;
+    max-height: calc(100vh - 100px);
+    overflow: auto;
+    background: #fff;
+    border: 1px solid #eee;
+    border-radius: 6px;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.08);
+    padding: 12px;
+}
 </style>
