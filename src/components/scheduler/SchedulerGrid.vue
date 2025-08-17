@@ -472,7 +472,7 @@ export default {
       const cls = props.classes.find((c) => isSameId(c.id, assignment.class_id));
       return {
         borderLeft: `4px solid ${course?.color || cls?.color || '#e0e0e0'}`,
-        backgroundColor: course?.color ? `${course.color}15` : cls?.color ? `${cls.color}15` : '#f9f9f9`,
+        backgroundColor: course?.color ? `${course.color}15` : (cls?.color ? `${cls.color}15` : '#f9f9f9'),
       };
     }
 
@@ -664,7 +664,7 @@ export default {
         }
       }
 
-      // Emit final scheduler-drop (unchanged event name + payload shape + added frequency)
+      // Emit final scheduler-drop
       emit('scheduler-drop', {
         dayId, periodId,
         courseId, courseName, courseCode,
@@ -731,7 +731,10 @@ export default {
       });
     }
     function getCourseCardStyle(course) {
-      return { borderLeft: `4px solid ${course.color || '#007cba'}`, backgroundColor: course.color ? `${course.color}15` : '#f0f8ff` };
+      return {
+        borderLeft: `4px solid ${course.color || '#007cba'}`,
+        backgroundColor: course.color ? `${course.color}15` : '#f0f8ff',
+      };
     }
     function isDraggingCourse(courseId) { return normId(draggedCourse.value?.id) === normId(courseId); }
 
@@ -839,10 +842,9 @@ export default {
 </script>
 
 <style scoped>
-/* Keep your compact styling and aligned icons (same as delivered earlier) */
-/* ... existing styles from prior version ... */
+/* Minimal styling kept; your existing CSS can remain as before */
 
-/* Context Menu (kept) */
+/* Context Menu */
 .context-menu {
   position: fixed; background: white; border: 1px solid #ccc; border-radius: 6px;
   box-shadow: 0 8px 24px rgba(0,0,0,0.12); z-index: 2000; min-width: 160px; padding: 4px 0;
