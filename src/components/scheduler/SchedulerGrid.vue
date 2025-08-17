@@ -74,6 +74,7 @@
                 :class="getAssignmentClasses(assignment)"
                 :style="getAssignmentStyles(assignment)"
                 @click.stop="handleAssignmentClick(assignment, day.id, period.id)"
+                @contextmenu.prevent="emitAssignmentDetails(assignment)"
                 :draggable="!isReadOnly"
                 @dragstart="!isReadOnly ? handleAssignmentDragStart($event, assignment, day.id, period.id) : null"
                 @dragend="!isReadOnly ? handleAssignmentDragEnd($event) : null"
@@ -83,11 +84,13 @@
               >
                 <div class="assignment-content">
                   <span class="course-name">{{ getDisplayName(assignment) }}</span>
-                  <span class="class-name" v-if="assignment.class_id">{{ getClassName(assignment.class_id) }}</span>
-                  <span class="teacher-names" v-if="getAssignmentTeachers(assignment)">
-                    {{ getAssignmentTeachers(assignment) }}
+                  <span class="meta-line">
+                    <span class="class-name" v-if="assignment.class_id">{{ getClassName(assignment.class_id) }}</span>
+                    <span class="teacher-names" v-if="getAssignmentTeachers(assignment)">
+                      • {{ getAssignmentTeachers(assignment) }}
+                    </span>
+                    <span class="room-name" v-if="assignment.room_id">• {{ getRoomName(assignment.room_id) }}</span>
                   </span>
-                  <span class="room-name" v-if="assignment.room_id">{{ getRoomName(assignment.room_id) }}</span>
                 </div>
 
                 <div v-if="hasConflicts(assignment)" class="conflict-indicator" title="Has conflicts">⚠️</div>
@@ -118,9 +121,9 @@
 
           <div v-for="day in visibleDays" :key="`stats-${day.id}`" class="day-statistics-cell">
             <div class="stats-headers">
-              <div class="stat-header" title="📊 Total free spots available">📊</div>
-              <div class="stat-header" title="⚖️ Average spots available">⚖️</div>
-              <div class="stat-header" title="📚 Amount of courses available">📚</div>
+              <div class="stat-header" title="Total free spots available">📊 <span>Free</span></div>
+              <div class="stat-header" title="Average spots available">⚖️ <span>Avg</span></div>
+              <div class="stat-header" title="Courses available">📚 <span>Courses</span></div>
             </div>
 
             <div class="stats-rows">
@@ -158,6 +161,7 @@
               v-for="course in getAvailableCoursesForSlot(day.id, focusedPeriodId)"
               :key="course.id"
               class="course-card draggable-course"
+              :class="{ 'is-dragging': isDraggingCourse(course.id) }"
               :style="getCourseCardStyle(course)"
               :title="`${course.name || course.course_name || course.title || 'Course'}`"
               :draggable="true"
@@ -256,6 +260,13 @@ export default {
 
     const focusedPeriodId = ref(null);
 
+    // Track currently dragging course for subtle UI feedback
+    const draggedCourse = ref(null);
+    const draggedAssignment = ref(null);
+
+    // Optimistic hide-after-schedule: courses removed from the list until parent updates
+    const optimisticallyScheduled = ref(new Set());
+
     const visibleDays = computed(() => safeArray(props.schoolDays).slice(0, props.maxDays || 7));
 
     const visiblePeriods = computed(() => {
@@ -265,8 +276,10 @@ export default {
       return match.length ? match : all;
     });
 
+    // Parent passes draft data; this is what we render against
     const currentSchedules = computed(() => props.draftSchedules);
 
+    // Formatting helpers
     function formatTime(timeString) {
       if (!timeString) return '';
       const parts = String(timeString).split(':');
@@ -281,6 +294,7 @@ export default {
       return Number.isFinite(n) ? Math.round(n) : val;
     }
 
+    // Cell helpers
     function getCellAssignments(dayId, periodId) {
       const entries = currentSchedules.value;
       const assignments = entries.filter(
@@ -321,6 +335,7 @@ export default {
       }`;
     }
 
+    // Assignment helpers
     function getAssignmentClasses(assignment) {
       const classes = [];
       if (hasConflicts(assignment)) classes.push('has-conflict');
@@ -402,15 +417,21 @@ export default {
       return !(courseOk && classOk && roomOk && teachersOk);
     }
 
+    // Interactions
     function handleCellClick(dayId, periodId, period) {
       if (props.isReadOnly || !props.enableCellAdd) return;
       emit('cell-click', { dayId, periodId, period, mode: 'add', preSelectedCourse: null });
     }
 
-    // Drag state
-    const draggedCourse = ref(null);
-    const draggedAssignment = ref(null);
+    function emitAssignmentDetails(assignment) {
+      emit('assignment-details', assignment);
+    }
 
+    function handleAssignmentClick(assignment) {
+      emit('assignment-details', assignment);
+    }
+
+    // Drag: courses
     function handleCourseDragStart(event, course) {
       draggedCourse.value = course;
       emit('scheduler-drag-start', {
@@ -423,11 +444,7 @@ export default {
 
       event.dataTransfer.setData(
         'text/plain',
-        JSON.stringify({
-          type: 'course',
-          course,
-          id: course.id,
-        })
+        JSON.stringify({ type: 'course', course, id: course.id })
       );
       event.dataTransfer.effectAllowed = 'copy';
       event.target.style.opacity = '0.5';
@@ -446,6 +463,7 @@ export default {
       event.target.style.opacity = '1';
     }
 
+    // Drag: assignments
     function handleAssignmentDragStart(event, assignment, dayId, periodId) {
       draggedAssignment.value = { assignment, originalDayId: dayId, originalPeriodId: periodId };
       emit('scheduler-drag-start', {
@@ -480,6 +498,7 @@ export default {
       event.target.style.opacity = '1';
     }
 
+    // Drop target handling
     function handleCellDragOver(event) {
       if (!draggedAssignment.value && !draggedCourse.value) return false;
       event.dataTransfer.dropEffect = draggedAssignment.value ? 'move' : 'copy';
@@ -506,6 +525,9 @@ export default {
 
         if (dragData.type === 'course') {
           const course = dragData.course || {};
+          // Optimistically hide from the available list for that slot
+          optimisticallyScheduled.value.add(`${normId(dayId)}|${normId(periodId)}|${normId(course.id)}`);
+
           emit('scheduler-drop', {
             dayId,
             periodId,
@@ -561,25 +583,43 @@ export default {
       }
     }
 
+    // Period focus
     function togglePeriodFocus(periodId) {
       const pid = normId(periodId);
       focusedPeriodId.value = isSameId(focusedPeriodId.value, pid) ? null : pid;
       emit('period-focus-changed', focusedPeriodId.value);
     }
-
     function isFocused(id) {
       return isSameId(focusedPeriodId.value, id);
     }
-
     function getFocusedPeriodName() {
       const p = props.periods.find((x) => isSameId(x.id, focusedPeriodId.value));
       return p?.name || p?.label || 'Unknown Period';
     }
 
+    // Available courses (hide already scheduled for the specific day/period, plus optimistic hides)
     function getAvailableCoursesForSlot(dayId, periodId) {
+      const dayKey = normId(dayId);
+      const periodKey = normId(periodId);
+
+      const scheduledIds = new Set(
+        safeArray(currentSchedules.value)
+          .filter((e) => isSameId(e.day_id, dayId) && isSameId(e.period_id, periodId))
+          .map((e) => normId(e.course_id))
+      );
+
       return safeArray(props.courses).filter((course) => {
+        const cid = normId(course.id);
+
+        // Remove if already scheduled in this slot (or optimistically scheduled)
+        if (scheduledIds.has(cid) || optimisticallyScheduled.value.has(`${dayKey}|${periodKey}|${cid}`)) {
+          return false;
+        }
+
+        // Respect possibleSlots if present
         const slots = Array.isArray(course.possibleSlots) ? course.possibleSlots : [];
         if (slots.length === 0) return true;
+
         return slots.some((s) => isSameId(s.dayId, dayId) && isSameId(s.periodId, periodId));
       });
     }
@@ -598,7 +638,14 @@ export default {
       };
     }
 
+    function isDraggingCourse(courseId) {
+      return normId(draggedCourse.value?.id) === normId(courseId);
+    }
+
     function assignCourseByClick(course, dayId, periodId) {
+      // Optimistic hide
+      optimisticallyScheduled.value.add(`${normId(dayId)}|${normId(periodId)}|${normId(course.id)}`);
+
       emit('scheduler-drop', {
         dayId,
         periodId,
@@ -613,24 +660,7 @@ export default {
       });
     }
 
-    function getScheduledCoursesForSlot(dayId, periodId) {
-      const scheduled = [];
-      const scheduledEntries = safeArray(currentSchedules.value).filter(
-        (e) => isSameId(e.day_id, dayId) && isSameId(e.period_id, periodId)
-      );
-
-      scheduledEntries.forEach((entry) => {
-        const course = props.courses.find((c) => isSameId(c.id, entry.course_id));
-        if (course) {
-          const totalSpots = course.max_students || course.capacity || 0;
-          const freeSpots = entry.free_spaces !== undefined ? entry.free_spaces : totalSpots;
-          scheduled.push({ ...course, scheduledEntry: entry, freeSpots, totalSpots });
-        }
-      });
-
-      return scheduled;
-    }
-
+    // Grade stats
     function parseGrades(course) {
       const grades = [];
       if (course.is_for_year_g && typeof course.is_for_year_g === 'object') {
@@ -650,6 +680,24 @@ export default {
       safeArray(props.courses).forEach((c) => parseGrades(c).forEach((g) => set.add(g)));
       return Array.from(set).sort((a, b) => a - b);
     });
+
+    function getScheduledCoursesForSlot(dayId, periodId) {
+      const scheduled = [];
+      const scheduledEntries = safeArray(currentSchedules.value).filter(
+        (e) => isSameId(e.day_id, dayId) && isSameId(e.period_id, periodId)
+      );
+
+      scheduledEntries.forEach((entry) => {
+        const course = props.courses.find((c) => isSameId(c.id, entry.course_id));
+        if (course) {
+          const totalSpots = course.max_students || course.capacity || 0;
+          const freeSpots = entry.free_spaces !== undefined ? entry.free_spaces : totalSpots;
+          scheduled.push({ ...course, scheduledEntry: entry, freeSpots, totalSpots });
+        }
+      });
+
+      return scheduled;
+    }
 
     function getDailyGradeStats(dayId, periodId) {
       if (!periodId) return [];
@@ -690,15 +738,12 @@ export default {
       return out;
     }
 
-    function handleAssignmentClick(assignment) {
-      emit('assignment-details', assignment);
-    }
-
     return {
       // state
       focusedPeriodId,
       draggedCourse,
       draggedAssignment,
+      optimisticallyScheduled,
 
       // computed
       visibleDays,
@@ -732,6 +777,7 @@ export default {
 
       // interactions
       handleCellClick,
+      emitAssignmentDetails,
       handleAssignmentClick,
       handleCourseDragStart,
       handleCourseDragEnd,
@@ -754,13 +800,14 @@ export default {
       getNoPreferredDaysCourses,
       getCourseCardStyle,
       assignCourseByClick,
+      isDraggingCourse,
     };
   },
 };
 </script>
 
 <style scoped>
-/* Styles unchanged from your latest working version (with larger grade stats text) */
+/* Container */
 .scheduler-grid {
   display: flex;
   flex-direction: column;
@@ -770,23 +817,28 @@ export default {
   overflow: hidden;
   background: white;
 }
+
+/* Header */
 .grid-header {
   display: flex;
   background: #f5f5f5;
   border-bottom: 1px solid #ddd;
   font-weight: 600;
 }
+
 .period-header-cell {
-  width: 140px;
-  padding: 12px 8px;
+  width: 130px; /* slightly narrower */
+  padding: 8px 6px; /* tighter */
   border-right: 1px solid #ddd;
   display: flex;
   align-items: center;
   justify-content: center;
 }
+
+/* Days */
 .day-header-cell {
   flex: 1;
-  padding: 12px 8px;
+  padding: 8px 6px; /* tighter */
   border-right: 1px solid #ddd;
   text-align: center;
   display: flex;
@@ -795,86 +847,238 @@ export default {
 }
 .day-name { font-size: 0.95em; }
 .day-date { font-size: 0.8em; color: #666; font-weight: normal; }
+
+/* Body */
 .grid-body { display: flex; flex-direction: column; }
-.grid-row { display: flex; border-bottom: 1px solid #ddd; min-height: 80px; }
+
+.grid-row {
+  display: flex;
+  border-bottom: 1px solid #ddd;
+  min-height: 68px; /* more compact */
+}
 .grid-row.non-instructional { background: #f8f9fa; }
+
+/* Period label (left column) */
 .period-label-cell {
-  width: 140px; padding: 8px; border-right: 1px solid #ddd; background: #f9f9f9;
-  display: flex; align-items: center; cursor: pointer; transition: background-color 0.2s;
+  width: 130px;
+  padding: 6px; /* tighter */
+  border-right: 1px solid #ddd;
+  background: #f9f9f9;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  transition: background-color 0.2s;
 }
 .period-label-cell:hover { background: #f0f7ff !important; }
 .period-label-cell.focused { background: #e6f7ff !important; border-left: 4px solid #007cba; }
+
 .period-info { display: flex; flex-direction: column; gap: 2px; }
-.period-name { font-weight: 500; font-size: 0.9em; }
-.period-time { font-size: 0.8em; color: #666; }
-.non-instructional-badge { font-size: 0.75em; color: #888; background: #e9ecef; padding: 2px 4px; border-radius: 3px; }
+.period-name { font-weight: 600; font-size: 0.9em; }
+.period-time { font-size: 0.78em; color: #666; }
+.non-instructional-badge {
+  font-size: 0.72em;
+  color: #888;
+  background: #e9ecef;
+  padding: 1px 4px;
+  border-radius: 3px;
+  align-self: flex-start;
+}
+
+/* Cells */
 .schedule-cell {
-  flex: 1; border-right: 1px solid #ddd; position: relative; cursor: pointer;
-  transition: background-color 0.2s; min-height: 80px;
+  flex: 1;
+  border-right: 1px solid #ddd;
+  position: relative;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  min-height: 68px; /* compact */
 }
 .schedule-cell:hover { background: #f0f7ff; }
-.schedule-cell.has-assignments { background: #e6f7ff; }
-.schedule-cell.multiple-assignments { background: #d6f3ff; }
+.schedule-cell.has-assignments { background: #eaf7ff; }
+.schedule-cell.multiple-assignments { background: #def3ff; }
 .schedule-cell.has-conflicts { background: #fff2f0; border-left: 3px solid #ff4d4f; }
-.assignments-container { padding: 4px; height: 100%; display: flex; flex-direction: column; gap: 2px; position: relative; }
-.assignment-item { padding: 4px 6px; border-radius: 3px; border: 1px solid #e0e0e0; position: relative; cursor: pointer; transition: all 0.2s; }
+
+/* Assignments */
+.assignments-container {
+  padding: 3px; /* tighter */
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  position: relative;
+}
+.assignment-item {
+  padding: 4px 6px; /* tighter */
+  border-radius: 4px;
+  border: 1px solid #e0e0e0;
+  position: relative;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: #fff;
+}
 .assignment-item:hover { transform: translateX(1px); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1); }
 .assignment-item.has-conflict { border-color: #ff4d4f; background: #fff2f0; }
 .assignment-item.has-deleted-entities { border-color: #faad14; background: #fff7e6; }
 .assignment-item.lesson-schedule {
-  opacity: 0.6; border-style: dashed; background: #f5f5f5 !important; font-style: italic; font-size: 0.8em;
-  transform: scale(0.95); margin: 1px;
+  opacity: 0.75;
+  border-style: dashed;
+  background: #f5f5f5 !important;
+  font-style: italic;
+  font-size: 0.8em;
 }
-.assignment-content { display: flex; flex-direction: column; gap: 1px; }
-.course-name { font-weight: 500; font-size: 0.85em; line-height: 1.2; }
-.class-name, .teacher-names, .room-name { font-size: 0.75em; color: #666; line-height: 1.1; }
-.conflict-indicator, .deleted-warning { position: absolute; top: 2px; right: 2px; font-size: 0.7em; }
-.empty-cell { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #ccc; font-size: 0.85em; gap: 4px; }
-.add-text { opacity: 0.8; }
 
-/* Drag and Drop */
+.assignment-content { display: flex; flex-direction: column; gap: 2px; }
+.course-name { font-weight: 600; font-size: 0.88em; line-height: 1.2; }
+.meta-line { font-size: 0.76em; color: #666; line-height: 1.2; display: inline-flex; gap: 4px; align-items: baseline; }
+
+.conflict-indicator,
+.deleted-warning {
+  position: absolute;
+  top: 4px; /* better vertical alignment */
+  right: 4px;
+  font-size: 0.8em; /* slightly larger, visually centered with text */
+  line-height: 1;
+}
+
+/* Empty cell */
+.empty-cell {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #ccc;
+  font-size: 0.85em;
+  gap: 2px;
+}
+.add-text { opacity: 0.85; }
+
+/* Drag targets */
 .drop-zone { position: relative; transition: all 0.2s ease; }
-.drop-zone.drag-over { background: rgba(0, 123, 186, 0.1) !important; border: 2px dashed #007cba !important; transform: scale(1.02); }
+.drop-zone.drag-over {
+  background: rgba(0, 123, 186, 0.08) !important;
+  border: 2px dashed #007cba !important;
+  transform: scale(1.01);
+}
 .drop-zone.drag-over::after {
-  content: '📋 Drop here'; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-  background: rgba(0, 123, 186, 0.9); color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; pointer-events: none; z-index: 10;
+  content: '📋 Drop here';
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  background: rgba(0, 123, 186, 0.9); color: white; padding: 3px 6px; border-radius: 4px;
+  font-size: 12px; font-weight: 600; pointer-events: none; z-index: 10;
 }
 
-/* Grade Statistics */
-.statistics-row { display: flex; border-bottom: 2px solid #007cba; background: #f0f8ff; border-top: 2px solid #007cba; }
-.stats-label-cell { background: #007cba !important; color: white; display: flex; align-items: center; justify-content: center; }
+/* Grade Statistics (more compact + aligned icons) */
+.statistics-row {
+  display: flex;
+  border-bottom: 2px solid #007cba;
+  background: #f0f8ff;
+  border-top: 2px solid #007cba;
+}
+.stats-label-cell {
+  background: #007cba !important;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
 .stats-title { display: flex; align-items: center; gap: 6px; font-size: 0.95em; font-weight: 600; }
 .stats-emoji { font-size: 1.15em; }
-.day-statistics-cell { flex: 1; border-right: 1px solid #ddd; padding: 10px; background: white; display: flex; flex-direction: column; gap: 6px; min-height: 110px; }
-.stats-headers { display: flex; justify-content: space-between; align-items: center; gap: 4px; margin-bottom: 6px; padding: 4px; background: rgba(0, 124, 186, 0.1); border-radius: 4px; }
-.stat-header { font-size: 0.95em; text-align: center; cursor: help; padding: 2px 4px; border-radius: 3px; flex: 1; }
+
+.day-statistics-cell {
+  flex: 1;
+  border-right: 1px solid #ddd;
+  padding: 6px; /* tighter */
+  background: white;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 96px; /* tighter */
+}
+.stats-headers {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 4px;
+  padding: 3px 4px; /* tighter */
+  background: rgba(0, 124, 186, 0.1);
+  border-radius: 4px;
+}
+.stat-header {
+  display: inline-flex;
+  align-items: center; /* vertical align icon with text */
+  justify-content: center;
+  gap: 6px;
+  font-size: 0.9em;
+  line-height: 1;
+  text-align: center;
+  padding: 2px 4px;
+  border-radius: 3px;
+  flex: 1;
+}
+.stat-header span { font-size: 0.88em; color: #333; }
 .stat-header:hover { background: rgba(0, 124, 186, 0.2); }
-.stats-rows { display: flex; flex-direction: column; gap: 4px; flex-grow: 1; }
-.grade-stats-row { display: flex; align-items: center; justify-content: space-between; gap: 6px; background: #f8f9fa; border: 1px solid #e0e0e0; border-radius: 4px; padding: 4px 6px; font-size: 0.9em; }
-.grade-number { font-weight: 700; color: #333; min-width: 22px; font-size: 1em; }
-.stat-value { text-align: center; padding: 2px 4px; background: white; border-radius: 3px; font-size: 0.9em; color: #333; min-width: 22px; flex: 1; }
+
+.stats-rows { display: flex; flex-direction: column; gap: 3px; flex-grow: 1; }
+.grade-stats-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  background: #f8f9fa;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  padding: 3px 4px; /* tighter */
+  font-size: 0.88em;
+}
+.grade-number { font-weight: 700; color: #333; min-width: 22px; font-size: 0.95em; }
+.stat-value {
+  text-align: center;
+  padding: 2px 4px;
+  background: white;
+  border-radius: 3px;
+  font-size: 0.88em;
+  color: #333;
+  min-width: 22px;
+  flex: 1;
+}
+.no-stats { display: flex; align-items: center; justify-content: center; flex-grow: 1; color: #999; }
+.no-stats-text { font-size: 0.85em; font-style: italic; text-align: center; }
 
 /* Available Courses Panel */
-.available-courses-panel { padding: 16px; background: #f0f8ff; border-top: 1px solid #007cba; border-bottom: 1px solid #ddd; }
-.available-courses-panel h3 { margin: 0 0 8px 0; color: #007cba; font-size: 1.1em; }
-.focused-period-info { margin: 0 0 16px 0; color: #666; font-size: 0.9em; }
-.day-courses-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
-.day-courses-column h4 { margin: 0 0 12px 0; padding: 8px 12px; background: #007cba; color: white; border-radius: 4px; text-align: center; font-size: 0.9em; }
-.available-courses-list { display: flex; flex-direction: column; gap: 8px; max-height: 340px; overflow-y: auto; }
-.course-card { padding: 10px; background: white; border: 1px solid #ddd; border-radius: 4px; cursor: grab; transition: all 0.2s; font-size: 0.9em; }
+.available-courses-panel {
+  padding: 12px; /* tighter */
+  background: #f0f8ff;
+  border-top: 1px solid #007cba;
+  border-bottom: 1px solid #ddd;
+}
+.available-courses-panel h3 { margin: 0 0 6px 0; color: #007cba; font-size: 1.05em; }
+.focused-period-info { margin: 0 0 10px 0; color: #666; font-size: 0.9em; }
+
+.day-courses-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.day-courses-column h4 {
+  margin: 0 0 10px 0; padding: 6px 10px; background: #007cba; color: white; border-radius: 4px; text-align: center; font-size: 0.88em;
+}
+.available-courses-list { display: flex; flex-direction: column; gap: 8px; max-height: 320px; overflow-y: auto; }
+.course-card {
+  padding: 8px 10px; background: white; border: 1px solid #ddd; border-radius: 4px; cursor: grab; transition: all 0.2s; font-size: 0.9em;
+}
 .course-card:hover { transform: translateY(-1px); box-shadow: 0 2px 4px rgba(0, 124, 186, 0.15); border-color: #007cba; }
 .course-card:active { cursor: grabbing; }
-.course-card .course-name { font-weight: 500; color: #333; margin-bottom: 4px; display: block; }
+.course-card.is-dragging { opacity: 0.6; }
+.course-card .course-name { font-weight: 600; color: #333; margin-bottom: 2px; display: block; }
 .course-card .course-details { display: flex; flex-direction: column; gap: 2px; }
 .course-card .course-details small { color: #666; font-size: 0.8em; }
-.no-courses { padding: 16px; text-align: center; color: #999; font-style: italic; background: #f9f9f9; border: 1px dashed #ddd; border-radius: 4px; }
+.no-courses {
+  padding: 12px; text-align: center; color: #999; font-style: italic; background: #f9f9f9; border: 1px dashed #ddd; border-radius: 4px;
+}
 
 /* No Preferred Days Panel */
-.no-preferred-days-panel { padding: 16px; background: #f0f8e6; border: 1px solid #52c41a; border-radius: 4px; margin-top: 16px; }
+.no-preferred-days-panel { padding: 12px; background: #f0f8e6; border: 1px solid #52c41a; border-radius: 4px; margin-top: 12px; }
 .no-preferred-days-panel h4 { margin: 0 0 8px 0; color: #52c41a; font-size: 1em; display: flex; align-items: center; gap: 8px; }
-.panel-description { margin: 0 0 12px 0; color: #666; font-size: 0.9em; font-style: italic; }
-.no-preferred-courses-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
-.flexible-tag { color: #52c41a !important; font-weight: 500; }
+.panel-description { margin: 0 0 10px 0; color: #666; font-size: 0.9em; font-style: italic; }
+.no-preferred-courses-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; }
+.flexible-tag { color: #52c41a !important; font-weight: 600; }
 
 /* Read-only mode */
 .scheduler-grid[data-readonly='true'] .schedule-cell { cursor: default; }
@@ -889,7 +1093,7 @@ export default {
 
 /* Responsive */
 @media (max-width: 768px) {
-  .period-header-cell, .period-label-cell { width: 110px; font-size: 0.85em; }
+  .period-header-cell, .period-label-cell { width: 108px; font-size: 0.85em; }
   .day-header-cell { font-size: 0.85em; }
 }
 </style>
