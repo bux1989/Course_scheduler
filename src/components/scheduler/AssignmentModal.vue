@@ -1,163 +1,224 @@
 <template>
-    <div v-if="visible" class="assignment-modal-backdrop" @click="$emit('close')">
-        <div class="assignment-modal" @click.stop>
-            <div class="modal-header">
-                <h3>Assignment Details</h3>
-                <button @click="$emit('close')" class="close-btn">×</button>
-            </div>
-            <div class="modal-body">
-                <div v-if="isReadOnly" class="read-only-notice">
-                    <p>📖 Read-only mode - Assignment details are shown for information only</p>
-                </div>
-                <div v-else>
-                    <p>
-                        This is a simplified assignment modal. Assignment functionality is handled by the SchedulerGrid
-                        component.
-                    </p>
-                    <p>Day: {{ dayId }}, Period: {{ periodId }}</p>
-                    <p>Available courses: {{ courses.length }}</p>
-                    <p>Existing assignments: {{ existingAssignments.length }}</p>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button @click="$emit('close')" class="btn btn-secondary">Close</button>
-                <button v-if="!isReadOnly" @click="handleAddAssignment" class="btn btn-primary">Add Assignment</button>
-            </div>
+  <div v-if="visible" class="assignment-modal-backdrop" @click="$emit('close')">
+    <div class="assignment-modal" @click.stop>
+      <div class="modal-header">
+        <h3>Assign {{ preSelectedCourse?.name || 'Course' }}</h3>
+        <button @click="$emit('close')" class="close-btn" aria-label="Close">×</button>
+      </div>
+
+      <div class="modal-body">
+        <div v-if="isReadOnly" class="read-only-notice">
+          <p>📖 Read-only mode — Assignment details are shown for information only.</p>
         </div>
+
+        <template v-else>
+          <!-- When a course is provided, show context -->
+          <div class="context-row" v-if="preSelectedCourse">
+            <div class="context-chip">Day: <strong>{{ formattedDay }}</strong></div>
+            <div class="context-chip">Period: <strong>{{ formattedPeriod }}</strong></div>
+          </div>
+
+          <!-- Frequency -->
+          <label class="freq-row">
+            <input
+              type="checkbox"
+              v-model="frequencyChecked"
+              :aria-checked="frequencyChecked ? 'true' : 'false'"
+            />
+            <span>Schedule multiple times this week</span>
+          </label>
+          <p class="freq-warning" v-if="frequencyChecked">
+            Note: Multiple times per week means some children, teachers, and the room may be shared across repeated
+            sessions. The course will remain in the Available list so you can add another occurrence.
+          </p>
+
+          <!-- Teacher selection -->
+          <div class="section">
+            <div class="section-title">Teachers</div>
+            <div class="teacher-list">
+              <label
+                v-for="t in teachers"
+                :key="t.id"
+                class="teacher-item"
+              >
+                <input
+                  type="checkbox"
+                  :value="t.id"
+                  v-model="selectedTeacherIds"
+                />
+                <span class="t-name">{{ t.name }}</span>
+                <input
+                  type="radio"
+                  :value="t.id"
+                  v-model="primaryTeacherId"
+                  :disabled="!selectedTeacherIds.includes(t.id)"
+                  title="Primary teacher"
+                  class="primary-radio"
+                />
+              </label>
+            </div>
+            <div class="helper" v-if="selectedTeacherIds.length === 0">
+              Select at least one teacher (optional but recommended).
+            </div>
+          </div>
+
+          <!-- Room selection -->
+          <div class="section">
+            <div class="section-title">Room</div>
+            <select class="room-select" v-model="selectedRoomId">
+              <option :value="null">No room</option>
+              <option v-for="r in rooms" :key="r.id" :value="r.id">{{ r.name }}</option>
+            </select>
+          </div>
+        </template>
+      </div>
+
+      <div class="modal-footer">
+        <button @click="$emit('close')" class="btn btn-secondary">Cancel</button>
+        <button
+          v-if="!isReadOnly"
+          @click="submit"
+          class="btn btn-primary"
+        >
+          Assign Course
+        </button>
+      </div>
     </div>
+  </div>
 </template>
 
 <script>
 export default {
-    name: 'AssignmentModal',
-    props: {
-        visible: { type: Boolean, default: false },
-        dayId: { type: [String, Number], default: null },
-        periodId: { type: [String, Number], default: null },
-        period: { type: Object, default: null },
-        courses: { type: Array, default: () => [] },
-        teachers: { type: Array, default: () => [] },
-        classes: { type: Array, default: () => [] },
-        rooms: { type: Array, default: () => [] },
-        subjects: { type: Array, default: () => [] },
-        schoolDays: { type: Array, default: () => [] },
-        existingAssignments: { type: Array, default: () => [] },
-        conflicts: { type: Array, default: () => [] },
-        isReadOnly: { type: Boolean, default: false },
-        preSelectedCourse: { type: Object, default: null },
+  name: 'AssignmentModal',
+  props: {
+    visible: { type: Boolean, default: false },
+    dayId: { type: [String, Number], default: null },
+    periodId: { type: [String, Number], default: null },
+    period: { type: Object, default: null },
+    preSelectedCourse: { type: Object, default: null },
+    teachers: { type: Array, default: () => [] },
+    rooms: { type: Array, default: () => [] },
+    schoolDays: { type: Array, default: () => [] },
+    isReadOnly: { type: Boolean, default: false },
+
+    // Checkbox defaults to unchecked every time (per request)
+    defaultFrequencyChecked: { type: Boolean, default: false },
+  },
+  emits: ['close', 'submit'],
+  data() {
+    return {
+      frequencyChecked: this.defaultFrequencyChecked,
+      selectedTeacherIds: [],
+      primaryTeacherId: null,
+      selectedRoomId: null,
+    };
+  },
+  watch: {
+    // Reset state whenever a new course is opened or modal toggles
+    visible(n) {
+      if (n) {
+        this.resetForm();
+      }
     },
-    emits: ['close', 'add-assignment', 'edit-assignment', 'remove-assignment'],
-    methods: {
-        handleAddAssignment() {
-            // Emit a basic assignment for testing
-            this.$emit('add-assignment', {
-                id: `temp-${Date.now()}`,
-                day_id: this.dayId,
-                period_id: this.periodId,
-                course_id: this.preSelectedCourse?.id || 'test-course',
-                course_name: this.preSelectedCourse?.name || 'Test Course',
-                class_id: 'test-class',
-                teacher_ids: [],
-                room_id: null,
-            });
-        },
+    preSelectedCourse() {
+      this.resetForm();
     },
+  },
+  computed: {
+    formattedDay() {
+      const d = Array.isArray(this.schoolDays)
+        ? this.schoolDays.find((x) => String(x.id) === String(this.dayId))
+        : null;
+      return d?.name || `Day ${this.dayId}`;
+    },
+    formattedPeriod() {
+      return this.period?.name || `Period ${this.periodId}`;
+    },
+  },
+  methods: {
+    resetForm() {
+      this.frequencyChecked = this.defaultFrequencyChecked;
+      this.selectedTeacherIds = [];
+      this.primaryTeacherId = null;
+      this.selectedRoomId = null;
+    },
+    submit() {
+      // If a primary teacher is selected but they aren't in the list, add them
+      if (this.primaryTeacherId && !this.selectedTeacherIds.includes(this.primaryTeacherId)) {
+        this.selectedTeacherIds = [...this.selectedTeacherIds, this.primaryTeacherId];
+      }
+
+      this.$emit('submit', {
+        dayId: this.dayId,
+        periodId: this.periodId,
+        courseId: this.preSelectedCourse?.id || null,
+        courseName: this.preSelectedCourse?.name || this.preSelectedCourse?.course_name || '',
+        courseCode: this.preSelectedCourse?.code || this.preSelectedCourse?.course_code || '',
+        teacherIds: this.selectedTeacherIds,
+        primaryTeacherId: this.primaryTeacherId,
+        roomId: this.selectedRoomId,
+        frequency: this.frequencyChecked ? 'recurring' : 'one-off',
+        timestamp: new Date().toISOString(),
+      });
+    },
+  },
 };
 </script>
 
 <style scoped>
 .assignment-modal-backdrop {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0, 0, 0, 0.5);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 1000;
+  position: fixed; inset: 0; background: rgba(0,0,0,0.45);
+  display: flex; align-items: center; justify-content: center; z-index: 2000;
 }
-
 .assignment-modal {
-    background: white;
-    border-radius: 8px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    max-width: 500px;
-    width: 90vw;
-    max-height: 80vh;
-    overflow-y: auto;
+  background: #fff; border-radius: 10px; box-shadow: 0 12px 32px rgba(0,0,0,0.2);
+  max-width: 720px; width: 96vw; max-height: 86vh; overflow: auto;
 }
-
 .modal-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 16px 20px;
-    border-bottom: 1px solid #e0e0e0;
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 12px 16px; border-bottom: 1px solid #e5e7eb;
 }
+.modal-header h3 { margin: 0; font-size: 1.05rem; color: #111827; }
+.close-btn { background: transparent; border: 0; font-size: 22px; color: #6b7280; cursor: pointer; }
+.close-btn:hover { color: #374151; }
 
-.modal-header h3 {
-    margin: 0;
-    color: #333;
-}
-
-.close-btn {
-    background: none;
-    border: none;
-    font-size: 24px;
-    cursor: pointer;
-    color: #666;
-}
-
-.close-btn:hover {
-    color: #333;
-}
-
-.modal-body {
-    padding: 20px;
-}
-
+.modal-body { padding: 14px 16px; }
 .read-only-notice {
-    background: #f0f8ff;
-    border: 1px solid #b3d9ff;
-    border-radius: 4px;
-    padding: 12px;
-    margin-bottom: 16px;
+  background: #f0f8ff; border: 1px solid #b3d9ff; border-radius: 6px; padding: 10px; margin-bottom: 12px;
+}
+.context-row { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+.context-chip {
+  background: #eef2ff; color: #1e3a8a; border: 1px solid #c7d2fe; padding: 2px 6px; border-radius: 9999px; font-size: 12px;
+}
+
+.freq-row { display: flex; align-items: center; gap: 10px; margin-top: 6px; margin-bottom: 6px; }
+.freq-warning { margin: 0 0 12px; color: #92400e; background: #fffbeb; border: 1px solid #fde68a; border-radius: 6px; padding: 8px; font-size: 0.92em; }
+
+.section { margin-top: 8px; }
+.section-title { font-weight: 700; color: #111827; margin-bottom: 6px; }
+
+.teacher-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 6px; }
+.teacher-item {
+  display: grid; grid-template-columns: 18px 1fr 18px; align-items: center; gap: 8px;
+  padding: 6px 8px; border: 1px solid #e5e7eb; border-radius: 6px; background: #fff;
+}
+.t-name { color: #374151; }
+.primary-radio { justify-self: end; }
+
+.helper { color: #6b7280; font-size: 12px; margin-top: 4px; }
+
+.room-select {
+  width: 100%; padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 6px; background: #fff; color: #111827;
 }
 
 .modal-footer {
-    display: flex;
-    justify-content: flex-end;
-    gap: 8px;
-    padding: 16px 20px;
-    border-top: 1px solid #e0e0e0;
+  display: flex; justify-content: flex-end; gap: 8px; padding: 12px 16px; border-top: 1px solid #e5e7eb;
 }
-
 .btn {
-    padding: 8px 16px;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 14px;
+  padding: 8px 12px; border-radius: 8px; border: 1px solid #d1d5db; cursor: pointer; font-weight: 700; font-size: 14px;
 }
-
-.btn-secondary {
-    background: white;
-    color: #333;
-}
-
-.btn-secondary:hover {
-    background: #f5f5f5;
-}
-
-.btn-primary {
-    background: #007cba;
-    color: white;
-    border-color: #007cba;
-}
-
-.btn-primary:hover {
-    background: #005a85;
-}
+.btn-secondary { background: #fff; color: #111827; }
+.btn-secondary:hover { background: #f9fafb; }
+.btn-primary { background: #007cba; color: #fff; border-color: #007cba; }
+.btn-primary:hover { background: #066aa0; }
 </style>
