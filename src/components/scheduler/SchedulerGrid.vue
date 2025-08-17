@@ -249,20 +249,36 @@
       <div v-if="contextMenu.show" class="context-menu-backdrop" @click="closeContextMenu"></div>
     </teleport>
 
-    <!-- Inline Assignment Editor -->
-    <InlineAssignmentEditor
-      v-if="editingAssignment"
-      :assignment="editingAssignment"
-      :courses="courses"
-      :teachers="teachers"
-      :classes="classes"
-      :rooms="rooms"
-      :subjects="subjects"
-      @save="saveInlineEdit"
-      @cancel="cancelInlineEdit"
-      @delete="deleteInlineAssignment"
-      @edit-course="handleCourseEdit"
-    />
+    <!-- Assignment Editor Modal (popup) -->
+    <teleport to="body">
+      <div v-if="editingAssignment" class="assignment-editor-backdrop" @click="cancelInlineEdit"></div>
+      <div
+        v-if="editingAssignment"
+        class="assignment-editor-modal"
+        role="dialog"
+        aria-modal="true"
+        :aria-label="editorModalTitle"
+      >
+        <div class="editor-modal-header">
+          <div class="editor-modal-title">{{ editorModalTitle }}</div>
+          <button class="editor-modal-close" @click="cancelInlineEdit" aria-label="Close">×</button>
+        </div>
+        <div class="editor-modal-body">
+          <InlineAssignmentEditor
+            :assignment="editingAssignment"
+            :courses="courses"
+            :teachers="teachers"
+            :classes="classes"
+            :rooms="rooms"
+            :subjects="subjects"
+            @save="onEditorSave"
+            @cancel="cancelInlineEdit"
+            @delete="onEditorDelete"
+            @edit-course="handleCourseEdit"
+          />
+        </div>
+      </div>
+    </teleport>
   </div>
 </template>
 
@@ -276,6 +292,7 @@ export default {
   name: 'SchedulerGrid',
   components: { InlineAssignmentEditor, TeacherRoomSelectionModal },
   props: {
+    // Data
     periods: { type: Array, default: () => [] },
     schoolDays: { type: Array, default: () => [] },
     courses: { type: Array, default: () => [] },
@@ -283,16 +300,26 @@ export default {
     classes: { type: Array, default: () => [] },
     rooms: { type: Array, default: () => [] },
     subjects: { type: Array, default: () => [] },
+
+    // Schedules
     draftSchedules: { type: Array, default: () => [] },
     liveSchedules: { type: Array, default: () => [] },
+
+    // Config/mode
     isReadOnly: { type: Boolean, default: false },
     isLiveMode: { type: Boolean, default: false },
     showStatistics: { type: Boolean, default: true },
     maxDays: { type: Number, default: 6 },
     enableCellAdd: { type: Boolean, default: false },
+
+    // Available list behavior
     hideScheduledInAvailable: { type: Boolean, default: true },
+
+    // Compat
     parentEmit: { type: Function, default: null },
     emitDropEvents: { type: Boolean, default: false },
+
+    // State/misc
     conflicts: { type: Array, default: () => [] },
     canUndo: { type: Boolean, default: false },
     isSaving: { type: Boolean, default: false },
@@ -321,9 +348,9 @@ export default {
     const draggedCourse = ref(null);
     const draggedAssignment = ref(null);
 
-    // Available list behavior
+    // Available list behavior (optimistic hide + recurring keep-visible)
     const optimisticallyScheduled = ref(new Set()); // key: day|period|course
-    const recurringWhitelist = ref(new Set());
+    const recurringWhitelist = ref(new Set());       // key: day|period|course
 
     // Inline editor/context menu
     const editingAssignment = ref(null);
@@ -335,22 +362,6 @@ export default {
     // Teacher modal
     const showTeacherRoomModal = ref(false);
     const modalCourseData = ref(null);
-
-    // Global “close menu” listeners
-    const onKeyDown = (e) => { if (e.key === 'Escape') contextMenu.value.show = false; };
-    const onWindowResize = () => (contextMenu.value.show = false);
-    const onAnyScroll = () => (contextMenu.value.show = false);
-
-    onMounted(() => {
-      window.addEventListener('keydown', onKeyDown, true);
-      window.addEventListener('resize', onWindowResize, { passive: true });
-      window.addEventListener('scroll', onAnyScroll, true);
-    });
-    onBeforeUnmount(() => {
-      window.removeEventListener('keydown', onKeyDown, true);
-      window.removeEventListener('resize', onWindowResize);
-      window.removeEventListener('scroll', onAnyScroll, true);
-    });
 
     // Visible data
     const visibleDays = computed(() => safeArray(props.schoolDays).slice(0, props.maxDays || 7));
@@ -451,7 +462,7 @@ export default {
       };
     };
 
-    // Context menu (single, global, always above everything)
+    // Context menu: compute position
     const computeContextMenuPosition = (evt, menuSize = { w: 220, h: 96 }) => {
       const vw = window.innerWidth || 1024;
       const vh = window.innerHeight || 768;
@@ -461,8 +472,9 @@ export default {
       if (y + menuSize.h > vh) y = Math.max(8, vh - menuSize.h - 8);
       return { x, y };
     };
+
+    // Inline right-click (primary path)
     const openContextMenu = (event, assignment, dayId, periodId) => {
-      // Only our menu, never let other handlers run
       event.stopPropagation();
       event.preventDefault();
       const pos = computeContextMenuPosition(event);
@@ -474,7 +486,8 @@ export default {
       if (!contextMenu.value.assignment) return;
       if (props.isReadOnly || props.isLiveMode)
         startInlineEditReadOnly(contextMenu.value.assignment, contextMenu.value.dayId, contextMenu.value.periodId);
-      else startInlineEdit(contextMenu.value.assignment, contextMenu.value.dayId, contextMenu.value.periodId);
+      else
+        startInlineEdit(contextMenu.value.assignment, contextMenu.value.dayId, contextMenu.value.periodId);
       closeContextMenu();
     };
     const deleteAssignmentFromContext = () => {
@@ -484,7 +497,47 @@ export default {
       closeContextMenu();
     };
 
-    // Inline editor
+    // GLOBAL contextmenu listener (safety net) – fires in capture phase before anything can swallow it
+    const docContextMenuHandler = (e) => {
+      const el = e.target?.closest?.('.assignment-item');
+      if (!el) return;
+      const assignmentId = el.getAttribute('data-assignment-id');
+      const dayId = el.getAttribute('data-day-id');
+      const periodId = el.getAttribute('data-period-id');
+      const assignment = safeArray(currentSchedules.value).find(a => String(a.id) === String(assignmentId));
+      if (!assignment) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+
+      const pos = computeContextMenuPosition(e);
+      contextMenu.value = { show: true, x: pos.x, y: pos.y, assignment, dayId, periodId };
+    };
+
+    // Close context menu/editor on Escape / resize / scroll (capture)
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        contextMenu.value.show = false;
+        if (editingAssignment.value) editingAssignment.value = null;
+      }
+    };
+    const onWindowResize = () => (contextMenu.value.show = false);
+    const onAnyScroll = () => (contextMenu.value.show = false);
+
+    onMounted(() => {
+      document.addEventListener('contextmenu', docContextMenuHandler, true);
+      window.addEventListener('keydown', onKeyDown, true);
+      window.addEventListener('resize', onWindowResize, { passive: true });
+      window.addEventListener('scroll', onAnyScroll, true);
+    });
+    onBeforeUnmount(() => {
+      document.removeEventListener('contextmenu', docContextMenuHandler, true);
+      window.removeEventListener('keydown', onKeyDown, true);
+      window.removeEventListener('resize', onWindowResize);
+      window.removeEventListener('scroll', onAnyScroll, true);
+    });
+
+    // Inline editor (used inside popup modal)
     const isEditing = (id) => editingAssignment.value?.id === id;
     const startInlineEdit = (a, dayId, periodId) => {
       if (props.isReadOnly || props.isLiveMode) return;
@@ -512,6 +565,22 @@ export default {
       emit('update-assignments', data);
       editingAssignment.value = null; editingCell.value = null;
     };
+
+    // Popup editor handlers (guard live/read-only)
+    const onEditorSave = (updated) => {
+      if (props.isReadOnly || props.isLiveMode) return;
+      saveInlineEdit(updated);
+    };
+    const onEditorDelete = (a) => {
+      if (props.isReadOnly || props.isLiveMode) return;
+      deleteInlineAssignment(a);
+    };
+    const editorModalTitle = computed(() => {
+      const a = editingAssignment.value;
+      if (!a) return '';
+      const name = getDisplayName(a);
+      return (props.isReadOnly || props.isLiveMode) ? `View Assignment – ${name}` : `Edit Assignment – ${name}`;
+    });
 
     // Drag: course
     const handleCourseDragStart = (event, course) => {
@@ -557,7 +626,8 @@ export default {
     const handleAssignmentDragEnd = (event) => {
       emit('scheduler-drag-end', {
         courseId: draggedAssignment.value?.assignment?.course_id || null,
-        courseName: draggedAssignment.value?.assignment?.course_name || draggedAssignment.value?.assignment?.display_cell || null,
+        courseName:
+          draggedAssignment.value?.assignment?.course_name || draggedAssignment.value?.assignment?.display_cell || null,
         courseCode: draggedAssignment.value?.assignment?.course_code || null,
         success: false,
         source: 'drag-end',
@@ -616,7 +686,7 @@ export default {
       } catch (e) { console.error('Drop error:', e); }
     };
 
-    // Open modal
+    // Open modal for course assign
     const assignCourseToSlot = (course, dayId, periodId) => {
       if (!course || props.isReadOnly || props.isLiveMode) return;
       modalCourseData.value = {
@@ -627,8 +697,9 @@ export default {
       };
       showTeacherRoomModal.value = true;
     };
+
+    // Teacher/Room modal submit (frequency-aware)
     const handleTeacherRoomSubmit = (payload) => {
-      // frequency-aware optimistic hide
       const key = `${normId(payload.dayId)}|${normId(payload.periodId)}|${normId(payload.courseId)}`;
       if ((payload.frequency || 'one-off') === 'recurring') {
         recurringWhitelist.value.add(key);
@@ -652,7 +723,6 @@ export default {
         timestamp: payload.timestamp,
       });
 
-      // compat end event
       emit('scheduler-drag-end', {
         courseId: payload.courseId,
         courseName: payload.courseName,
@@ -680,7 +750,7 @@ export default {
     const getFocusedPeriodName = () =>
       props.periods.find((p) => isSameId(p.id, focusedPeriodId.value))?.name || 'Unknown Period';
 
-    // Normalize slots helper
+    // Slots normalization
     const normalizeSlots = (course) => {
       if (Array.isArray(course.possibleSlots)) return course.possibleSlots;
       if (Array.isArray(course.possible_time_slots)) {
@@ -706,7 +776,6 @@ export default {
         const cid = normId(course.id);
         const k = `${dayKey}|${periodKey}|${cid}`;
 
-        // Apply optimistic hide unless whitelisted for recurring
         if (!recurringWhitelist.value.has(k) && props.hideScheduledInAvailable) {
           if (scheduledIds.has(cid) || optimisticallyScheduled.value.has(k)) return false;
         }
@@ -734,7 +803,7 @@ export default {
     };
     const allGrades = computed(() => {
       const set = new Set(); safeArray(props.courses).forEach((c) => parseGrades(c).forEach((g) => set.add(g)));
-      return Array.from(set).sort((a, b) => a - b);
+      return Array.from(set).sort((a, b) => a - b;
     });
     const findCourseById = (courseId) => safeArray(props.courses).find((c) => isSameId(c.id, courseId));
     const getScheduledCoursesForSlot = (dayId, periodId) => {
@@ -791,6 +860,7 @@ export default {
       visiblePeriods,
       currentSchedules,
       hasData,
+      editorModalTitle,
 
       // helpers
       safeArray,
@@ -825,13 +895,15 @@ export default {
       handleCellClick,
       handleAssignmentClick,
 
-      // inline editor
+      // inline editor (popup)
       isEditing,
       startInlineEdit,
       startInlineEditReadOnly,
       saveInlineEdit,
       cancelInlineEdit,
       deleteInlineAssignment,
+      onEditorSave,
+      onEditorDelete,
       handleCourseEdit,
 
       // drag/drop
@@ -867,26 +939,52 @@ export default {
 </script>
 
 <style scoped>
-/* Same styling you liked, unchanged (trimmed here for brevity)
-   ... keep all your grid, row, cell, stats, available panel, etc. from your last working style ... */
-
 /* Root */
-.scheduler-grid { display: flex; flex-direction: column; width: 100%; border: 1px solid #ddd; border-radius: 6px; overflow: hidden; background: #fff; }
-/* Header */
-.grid-header { display: flex !important; align-items: stretch; background: #f5f5f5; border-bottom: 1px solid #ddd; font-weight: 600; }
-.period-header-cell { width: 140px; min-width: 140px; max-width: 140px; padding: 10px 8px; border-right: 1px solid #ddd; display: flex; align-items: center; justify-content: center; box-sizing: border-box; }
-.day-header-cell { flex: 1 1 0; min-width: 160px; padding: 10px 8px; border-right: 1px solid #ddd; text-align: center; display: flex; flex-direction: column; gap: 2px; box-sizing: border-box; }
+.scheduler-grid {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #fff;
+}
+
+/* Header row */
+.grid-header {
+  display: flex !important;
+  align-items: stretch;
+  background: #f5f5f5;
+  border-bottom: 1px solid #ddd;
+  font-weight: 600;
+}
+.period-header-cell {
+  width: 140px; min-width: 140px; max-width: 140px;
+  padding: 10px 8px; border-right: 1px solid #ddd;
+  display: flex; align-items: center; justify-content: center; box-sizing: border-box;
+}
+.day-header-cell {
+  flex: 1 1 0; min-width: 160px; padding: 10px 8px; border-right: 1px solid #ddd;
+  text-align: center; display: flex; flex-direction: column; gap: 2px; box-sizing: border-box;
+}
 .day-header-cell:last-child { border-right: 0; }
 .day-name { font-size: 0.95em; }
 .day-date { font-size: 0.8em; color: #666; }
 
 /* Body */
 .grid-body { display: block; }
-.grid-row { display: flex !important; align-items: stretch; border-bottom: 1px solid #ddd; min-height: 72px; }
+.grid-row {
+  display: flex !important; align-items: stretch;
+  border-bottom: 1px solid #ddd; min-height: 72px;
+}
 .grid-row:last-child { border-bottom: 0; }
 .grid-row.non-instructional { background: #f8f9fa; }
 
-.period-label-cell { width: 140px; min-width: 140px; max-width: 140px; padding: 8px; border-right: 1px solid #ddd; background: #f9f9f9; display: flex; align-items: center; cursor: pointer; transition: background-color 0.2s; box-sizing: border-box; }
+.period-label-cell {
+  width: 140px; min-width: 140px; max-width: 140px;
+  padding: 8px; border-right: 1px solid #ddd; background: #f9f9f9;
+  display: flex; align-items: center; cursor: pointer; transition: background-color 0.2s; box-sizing: border-box;
+}
 .period-label-cell:hover { background: #f0f7ff !important; }
 .period-label-cell.focused { background: #e6f7ff !important; border-left: 4px solid #007cba; }
 .period-info { display: flex; flex-direction: column; gap: 2px; }
@@ -894,16 +992,24 @@ export default {
 .period-time { font-size: 0.78em; color: #666; }
 .non-instructional-badge { font-size: 0.72em; color: #888; background: #e9ecef; padding: 1px 4px; border-radius: 3px; align-self: flex-start; }
 
-.schedule-cell { flex: 1 1 0; min-width: 160px; border-right: 1px solid #ddd; position: relative; cursor: pointer; transition: background-color 0.2s; min-height: 72px; box-sizing: border-box; }
+/* Cells */
+.schedule-cell {
+  flex: 1 1 0; min-width: 160px; border-right: 1px solid #ddd;
+  position: relative; cursor: pointer; transition: background-color 0.2s; min-height: 72px; box-sizing: border-box;
+}
 .schedule-cell:last-child { border-right: 0; }
 .schedule-cell:hover { background: #f0f7ff; }
 .schedule-cell.has-assignments { background: #eaf7ff; }
 .schedule-cell.multiple-assignments { background: #def3ff; }
 .schedule-cell.has-conflicts { background: #fff2f0; border-left: 3px solid #ff4d4f; }
 
-/* Assignments */
-.assignments-container { padding: 4px; height: 100%; display: flex; flex-direction: column; gap: 4px; position: relative; box-sizing: border-box; }
-.assignment-item { padding: 4px 6px; border-radius: 4px; border: 1px solid #e0e0e0; position: relative; transition: all 0.2s; background: #fff; }
+/* Assignment items */
+.assignments-container {
+  padding: 4px; height: 100%; display: flex; flex-direction: column; gap: 4px; position: relative; box-sizing: border-box;
+}
+.assignment-item {
+  padding: 4px 6px; border-radius: 4px; border: 1px solid #e0e0e0; position: relative; transition: all 0.2s; background: #fff;
+}
 .assignment-item:hover { transform: translateX(1px); box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
 .assignment-item.has-conflict { border-color: #ff4d4f; background: #fff2f0; }
 .assignment-item.has-deleted-entities { border-color: #faad14; background: #fff7e6; }
@@ -919,21 +1025,39 @@ export default {
 /* Drag targets */
 .drop-zone { position: relative; transition: all 0.2s ease; }
 .drop-zone.drag-over { background: rgba(0,123,186,0.08) !important; border: 2px dashed #007cba !important; transform: scale(1.01); }
-.drop-zone.drag-over::after { content: '📋 Drop here'; position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); background: rgba(0,123,186,0.9); color: white; padding: 3px 6px; border-radius: 4px; font-size: 12px; font-weight: 600; pointer-events: none; z-index: 10; }
+.drop-zone.drag-over::after {
+  content: '📋 Drop here'; position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
+  background: rgba(0,123,186,0.9); color: white; padding: 3px 6px; border-radius: 4px; font-size: 12px; font-weight: 600; pointer-events: none; z-index: 10;
+}
 
 /* Grade Statistics */
 .statistics-row { display: flex !important; border-bottom: 2px solid #007cba; background: #f0f8ff; border-top: 2px solid #007cba; }
-.stats-label-cell { width: 140px; min-width: 140px; max-width: 140px; background: #007cba !important; color: white; display: flex; align-items: center; justify-content: center; border-right: 1px solid #ddd; box-sizing: border-box; }
+.stats-label-cell {
+  width: 140px; min-width: 140px; max-width: 140px;
+  background: #007cba !important; color: white; display: flex; align-items: center; justify-content: center;
+  border-right: 1px solid #ddd; box-sizing: border-box;
+}
 .stats-title { display: flex; align-items: center; gap: 6px; font-size: 0.95em; font-weight: 600; }
 .stats-emoji { font-size: 1.15em; }
-.day-statistics-cell { --grade-col: 28px; flex: 1 1 0; min-width: 160px; border-right: 1px solid #ddd; padding: 6px; background: white; display: flex; flex-direction: column; gap: 6px; min-height: 96px; box-sizing: border-box; }
+
+.day-statistics-cell {
+  --grade-col: 28px;
+  flex: 1 1 0; min-width: 160px; border-right: 1px solid #ddd; padding: 6px; background: white;
+  display: flex; flex-direction: column; gap: 6px; min-height: 96px; box-sizing: border-box;
+}
 .day-statistics-cell:last-child { border-right: 0; }
-.stats-headers { display: grid; grid-template-columns: var(--grade-col) 1fr 1fr 1fr; align-items: center; gap: 4px; margin-bottom: 4px; padding: 3px 4px; background: rgba(0,124,186,0.1); border-radius: 4px; }
+.stats-headers {
+  display: grid; grid-template-columns: var(--grade-col) 1fr 1fr 1fr; align-items: center; gap: 4px;
+  margin-bottom: 4px; padding: 3px 4px; background: rgba(0,124,186,0.1); border-radius: 4px;
+}
 .header-spacer { width: 100%; height: 1px; opacity: 0; }
 .stat-header { display: flex; align-items: center; justify-content: center; font-size: 0.95em; line-height: 1; padding: 2px 4px; border-radius: 3px; }
 .stat-header:hover { background: rgba(0,124,186,0.2); }
 .stats-rows { display: flex; flex-direction: column; gap: 3px; flex-grow: 1; }
-.grade-stats-row { display: grid; grid-template-columns: var(--grade-col) 1fr 1fr 1fr; align-items: center; gap: 6px; background: #f8f9fa; border: 1px solid #e0e0e0; border-radius: 4px; padding: 3px 4px; font-size: 0.88em; }
+.grade-stats-row {
+  display: grid; grid-template-columns: var(--grade-col) 1fr 1fr 1fr; align-items: center; gap: 6px;
+  background: #f8f9fa; border: 1px solid #e0e0e0; border-radius: 4px; padding: 3px 4px; font-size: 0.88em;
+}
 .grade-number { font-weight: 700; color: #333; min-width: var(--grade-col); font-size: 0.95em; }
 .stat-value { text-align: center; padding: 2px 4px; background: white; border-radius: 3px; font-size: 0.88em; color: #333; }
 
@@ -960,7 +1084,7 @@ export default {
 .no-preferred-courses-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; }
 .flexible-tag { color: #52c41a !important; font-weight: 600; }
 
-/* Read-only */
+/* Read-only/live */
 .scheduler-grid[data-readonly='true'] .schedule-cell { cursor: default; }
 .scheduler-grid[data-readonly='true'] .schedule-cell:hover { background: inherit; }
 .scheduler-grid[data-readonly='true'] .draggable-assignment,
@@ -971,8 +1095,32 @@ export default {
 /* Warning banner */
 .grid-hidden-debug { padding: 12px; background: #fffbeb; border: 1px solid #fde68a; border-radius: 6px; margin: 8px 8px 0; color: #92400e; }
 
+/* Assignment editor popup */
+.assignment-editor-backdrop {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.45);
+  z-index: 2147483600;
+}
+.assignment-editor-modal {
+  position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  width: min(920px, 92vw); max-height: 86vh; overflow: auto;
+  background: #fff; border-radius: 8px; box-shadow: 0 16px 48px rgba(0,0,0,0.35);
+  z-index: 2147483601; display: flex; flex-direction: column;
+}
+.editor-modal-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 14px; border-bottom: 1px solid #e5e5e5;
+}
+.editor-modal-title { font-weight: 600; color: #333; }
+.editor-modal-close {
+  appearance: none; border: 0; background: transparent; font-size: 22px; line-height: 1; cursor: pointer; color: #666;
+}
+.editor-modal-close:hover { color: #222; }
+.editor-modal-body { padding: 12px 14px; }
+
 /* Responsive */
-@media (max-width: 1024px) { .day-header-cell, .schedule-cell, .day-statistics-cell { min-width: 200px; } }
+@media (max-width: 1024px) {
+  .day-header-cell, .schedule-cell, .day-statistics-cell { min-width: 200px; }
+}
 @media (max-width: 768px) {
   .period-header-cell, .period-label-cell, .stats-label-cell { width: 120px; min-width: 120px; max-width: 120px; }
   .day-header-cell, .schedule-cell, .day-statistics-cell { min-width: 180px; }
