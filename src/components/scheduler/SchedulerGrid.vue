@@ -229,6 +229,8 @@
         class="context-menu"
         :style="{ left: contextMenu.x + 'px', top: contextMenu.y + 'px' }"
         @click.stop
+        ref="contextMenuRef"
+        data-debug="context-menu"
       >
         <div class="context-menu-item" @click="editAssignmentFromContext">
           {{ (!isReadOnly && !isLiveMode) ? '✏️ Edit Assignment' : '📄 View Assignment' }}
@@ -262,7 +264,7 @@
 </template>
 
 <script>
-import { computed, ref } from 'vue';
+import { computed, ref, watch, nextTick } from 'vue';
 import InlineAssignmentEditor from './InlineAssignmentEditor.vue';
 import AssignmentModal from './AssignmentModal.vue';
 import { emitSchedulerRemoveEvent } from '../../utils/events.js';
@@ -341,6 +343,9 @@ export default {
     const contextMenu = ref({
       show: false, x: 0, y: 0, assignment: null, dayId: null, periodId: null,
     });
+
+    // For measuring the rendered context menu position/z-index
+    const contextMenuRef = ref(null);
 
     // Combined assignment modal
     const assignmentModal = ref({
@@ -478,6 +483,59 @@ export default {
       };
     }
 
+    // Console-debug helpers for context menu
+    function logAncestorChain(el) {
+      try {
+        const chain = [];
+        let cur = el?.parentElement || null;
+        for (let i = 0; i < 10 && cur; i++) {
+          const cs = getComputedStyle(cur);
+          chain.push({
+            tag: cur.tagName,
+            id: cur.id || '',
+            class: cur.className || '',
+            position: cs.position,
+            zIndex: cs.zIndex,
+            overflow: `${cs.overflow}/${cs.overflowY}/${cs.overflowX}`,
+            transform: cs.transform !== 'none',
+            opacity: cs.opacity,
+            pointerEvents: cs.pointerEvents,
+          });
+          cur = cur.parentElement;
+        }
+        console.log('🧬 [ContextMenu] Ancestor chain (top 10):', chain);
+      } catch (e) {
+        console.log('⚠️ [ContextMenu] Failed to inspect ancestor chain:', e);
+      }
+    }
+
+    function measureContextMenuRender() {
+      nextTick(() => {
+        const el = contextMenuRef.value;
+        if (!el) {
+          console.log('❓ [ContextMenu] Ref not set after show');
+          return;
+        }
+        const rect = el.getBoundingClientRect();
+        const cs = getComputedStyle(el);
+        console.log('📏 [ContextMenu] Rendered rect:', rect);
+        console.log('🎨 [ContextMenu] Computed style: { zIndex:', cs.zIndex, ', position:', cs.position, ', display:', cs.display, ' }');
+        logAncestorChain(el);
+      });
+    }
+
+    watch(
+      () => contextMenu.value.show,
+      (show) => {
+        if (show) {
+          console.log('▶️ [ContextMenu] Showing at coords:', { x: contextMenu.value.x, y: contextMenu.value.y });
+          measureContextMenuRender();
+        } else {
+          console.log('⏹️ [ContextMenu] Hidden');
+        }
+      }
+    );
+
     // Clicks + context menu
     function handleCellClick(dayId, periodId, period) {
       if (props.isReadOnly || !props.enableCellAdd) return;
@@ -495,21 +553,46 @@ export default {
       let x = 0;
       let y = 0;
 
+      console.log('🖱️ [ContextMenu] Right-click event:', {
+        clientX: evt?.clientX, clientY: evt?.clientY,
+        pageX: evt?.pageX, pageY: evt?.pageY,
+        targetTag: evt?.target?.tagName, currentTargetTag: evt?.currentTarget?.tagName,
+      });
+
       if (rect && rect.width >= 0 && rect.height >= 0) {
         x = rect.left + 8;
         y = rect.bottom + 6;
+        console.log('📐 [ContextMenu] Using element rect for anchor:', {
+          left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom, width: rect.width, height: rect.height,
+        });
       } else {
-        // Fallback to cursor
         x = (evt?.clientX ?? 0) + 6;
         y = (evt?.clientY ?? 0) + 6;
+        console.log('📐 [ContextMenu] Using cursor fallback as anchor.');
       }
 
+      const preClamp = { x, y };
       if (x + menuSize.w > vw) x = Math.max(8, vw - menuSize.w - 8);
       if (y + menuSize.h > vh) y = Math.max(8, vh - menuSize.h - 8);
+      console.log('🧮 [ContextMenu] Position clamp:', {
+        viewport: { vw, vh },
+        menuSize,
+        beforeClamp: preClamp,
+        afterClamp: { x, y },
+        scroll: { x: window.scrollX, y: window.scrollY },
+      });
+
       return { x, y };
     }
 
     function handleAssignmentRightClick(event, assignment, dayId, periodId) {
+      console.log('➡️ [ContextMenu] Right-click on assignment:', {
+        id: assignment?.id,
+        course: assignment?.course_name || assignment?.display_cell || getDisplayName(assignment),
+        dayId, periodId,
+        isReadOnly: props.isReadOnly, isLiveMode: props.isLiveMode,
+      });
+
       const pos = computeContextMenuPosition(event);
       contextMenu.value = {
         show: true,
@@ -520,14 +603,20 @@ export default {
         periodId,
       };
     }
-    function closeContextMenu() { contextMenu.value.show = false; }
+
+    function closeContextMenu() {
+      console.log('✖️ [ContextMenu] Backdrop clicked - closing');
+      contextMenu.value.show = false;
+    }
     function editAssignmentFromContext() {
+      console.log('✏️ [ContextMenu] Edit clicked for assignment:', contextMenu.value.assignment?.id);
       if (!contextMenu.value.assignment) return;
       if (props.isReadOnly || props.isLiveMode) startInlineEditReadOnly(contextMenu.value.assignment, contextMenu.value.dayId, contextMenu.value.periodId);
       else startInlineEdit(contextMenu.value.assignment, contextMenu.value.dayId, contextMenu.value.periodId);
       closeContextMenu();
     }
     function deleteAssignmentFromContext() {
+      console.log('🗑️ [ContextMenu] Delete clicked for assignment:', contextMenu.value.assignment?.id);
       if (!contextMenu.value.assignment || props.isReadOnly || props.isLiveMode) { closeContextMenu(); return; }
       deleteInlineAssignment(contextMenu.value.assignment);
       closeContextMenu();
@@ -535,16 +624,25 @@ export default {
 
     // Inline editor
     function isEditing(id) { return editingAssignment.value?.id === id; }
-    function startInlineEdit(a, dayId, periodId) { if (props.isReadOnly || props.isLiveMode) return; editingAssignment.value = a; editingCell.value = { dayId, periodId }; }
-    function startInlineEditReadOnly(a, dayId, periodId) { editingAssignment.value = { ...a, readOnly: true }; editingCell.value = { dayId, periodId }; }
+    function startInlineEdit(a, dayId, periodId) {
+      if (props.isReadOnly || props.isLiveMode) return;
+      console.log('📝 [InlineEdit] Start edit:', { id: a?.id, dayId, periodId });
+      editingAssignment.value = a; editingCell.value = { dayId, periodId };
+    }
+    function startInlineEditReadOnly(a, dayId, periodId) {
+      console.log('👁️ [InlineEdit] View-only details:', { id: a?.id, dayId, periodId });
+      editingAssignment.value = { ...a, readOnly: true }; editingCell.value = { dayId, periodId };
+    }
     function saveInlineEdit(updated) {
+      console.log('💾 [InlineEdit] Save:', { id: updated?.id });
       const data = currentSchedules.value;
       const updatedList = data.map((s) => (isSameId(s.id, updated.id) ? updated : s));
       emit('update-assignments', updatedList);
       editingAssignment.value = null; editingCell.value = null;
     }
-    function cancelInlineEdit() { editingAssignment.value = null; editingCell.value = null; }
+    function cancelInlineEdit() { console.log('↩️ [InlineEdit] Cancel'); editingAssignment.value = null; editingCell.value = null; }
     function deleteInlineAssignment(a) {
+      console.log('❌ [InlineEdit] Delete assignment:', { id: a?.id });
       if (props.emitDropEvents) {
         const fn = props.parentEmit || emit;
         emitSchedulerRemoveEvent(fn, {
@@ -826,6 +924,7 @@ export default {
       optimisticallyScheduled, recurringWhitelist,
       editingAssignment, editingCell,
       contextMenu, assignmentModal,
+      contextMenuRef,
 
       // computed
       visibleDays, visiblePeriods, currentSchedules,
@@ -1022,8 +1121,8 @@ export default {
   background: white;
   border: 1px solid #ccc;
   border-radius: 6px;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.12);
-  z-index: 4000;
+  box-shadow: 0 12px 32px rgba(0,0,0,0.18);
+  z-index: 9999; /* very high to avoid stacking issues */
   min-width: 180px;
   padding: 4px 0;
 }
@@ -1039,7 +1138,7 @@ export default {
 }
 .context-menu-item:hover { background-color: #f5f5f5; }
 .context-menu-item.delete:hover { background-color: #ffe6e6; color: #d32f2f; }
-.context-menu-backdrop { position: fixed; inset: 0; z-index: 3999; }
+.context-menu-backdrop { position: fixed; inset: 0; z-index: 9998; }
 
 /* Read-only */
 .scheduler-grid[data-readonly='true'] .schedule-cell { cursor: default; }
