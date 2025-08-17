@@ -2,7 +2,7 @@
   <div v-if="visible" class="assignment-modal-backdrop" @click="$emit('close')">
     <div class="assignment-modal" @click.stop>
       <div class="modal-header">
-        <h3>Assign {{ preSelectedCourse?.name || 'Course' }}</h3>
+        <h3>Assign {{ preSelectedCourse?.name || preSelectedCourse?.course_name || 'Course' }}</h3>
         <button @click="$emit('close')" class="close-btn" aria-label="Close">×</button>
       </div>
 
@@ -12,7 +12,7 @@
         </div>
 
         <template v-else>
-          <!-- When a course is provided, show context -->
+          <!-- Context -->
           <div class="context-row" v-if="preSelectedCourse">
             <div class="context-chip">Day: <strong>{{ formattedDay }}</strong></div>
             <div class="context-chip">Period: <strong>{{ formattedPeriod }}</strong></div>
@@ -28,11 +28,11 @@
             <span>Schedule multiple times this week</span>
           </label>
           <p class="freq-warning" v-if="frequencyChecked">
-            Note: Multiple times per week means some children, teachers, and the room may be shared across repeated
+            Multiple times per week means some children, teachers, and the room may be shared across repeated
             sessions. The course will remain in the Available list so you can add another occurrence.
           </p>
 
-          <!-- Teacher selection -->
+          <!-- Teachers -->
           <div class="section">
             <div class="section-title">Teachers</div>
             <div class="teacher-list">
@@ -58,11 +58,11 @@
               </label>
             </div>
             <div class="helper" v-if="selectedTeacherIds.length === 0">
-              Select at least one teacher (optional but recommended).
+              Select at least one teacher (optional).
             </div>
           </div>
 
-          <!-- Room selection -->
+          <!-- Room -->
           <div class="section">
             <div class="section-title">Room</div>
             <select class="room-select" v-model="selectedRoomId">
@@ -101,7 +101,7 @@ export default {
     schoolDays: { type: Array, default: () => [] },
     isReadOnly: { type: Boolean, default: false },
 
-    // Checkbox defaults to unchecked every time (per request)
+    // Checkbox defaults to unchecked every time
     defaultFrequencyChecked: { type: Boolean, default: false },
   },
   emits: ['close', 'submit'],
@@ -114,15 +114,8 @@ export default {
     };
   },
   watch: {
-    // Reset state whenever a new course is opened or modal toggles
-    visible(n) {
-      if (n) {
-        this.resetForm();
-      }
-    },
-    preSelectedCourse() {
-      this.resetForm();
-    },
+    visible(n) { if (n) this.resetForm(); },
+    preSelectedCourse() { this.resetForm(); },
   },
   computed: {
     formattedDay() {
@@ -143,11 +136,9 @@ export default {
       this.selectedRoomId = null;
     },
     submit() {
-      // If a primary teacher is selected but they aren't in the list, add them
       if (this.primaryTeacherId && !this.selectedTeacherIds.includes(this.primaryTeacherId)) {
         this.selectedTeacherIds = [...this.selectedTeacherIds, this.primaryTeacherId];
       }
-
       this.$emit('submit', {
         dayId: this.dayId,
         periodId: this.periodId,
