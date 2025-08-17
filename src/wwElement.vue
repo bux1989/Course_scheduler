@@ -101,7 +101,7 @@
 </template>
 
 <script>
-import { ref, computed, watch, onMounted, getCurrentInstance } from 'vue';
+import { ref, computed, watch, onMounted, getCurrentInstance, reactive } from 'vue';
 import SchedulerGrid from './components/scheduler/SchedulerGrid.vue';
 import AssignmentModal from './components/scheduler/AssignmentModal.vue';
 import ConflictPanel from './components/scheduler/ConflictPanel.vue';
@@ -154,19 +154,41 @@ export default {
         // Initialize scheduler store - now using simple Vue reactivity
         const store = useSchedulerStore();
 
-        // Initialize store with component data
-        watch(
-            () => props.content,
-            newContent => {
-                if (newContent && store.initialize) {
+        // Hydration guard to prevent reactive feedback loops
+        let hydrating = true;
+        const internalState = reactive({
+            initializedDraft: null,
+            hasHydrated: false,
+        });
+
+        // Helper function to check deep equality for draft schedules
+        function deepEqual(a, b) {
+            if (a === b) return true;
+            if (!a || !b) return false;
+            if (a.length !== b.length) return false;
+            return JSON.stringify(a) === JSON.stringify(b);
+        }
+
+        // One-way hydration function - only reads from props, never writes back
+        function hydrateFromDraft(draftData) {
+            try {
+                const normalizedDraft = toArray(draftData);
+                // Clone data to internal state - never mutate props
+                internalState.initializedDraft = normalizedDraft.map(item => ({ ...item }));
+                internalState.hasHydrated = true;
+
+                // Initialize store with cloned data only
+                if (store.initialize) {
                     store.initialize(null, null, null, {
-                        periods: toArray(newContent.periods),
-                        draftSchedules: toArray(newContent.draftSchedules),
+                        periods: toArray(props.content.periods).map(p => ({ ...p })),
+                        draftSchedules: [...internalState.initializedDraft],
                     });
                 }
-            },
-            { immediate: true, deep: true }
-        );
+            } catch (error) {
+                console.warn('🔄 [wwElement] Draft hydration warning:', error);
+                internalState.hasHydrated = true; // Prevent infinite retry
+            }
+        }
 
         // Local state
         const showAssignmentModal = ref(false);
@@ -441,6 +463,10 @@ export default {
         }
 
         function updateDraftSchedules(newSchedules) {
+            // Update internal state to prevent feedback loops
+            internalState.initializedDraft = newSchedules.map(item => ({ ...item }));
+
+            // Emit to external systems - but never mutate props directly
             emit('trigger-event', {
                 name: 'updateDraftSchedules',
                 event: { draftSchedules: newSchedules },
@@ -456,13 +482,17 @@ export default {
         }
 
         async function saveDraft() {
+            if (hydrating) return; // Skip during initialization
+
             isSaving.value = true;
             try {
-                // Emit WeWeb external event
+                const currentDraft = draftSchedules.value;
+
+                // Emit WeWeb external event - never mutate props/variables here
                 emit('trigger-event', {
                     name: 'saveDraft',
                     event: {
-                        schedules: draftSchedules.value,
+                        schedules: currentDraft,
                         timestamp: new Date().toISOString(),
                         action: 'save_draft',
                     },
@@ -470,7 +500,7 @@ export default {
 
                 // Also emit direct WeWeb event for external handling
                 emit('save-draft-external', {
-                    schedules: draftSchedules.value,
+                    schedules: currentDraft,
                     timestamp: new Date().toISOString(),
                 });
 
@@ -527,7 +557,7 @@ export default {
         }
 
         function handleToggleLessonSchedules(show) {
-            // UI controls removed - handler kept for compatibility  
+            // UI controls removed - handler kept for compatibility
             emit('trigger-event', {
                 name: 'toggleLessonSchedules',
                 event: { showLessonSchedules: show },
@@ -799,16 +829,21 @@ export default {
             console.log('🐛 [wwElement] === END COMPLETE DATA DUMP ===');
         }
 
-        // Auto-save functionality
+        // Auto-save functionality - prevent feedback loops with hydration guard
         let saveTimeout;
         watch(
             draftSchedules,
-            () => {
+            (newDraft, prevDraft) => {
+                if (hydrating) return; // Skip during initialization
                 if (isReadOnly.value) return;
+                if (deepEqual(newDraft, prevDraft)) return; // Skip no-op updates
 
                 clearTimeout(saveTimeout);
                 saveTimeout = setTimeout(() => {
-                    saveDraft();
+                    // Only save if we're not in a feedback loop
+                    if (!hydrating && !deepEqual(newDraft, internalState.initializedDraft)) {
+                        saveDraft();
+                    }
                 }, 2000); // Auto-save after 2 seconds of no changes
             },
             { deep: true }
@@ -816,13 +851,34 @@ export default {
 
         // Debug logging on mount - reduced verbosity
         onMounted(() => {
+            // One-way initialization on mount
+            if (props.content?.draftSchedules) {
+                hydrateFromDraft(props.content.draftSchedules);
+            }
+            hydrating = false; // Allow watchers after initial hydration
             console.log('🚀 [wwElement] Course Scheduler mounted successfully');
         });
 
-        // Watch for changes in props.content (only log significant changes)
+        // Guarded watcher for draft schedule updates - only after hydration
+        watch(
+            () => props.content?.draftSchedules,
+            (newDraft, prevDraft) => {
+                if (hydrating) return; // Skip during initialization
+                if (deepEqual(newDraft, prevDraft)) return; // Skip no-op updates
+                if (deepEqual(newDraft, internalState.initializedDraft)) return; // Skip self-updates
+
+                // Only hydrate if data actually changed
+                hydrateFromDraft(newDraft);
+            },
+            { deep: true }
+        );
+
+        // Watch for changes in props.content structure only - no state mutations
         watch(
             () => props.content,
             (newContent, oldContent) => {
+                if (hydrating) return; // Skip during initialization
+
                 // Only log when there are actual structural changes, not on every reactive update
                 if (
                     newContent &&
