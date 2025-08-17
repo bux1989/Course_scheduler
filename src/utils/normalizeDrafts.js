@@ -1,4 +1,4 @@
-// Lightweight, dependency-free normalizer for "draft schedule" data coming via prop.
+// Lightweight normalizer for "draft schedule" data coming via prop.
 // - Coerces types
 // - Adds safe defaults
 // - Deduplicates by id (last one wins)
@@ -15,10 +15,7 @@ export function normalizeDrafts(input) {
       continue;
     }
 
-    // Build a stable id if missing
-    const fallbackId = `${raw.class_id ?? "class?"}:${raw.day_id ?? "day?"}:${
-      raw.period_id ?? raw.start_time ?? "period?"
-    }`;
+    const fallbackId = `${raw.class_id ?? "class?"}:${raw.day_id ?? "day?"}:${raw.period_id ?? raw.start_time ?? "period?"}`;
     const id = String(raw.id ?? fallbackId);
 
     const day_id = Number(raw.day_id ?? 0);
@@ -34,9 +31,7 @@ export function normalizeDrafts(input) {
       : [];
 
     const normalized = {
-      // Keep original fields
       ...raw,
-      // Normalized/required-ish fields
       id,
       isDraft,
       day_id,
@@ -46,7 +41,6 @@ export function normalizeDrafts(input) {
       subject_id: raw.subject_id != null ? String(raw.subject_id) : "",
       staff_ids,
       teacher_names,
-      // Safe defaults for optional strings
       room_name: typeof raw.room_name === "string" ? raw.room_name : "",
       class_name: typeof raw.class_name === "string" ? raw.class_name : "",
       course_name: typeof raw.course_name === "string" ? raw.course_name : "",
@@ -55,7 +49,6 @@ export function normalizeDrafts(input) {
       day_name_en: typeof raw.day_name_en === "string" ? raw.day_name_en : "",
       display_cell: typeof raw.display_cell === "string" ? raw.display_cell : "",
       scheduled_room_name: typeof raw.scheduled_room_name === "string" ? raw.scheduled_room_name : "",
-      // Optional nullable fields pass through unchanged
       subject_color: raw.subject_color ?? null,
       subject_icon_id: raw.subject_icon_id ?? null,
       class_grade_level:
@@ -68,8 +61,7 @@ export function normalizeDrafts(input) {
       continue;
     }
 
-    // Deduplicate by id (last one wins)
-    byId[id] = normalized;
+    byId[id] = normalized; // last one wins
   }
 
   const list = Object.values(byId);
