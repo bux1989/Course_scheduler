@@ -222,25 +222,27 @@
       @submit="handleAssignmentModalSubmit"
     />
 
-    <!-- Context Menu -->
-    <div
-      v-if="contextMenu.show"
-      class="context-menu"
-      :style="{ left: contextMenu.x + 'px', top: contextMenu.y + 'px' }"
-      @click.stop
-    >
-      <div class="context-menu-item" @click="editAssignmentFromContext">
-        {{ (!isReadOnly && !isLiveMode) ? '✏️ Edit Assignment' : '📄 View Assignment' }}
-      </div>
+    <!-- Context Menu (teleported to body to avoid clipping) -->
+    <teleport to="body">
       <div
-        v-if="!isReadOnly && !isLiveMode"
-        class="context-menu-item delete"
-        @click="deleteAssignmentFromContext"
+        v-if="contextMenu.show"
+        class="context-menu"
+        :style="{ left: contextMenu.x + 'px', top: contextMenu.y + 'px' }"
+        @click.stop
       >
-        🗑️ Delete Assignment
+        <div class="context-menu-item" @click="editAssignmentFromContext">
+          {{ (!isReadOnly && !isLiveMode) ? '✏️ Edit Assignment' : '📄 View Assignment' }}
+        </div>
+        <div
+          v-if="!isReadOnly && !isLiveMode"
+          class="context-menu-item delete"
+          @click="deleteAssignmentFromContext"
+        >
+          🗑️ Delete Assignment
+        </div>
       </div>
-    </div>
-    <div v-if="contextMenu.show" class="context-menu-backdrop" @click="closeContextMenu"></div>
+      <div v-if="contextMenu.show" class="context-menu-backdrop" @click="closeContextMenu"></div>
+    </teleport>
 
     <!-- Inline Assignment Editor -->
     <InlineAssignmentEditor
@@ -484,8 +486,26 @@ export default {
     function handleAssignmentClick(assignment) {
       emit('assignment-details', assignment);
     }
+
+    function computeContextMenuPosition(evt, menuSize = { w: 220, h: 96 }) {
+      const vw = window.innerWidth || document.documentElement.clientWidth || 1024;
+      const vh = window.innerHeight || document.documentElement.clientHeight || 768;
+      let x = (evt?.clientX ?? 0) + 6;
+      let y = (evt?.clientY ?? 0) + 6;
+      if (x + menuSize.w > vw) x = Math.max(8, vw - menuSize.w - 8);
+      if (y + menuSize.h > vh) y = Math.max(8, vh - menuSize.h - 8);
+      return { x, y };
+    }
     function handleAssignmentRightClick(event, assignment, dayId, periodId) {
-      contextMenu.value = { show: true, x: event.clientX, y: event.clientY, assignment, dayId, periodId };
+      const pos = computeContextMenuPosition(event);
+      contextMenu.value = {
+        show: true,
+        x: pos.x,
+        y: pos.y,
+        assignment,
+        dayId,
+        periodId,
+      };
     }
     function closeContextMenu() { contextMenu.value.show = false; }
     function editAssignmentFromContext() {
@@ -646,25 +666,22 @@ export default {
 
     // Handle submit from combined modal
     function handleAssignmentModalSubmit(payload) {
-      // payload contains: dayId, periodId, courseId, courseName, courseCode, teacherIds, primaryTeacherId, roomId, frequency
       const { dayId, periodId, courseId, courseName, courseCode, teacherIds, primaryTeacherId, roomId, frequency } = payload;
 
       // Available-list behavior
       const key = `${normId(dayId)}|${normId(periodId)}|${normId(courseId)}`;
       if (frequency === 'recurring') {
-        // Keep visible: whitelist overrides any hide behavior
+        // Keep visible
         recurringWhitelist.value.add(key);
-        // Ensure optimistic hide is not set
         optimisticallyScheduled.value.delete(key);
       } else {
-        // One-off: hide if configured
         recurringWhitelist.value.delete(key);
         if (props.hideScheduledInAvailable) {
           optimisticallyScheduled.value.add(key);
         }
       }
 
-      // Emit final scheduler-drop
+      // Emit final scheduler-drop with frequency
       emit('scheduler-drop', {
         dayId, periodId,
         courseId, courseName, courseCode,
@@ -713,10 +730,10 @@ export default {
         const k = `${dayKey}|${periodKey}|${cid}`;
 
         // If recurring whitelist has it, keep visible regardless of schedule/hide flags
-        if (recurringWhitelist.value.has(k)) {
-          // Still respect possibleSlots below
-        } else if (props.hideScheduledInAvailable) {
-          if (scheduledIds.has(cid) || optimisticallyScheduled.value.has(k)) return false;
+        if (!recurringWhitelist.value.has(k)) {
+          if (props.hideScheduledInAvailable) {
+            if (scheduledIds.has(cid) || optimisticallyScheduled.value.has(k)) return false;
+          }
         }
 
         const slots = Array.isArray(course.possibleSlots) ? course.possibleSlots : [];
@@ -738,7 +755,7 @@ export default {
     }
     function isDraggingCourse(courseId) { return normId(draggedCourse.value?.id) === normId(courseId); }
 
-    // Grade stats (unchanged calculations)
+    // Grade stats
     function parseGrades(course) {
       const grades = [];
       if (course.is_for_year_g && typeof course.is_for_year_g === 'object') {
@@ -878,7 +895,7 @@ export default {
 /* Day headers (columns) */
 .day-header-cell {
   flex: 1 1 0;
-  min-width: 160px; /* helps prevent columns collapsing on narrow screens */
+  min-width: 160px;
   padding: 10px 8px;
   border-right: 1px solid #ddd;
   text-align: center;
@@ -1069,6 +1086,31 @@ export default {
 .panel-description { margin: 0 0 10px 0; color: #666; font-size: 0.9em; font-style: italic; }
 .no-preferred-courses-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; }
 .flexible-tag { color: #52c41a !important; font-weight: 600; }
+
+/* Context Menu (teleported) */
+.context-menu {
+  position: fixed;
+  background: white;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+  z-index: 4000;
+  min-width: 180px;
+  padding: 4px 0;
+}
+.context-menu-item {
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: background-color 0.15s;
+  white-space: nowrap;
+}
+.context-menu-item:hover { background-color: #f5f5f5; }
+.context-menu-item.delete:hover { background-color: #ffe6e6; color: #d32f2f; }
+.context-menu-backdrop { position: fixed; inset: 0; z-index: 3999; }
 
 /* Read-only */
 .scheduler-grid[data-readonly='true'] .schedule-cell { cursor: default; }
