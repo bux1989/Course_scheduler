@@ -96,12 +96,12 @@
 </template>
 
 <script>
-import { ref, computed, watch, onMounted, reactive } from 'vue';
+import { ref, computed, watch, onMounted } from 'vue';
 import SchedulerGrid from './components/scheduler/SchedulerGrid.vue';
 import AssignmentModal from './components/scheduler/AssignmentModal.vue';
 import ConflictPanel from './components/scheduler/ConflictPanel.vue';
 
-// Keep imports minimal; filtering happens externally
+// Minimal imports; you said filtering is external
 import { toArray, nonEmpty, normalizePeriods, normalizeCourse } from './utils/arrayUtils.js';
 import { emitSchedulerRemoveEvent } from './utils/events.js';
 import { detectConflicts } from './utils/conflictDetection.js';
@@ -127,23 +127,17 @@ export default {
                 emitDropEvents: false,
             }),
         },
-        // Optional external drafts props (WeWeb workflows)
         draftSchedules: { type: [Array, Object], default: () => [] },
         draftSchedule: { type: [Array, Object], default: () => [] },
-
         wwElementState: { type: Object, required: true },
         /* wwEditor:start */
         wwEditorState: { type: Object, required: true },
         /* wwEditor:end */
     },
     setup(props, { emit }) {
-        // Local helper to avoid mismatched import issues
         const safeLength = v => (Array.isArray(v) ? v.length : 0);
 
-        // Store (optional initialization hints)
         const store = useSchedulerStore();
-
-        // Initialize store with basic hints
         watch(
             () => props.content,
             newContent => {
@@ -176,16 +170,14 @@ export default {
             preSelectedCourse: null,
         });
 
-        // Data (assume filtering is done upstream)
+        // Data (already filtered upstream)
         const periods = computed(() => {
             const normalized = normalizePeriods(props.content.periods);
             return nonEmpty(normalized) ? normalized : [];
         });
-
         const courses = computed(() =>
             toArray(props.content.courses).map((course, idx) => normalizeCourse(course, idx))
         );
-
         const teachers = computed(() => toArray(props.content.teachers));
         const classes = computed(() => toArray(props.content.classes));
         const rooms = computed(() => toArray(props.content.rooms));
@@ -209,7 +201,7 @@ export default {
             });
         });
 
-        // Prefer direct draft props (if provided) else fallback to content
+        // Prefer direct draft props; fallback to content
         const draftSchedules = computed(() => {
             const propA = toArray(props.draftSchedules);
             const propB = toArray(props.draftSchedule);
@@ -228,28 +220,6 @@ export default {
                         isDraft: n.isDraft === false ? false : true,
                         day_id: Number(n.day_id ?? 0),
                         period_id: String(n.period_id ?? ''),
-                        room_id: n.room_id != null ? String(n.room_id) : n.room_id ?? null,
-                        class_id: n.class_id != null ? String(n.class_id) : n.class_id ?? null,
-                        subject_id: n.subject_id != null ? String(n.subject_id) : n.subject_id ?? null,
-                        staff_ids: Array.isArray(n.staff_ids)
-                            ? n.staff_ids.filter(s => typeof s === 'string' && s)
-                            : [],
-                        teacher_names: Array.isArray(n.teacher_names)
-                            ? n.teacher_names.filter(s => typeof s === 'string')
-                            : [],
-                        room_name: typeof n.room_name === 'string' ? n.room_name : '',
-                        class_name: typeof n.class_name === 'string' ? n.class_name : '',
-                        course_name: typeof n.course_name === 'string' ? n.course_name : '',
-                        subject_name: typeof n.subject_name === 'string' ? n.subject_name : '',
-                        day_name_de: typeof n.day_name_de === 'string' ? n.day_name_de : '',
-                        day_name_en: typeof n.day_name_en === 'string' ? n.day_name_en : '',
-                        display_cell: typeof n.display_cell === 'string' ? n.display_cell : '',
-                        scheduled_room_name: typeof n.scheduled_room_name === 'string' ? n.scheduled_room_name : '',
-                        subject_color: n.subject_color ?? null,
-                        subject_icon_id: n.subject_icon_id ?? null,
-                        class_grade_level:
-                            typeof n.class_grade_level === 'number' ? n.class_grade_level : n.class_grade_level ?? null,
-                        currentlyScheduled: n.currentlyScheduled === true,
                     };
                 });
 
@@ -267,22 +237,8 @@ export default {
         // Conflicts
         const allConflicts = computed(() => detectConflicts(draftSchedules.value));
 
-        // Courses available for current slot (keep time-slot logic; upstream filtering already applied)
-        const availableCoursesForSlot = computed(() => {
-            if (!selectedCell.value.dayId || !selectedCell.value.periodId) {
-                return courses.value;
-            }
-            const currentDayId = selectedCell.value.dayId;
-            const currentPeriodId = selectedCell.value.periodId;
-
-            const filteredCourses = courses.value.filter(course => {
-                const slots = Array.isArray(course.possibleSlots) ? course.possibleSlots : [];
-                if (slots.length === 0) return true;
-                return slots.some(slot => slot.dayId === currentDayId && slot.periodId === currentPeriodId);
-            });
-
-            return filteredCourses;
-        });
+        // Courses available for selected slot (leave as-is; upstream filtering already applied)
+        const availableCoursesForSlot = computed(() => courses.value);
 
         // Methods
         function saveToUndoStack() {
@@ -703,6 +659,18 @@ export default {
     border-radius: 6px;
     box-shadow: 0 6px 20px rgba(0,0,0,0.08);
     padding: 12px;
+}
+
+/* Make the circled “Grade Slots” area (inner stats) a bit bigger.
+   This assumes the inner block has .grade-stats. If it doesn't,
+   add that class in SchedulerGrid (see snippet below). */
+::v-deep(.grade-stats),
+::v-deep(.grade-stats table),
+::v-deep(.grade-stats td),
+::v-deep(.grade-stats th),
+::v-deep(.grade-stats input) {
+    font-size: 13.5px; /* slightly larger */
+    line-height: 1.25;
 }
 
 /* Responsive tweaks */
