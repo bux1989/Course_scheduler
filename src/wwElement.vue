@@ -1,44 +1,5 @@
 <template>
     <div class="course-scheduler-wrapper">
-        <!-- Header with Planning Mode Controls -->
-        <div class="scheduler-header">
-            <h2>Course Scheduler</h2>
-            <div class="scheduler-controls">
-                <div class="mode-indicator" :class="{ 'read-only': isReadOnly }">
-                    {{ isReadOnly ? 'Published Schedule (Read-Only) - Event Testing Available' : 'Planning Mode' }}
-                </div>
-                <div class="header-actions">
-                    <!-- Always show test button for WeWeb event testing -->
-                    <button
-                        @click="testEventEmission"
-                        class="test-btn"
-                        style="
-                            background: #007bff;
-                            color: white;
-                            border: none;
-                            padding: 8px 12px;
-                            border-radius: 4px;
-                            margin-right: 8px;
-                        "
-                        title="Test WeWeb events (always available)"
-                    >
-                        🧪 Test Event
-                    </button>
-                    <!-- Only show editing controls when not read-only -->
-                    <div v-if="!isReadOnly" class="editing-controls">
-                        <button @click="undo" :disabled="!canUndo" class="undo-btn">↶ Undo</button>
-                        <button
-                            @click="showConflicts = !showConflicts"
-                            class="conflicts-btn"
-                            :class="{ active: showConflicts }"
-                        >
-                            ⚠️ Conflicts ({{ safeLength(allConflicts) }})
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-
         <!-- Main Scheduler Grid -->
         <div class="scheduler-content">
             <SchedulerGrid
@@ -983,82 +944,6 @@ export default {
     position: relative;
 }
 
-.scheduler-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 16px 20px;
-    background: #f8f9fa;
-    border-bottom: 1px solid #e0e0e0;
-    border-radius: 6px 6px 0 0;
-
-    h2 {
-        margin: 0;
-        color: #333;
-        font-size: 1.3em;
-    }
-
-    .scheduler-controls {
-        display: flex;
-        align-items: center;
-        gap: 16px;
-    }
-
-    .mode-indicator {
-        padding: 6px 12px;
-        border-radius: 4px;
-        font-size: 0.9em;
-        font-weight: 500;
-        background: #e6f7ff;
-        color: #1890ff;
-
-        &.read-only {
-            background: #fff2f0;
-            color: #ff4d4f;
-        }
-    }
-
-    .header-actions {
-        display: flex;
-        gap: 8px;
-        align-items: center;
-    }
-
-    .editing-controls {
-        display: flex;
-        gap: 8px;
-    }
-
-    .undo-btn,
-    .conflicts-btn {
-        padding: 6px 12px;
-        border: 1px solid #d9d9d9;
-        border-radius: 4px;
-        background: white;
-        cursor: pointer;
-        font-size: 0.9em;
-        transition: all 0.2s;
-
-        &:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-
-        &:hover:not(:disabled) {
-            background: #f0f0f0;
-            transform: translateY(-1px);
-        }
-    }
-
-    .conflicts-btn {
-        &.active {
-            background: #ff4d4f;
-            color: white;
-            border-color: #ff4d4f;
-        }
-    }
-}
-
 .scheduler-content {
     display: flex;
     gap: 16px;
@@ -1175,20 +1060,6 @@ export default {
         position: relative;
         top: auto;
     }
-
-    .scheduler-header {
-        flex-direction: column;
-        gap: 12px;
-        align-items: stretch;
-
-        .scheduler-controls {
-            justify-content: space-between;
-        }
-
-        .header-actions {
-            justify-content: center;
-        }
-    }
 }
 
 @media (max-width: 600px) {
@@ -1220,24 +1091,14 @@ export default {
 
 /* High contrast mode support */
 @media (prefers-contrast: high) {
-    .scheduler-header,
-    .mode-indicator,
-    .undo-btn,
-    .conflicts-btn {
-        border-width: 2px;
-    }
+    /* No specific styles needed */
 }
 
 /* Print styles */
 @media print {
     .test-toggle,
-    .header-actions,
     .conflicts-sidebar {
         display: none !important;
-    }
-
-    .scheduler-header .mode-indicator.read-only::after {
-        content: ' (Read-Only)';
     }
 }
 </style>

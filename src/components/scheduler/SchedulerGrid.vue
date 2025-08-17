@@ -1,96 +1,5 @@
 <template>
     <div class="scheduler-grid" role="grid" aria-label="School schedule grid" :data-readonly="isReadOnly">
-        <!-- Toolbar -->
-        <div class="scheduler-toolbar">
-            <div class="toolbar-section">
-                <label class="filter-label">
-                    <input
-                        type="checkbox"
-                        v-model="showNonInstructional"
-                        @change="$emit('toggle-non-instructional', showNonInstructional)"
-                    />
-                    Show Non-Instructional Blocks
-                </label>
-
-                <label class="filter-label">
-                    <input type="checkbox" v-model="showLessonSchedules" @change="handleLessonScheduleToggle" />
-                    Show Lesson Schedules (No Course)
-                </label>
-            </div>
-
-            <div class="toolbar-section">
-                <select v-model="selectedYearFilter" @change="$emit('filter-year', selectedYearFilter)">
-                    <option value="">All Years</option>
-                    <option v-for="year in yearGroups" :key="year" :value="year">{{ year }}</option>
-                </select>
-            </div>
-
-            <div class="toolbar-section">
-                <select v-model="selectedClassFilter" @change="handleClassFilterChange">
-                    <option value="">All Classes</option>
-                    <option v-for="cls in availableClasses" :key="cls.id" :value="cls.id">{{ cls.name }}</option>
-                </select>
-            </div>
-
-            <div class="toolbar-section">
-                <input
-                    v-model="searchTerm"
-                    type="text"
-                    placeholder="Search courses/classes..."
-                    class="search-input"
-                    title="Search assignments by course, class, or teacher name"
-                />
-                <button v-if="searchTerm" @click="searchTerm = ''" class="clear-search-btn" title="Clear search">
-                    ✕
-                </button>
-                <div v-if="debouncedSearchTerm || selectedClassFilter" class="filter-status">
-                    <small>
-                        Filters active:
-                        <span v-if="debouncedSearchTerm" class="filter-tag">Search: "{{ debouncedSearchTerm }}"</span>
-                        <span v-if="selectedClassFilter" class="filter-tag"
-                            >Class: {{ getClassName(selectedClassFilter) }}</span
-                        >
-                        <span v-if="!showLessonSchedules" class="filter-tag">Courses only</span>
-                        <span v-if="!showNonInstructional" class="filter-tag">Instructional periods only</span>
-                    </small>
-                </div>
-            </div>
-
-            <div class="toolbar-section">
-                <button
-                    @click="clearPeriodFocus"
-                    v-if="focusedPeriodId"
-                    class="focus-button active"
-                    title="Show all periods"
-                >
-                    Show All Periods (Currently: {{ getFocusedPeriodName() }})
-                </button>
-                <span v-else class="focus-hint"
-                    >Click a period name to focus on that period and see available courses</span
-                >
-            </div>
-
-            <div class="toolbar-actions">
-                <button
-                    v-if="!isReadOnly"
-                    @click="$emit('undo-last')"
-                    :disabled="!canUndo"
-                    class="undo-button"
-                    title="Undo last change"
-                >
-                    ↶ Undo
-                </button>
-                <button
-                    v-if="!isReadOnly"
-                    @click="$emit('save-draft')"
-                    class="save-button"
-                    :class="{ saving: isSaving }"
-                >
-                    {{ isSaving ? 'Saving...' : 'Save Draft' }}
-                </button>
-            </div>
-        </div>
-
         <!-- Main Grid -->
         <div v-if="safeLength(visibleDays) > 0 && safeLength(visiblePeriods) > 0" class="main-grid-container">
             <!-- Grid Header with Days -->
@@ -512,11 +421,7 @@ export default {
     ],
 
     setup(props, { emit }) {
-        // Local state
-        const showNonInstructional = ref(true);
-        const showLessonSchedules = ref(true);
-        const selectedYearFilter = ref('');
-        const selectedClassFilter = ref('');
+        // Local state - simplified since filtering is handled externally
         const focusedPeriodId = ref(null);
 
         // Inline editing state
@@ -601,7 +506,7 @@ export default {
 
             let filteredPeriods = validatedPeriods;
 
-            // First filter by focused period if set
+            // Only filter by focused period if set (keep this functionality)
             if (focusedPeriodId.value) {
                 const focusedPeriods = validatedPeriods.filter(period => period.id === focusedPeriodId.value);
 
@@ -617,84 +522,8 @@ export default {
                     filteredPeriods = focusedPeriods;
                 }
             }
-            // Then filter by instructional status
-            else if (!showNonInstructional.value) {
-                filteredPeriods = validatedPeriods.filter(period => {
-                    // Show periods where attendance_requirement is 'flexible' or 'required' or 'contracted'
-                    let shouldShow =
-                        period.attendance_requirement === 'flexible' ||
-                        period.attendance_requirement === 'required' ||
-                        period.attendance_requirement === 'contracted';
-
-                    // Alternative checks if attendance_requirement is not available or doesn't match expected values
-                    if (!shouldShow && !period.attendance_requirement) {
-                        // Fall back to is_instructional field
-                        if (period.is_instructional !== undefined) {
-                            shouldShow = period.is_instructional === true;
-                        }
-                        // Check block_type - exclude known non-instructional types
-                        else if (period.block_type) {
-                            const nonInstructionalTypes = [
-                                'break',
-                                'pause',
-                                'lunch',
-                                'recess',
-                                'assembly',
-                                'flexband',
-                                'frühdienst',
-                            ];
-                            shouldShow = !nonInstructionalTypes.includes(period.block_type.toLowerCase());
-                        }
-                        // Fall back to label/name content analysis
-                        else if (period.label || period.name) {
-                            const text = (period.label || period.name).toLowerCase();
-                            const isBreakTime =
-                                text.includes('break') ||
-                                text.includes('pause') ||
-                                text.includes('lunch') ||
-                                text.includes('flexband') ||
-                                text.includes('frühdienst') ||
-                                text.includes('benutzerdefiniert');
-                            shouldShow = !isBreakTime;
-                        }
-                        // Default to showing if we can't determine
-                        else {
-                            shouldShow = true;
-                        }
-                    }
-                    // If we still don't have a clear answer and attendance_requirement exists but is not 'flexible' or 'required'
-                    else if (
-                        !shouldShow &&
-                        period.attendance_requirement &&
-                        period.attendance_requirement !== 'optional'
-                    ) {
-                        // Show periods that aren't explicitly optional
-                        shouldShow = true;
-                    }
-
-                    return shouldShow;
-                });
-            }
-
-            // Simple fallback - if no periods match filters, show all periods
-            if (safeLength(filteredPeriods) === 0 && safeLength(props.periods) > 0) {
-                filteredPeriods = safeArray(props.periods);
-            }
 
             return filteredPeriods;
-        });
-
-        // Performance optimization - debounced filtering
-        const debouncedSearchTerm = ref('');
-        const searchTerm = ref('');
-        let searchDebounceTimer = null;
-
-        // Watch for search changes with debouncing
-        watch(searchTerm, newTerm => {
-            clearTimeout(searchDebounceTimer);
-            searchDebounceTimer = setTimeout(() => {
-                debouncedSearchTerm.value = newTerm;
-            }, 300); // 300ms debounce
         });
 
         // Select the appropriate schedule data based on mode
@@ -702,10 +531,10 @@ export default {
             return props.isLiveMode ? props.liveSchedules : props.draftSchedules;
         });
 
-        // Optimized filtered entries computed property
+        // Simplified filtered entries - no filtering since it's handled externally
         const filteredEntries = computed(() => {
             // Use mode-based schedule selection
-            let entries = currentSchedules.value;
+            const entries = currentSchedules.value;
 
             // Debug: Log schedule data to understand the issue
             console.log('🔍 [SchedulerGrid] filteredEntries - Schedule debugging:', {
@@ -717,46 +546,8 @@ export default {
                 sampleEntry: safeLength(entries) > 0 ? entries[0] : null,
             });
 
-            // Apply debounced search filter
-            if (debouncedSearchTerm.value) {
-                const search = debouncedSearchTerm.value.toLowerCase();
-                entries = entries.filter(entry => {
-                    return (
-                        (entry.course_name && entry.course_name.toLowerCase().includes(search)) ||
-                        (entry.subject_name && entry.subject_name.toLowerCase().includes(search)) ||
-                        (entry.class_name && entry.class_name.toLowerCase().includes(search)) ||
-                        (entry.teacher_names && entry.teacher_names.some(name => name.toLowerCase().includes(search)))
-                    );
-                });
-            }
-
-            // Apply class filter
-            if (selectedClassFilter.value) {
-                entries = entries.filter(entry => entry.class_id === selectedClassFilter.value);
-            }
-
-            // Apply lesson schedule filter
-            if (!showLessonSchedules.value) {
-                entries = entries.filter(entry => entry.course_id);
-            }
-
+            // No filtering - all handled externally
             return entries;
-        });
-
-        const yearGroups = computed(() => {
-            const years = new Set();
-            props.classes.forEach(cls => {
-                if (cls.year_group) years.add(cls.year_group);
-            });
-            return Array.from(years).sort();
-        });
-
-        const availableClasses = computed(() => {
-            // Filter classes based on year filter if applied
-            if (selectedYearFilter.value) {
-                return props.classes.filter(cls => cls.year_group === selectedYearFilter.value);
-            }
-            return props.classes.slice().sort((a, b) => a.name.localeCompare(b.name));
         });
 
         // Helper functions
@@ -1030,15 +821,6 @@ export default {
             emit('assignment-details', assignment);
         }
 
-        // New event handlers
-        function handleLessonScheduleToggle() {
-            emit('toggle-lesson-schedules', showLessonSchedules.value);
-        }
-
-        function handleClassFilterChange() {
-            // Class filter is handled locally - no need to emit
-        }
-
         function togglePeriodFocus(periodId) {
             if (focusedPeriodId.value === periodId) {
                 focusedPeriodId.value = null;
@@ -1077,41 +859,10 @@ export default {
                 return isAvailable;
             });
 
-            // Apply search filter
-            if (debouncedSearchTerm.value) {
-                const search = debouncedSearchTerm.value.toLowerCase();
-                availableCourses = availableCourses.filter(course => {
-                    return (
-                        (course.name && course.name.toLowerCase().includes(search)) ||
-                        (course.course_name && course.course_name.toLowerCase().includes(search)) ||
-                        (course.title && course.title.toLowerCase().includes(search)) ||
-                        (course.course_code && course.course_code.toLowerCase().includes(search)) ||
-                        (course.subject_name && course.subject_name.toLowerCase().includes(search)) ||
-                        (course.description && course.description.toLowerCase().includes(search))
-                    );
-                });
-            }
-
-            // Apply class filter
-            if (selectedClassFilter.value) {
-                const selectedClass = props.classes.find(cls => cls.id === selectedClassFilter.value);
-                if (selectedClass) {
-                    availableCourses = availableCourses.filter(course => {
-                        // Check if course is available for the selected class's year group
-                        if (course.is_for_year_groups && safeLength(course.is_for_year_groups) > 0) {
-                            return course.is_for_year_groups.includes(selectedClass.year_group);
-                        }
-                        return true; // If no restrictions, course is available
-                    });
-                }
-            }
-
-            console.log('🎯 [SchedulerGrid] Available courses for slot (after filtering):', {
+            console.log('🎯 [SchedulerGrid] Available courses for slot:', {
                 dayId,
                 periodId,
                 availableCount: safeLength(availableCourses),
-                searchTerm: debouncedSearchTerm.value,
-                classFilter: selectedClassFilter.value,
                 courses: availableCourses.map(c => ({ id: c.id, name: c.name || c.course_name })),
             });
 
@@ -1230,43 +981,12 @@ export default {
                 return !course.possible_time_slots || safeLength(course.possible_time_slots) === 0;
             });
 
-            // Filter by current search term and class filter for consistency
-            let filteredCourses = coursesWithoutRestrictions;
-
-            if (debouncedSearchTerm.value) {
-                const search = debouncedSearchTerm.value.toLowerCase();
-                filteredCourses = filteredCourses.filter(course => {
-                    return (
-                        (course.name && course.name.toLowerCase().includes(search)) ||
-                        (course.course_name && course.course_name.toLowerCase().includes(search)) ||
-                        (course.title && course.title.toLowerCase().includes(search)) ||
-                        (course.course_code && course.course_code.toLowerCase().includes(search)) ||
-                        (course.subject_name && course.subject_name.toLowerCase().includes(search))
-                    );
-                });
-            }
-
-            // Filter by selected class if a class filter is applied
-            if (selectedClassFilter.value) {
-                // Check if the course is available for the selected class
-                filteredCourses = filteredCourses.filter(course => {
-                    // If course has is_for_year_groups, check if it includes the selected class's year
-                    const selectedClass = props.classes.find(cls => cls.id === selectedClassFilter.value);
-                    if (selectedClass && course.is_for_year_groups) {
-                        return course.is_for_year_groups.includes(selectedClass.year_group);
-                    }
-                    return true; // If no year restrictions, course is available
-                });
-            }
-
-            console.log('📅 [NoPreferredDays] Filtered courses:', {
+            // No filtering - all handled externally
+            console.log('📅 [NoPreferredDays] Courses available:', {
                 total: safeLength(coursesWithoutRestrictions),
-                afterSearch: safeLength(filteredCourses),
-                searchTerm: debouncedSearchTerm.value,
-                classFilter: selectedClassFilter.value,
             });
 
-            return filteredCourses;
+            return coursesWithoutRestrictions;
         }
 
         function assignCourseToFocusedSlot(course) {
@@ -1782,10 +1502,6 @@ export default {
 
         return {
             // State
-            showNonInstructional,
-            showLessonSchedules,
-            selectedYearFilter,
-            selectedClassFilter,
             focusedPeriodId,
             draggedCourse,
             draggedAssignment,
@@ -1796,16 +1512,12 @@ export default {
             modalCourseData,
             showCourseSelectionModal,
             courseSelectionData,
-            searchTerm,
-            debouncedSearchTerm,
 
             // Computed
             visibleDays,
             visiblePeriods,
             currentSchedules,
             filteredEntries,
-            yearGroups,
-            availableClasses,
 
             // Methods
             formatTime,
@@ -1827,8 +1539,6 @@ export default {
             handleCellClick,
             openAssignmentModal,
             openAssignmentDetails,
-            handleLessonScheduleToggle,
-            handleClassFilterChange,
             togglePeriodFocus,
             clearPeriodFocus,
             getFocusedPeriodName,
@@ -1932,116 +1642,6 @@ export default {
 
 .emergency-recover-btn:hover {
     background: #c0392b;
-}
-
-.scheduler-toolbar {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 12px 16px;
-    background: #f8f9fa;
-    border-bottom: 1px solid #ddd;
-    gap: 16px;
-    flex-wrap: wrap;
-}
-
-.toolbar-section {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    position: relative;
-}
-
-.search-input {
-    padding: 6px 12px;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    font-size: 14px;
-    width: 200px;
-    transition: border-color 0.2s ease;
-}
-
-.search-input:focus {
-    outline: none;
-    border-color: #007cba;
-    box-shadow: 0 0 0 2px rgba(0, 123, 186, 0.2);
-}
-
-.clear-search-btn {
-    background: #6c757d;
-    color: white;
-    border: none;
-    border-radius: 50%;
-    width: 20px;
-    height: 20px;
-    font-size: 12px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin-left: -30px;
-    z-index: 2;
-}
-
-.clear-search-btn:hover {
-    background: #5a6268;
-}
-
-.filter-status {
-    margin-left: 8px;
-    padding: 4px 8px;
-    background: rgba(0, 123, 186, 0.1);
-    border: 1px solid rgba(0, 123, 186, 0.3);
-    border-radius: 4px;
-}
-
-.filter-tag {
-    display: inline-block;
-    background: #007cba;
-    color: white;
-    padding: 2px 6px;
-    margin: 0 2px;
-    border-radius: 3px;
-    font-size: 11px;
-}
-
-.filter-label {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 0.9em;
-    cursor: pointer;
-}
-
-.toolbar-actions {
-    display: flex;
-    gap: 8px;
-}
-
-.undo-button,
-.save-button {
-    padding: 6px 12px;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    background: white;
-    cursor: pointer;
-    font-size: 0.9em;
-    transition: all 0.2s;
-}
-
-.undo-button:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-}
-
-.save-button {
-    background: #007cba;
-    color: white;
-    border-color: #007cba;
-}
-
-.save-button.saving {
-    opacity: 0.7;
 }
 
 .grid-header {
@@ -2396,12 +1996,6 @@ export default {
         font-size: 0.8em;
     }
 
-    .scheduler-toolbar {
-        flex-direction: column;
-        align-items: stretch;
-        gap: 8px;
-    }
-
     .stats-grid {
         grid-template-columns: 1fr;
     }
@@ -2497,15 +2091,6 @@ export default {
     font-style: italic;
     color: #999;
     font-size: 0.8em;
-}
-
-/* New styles for enhanced functionality */
-.filter-label {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 0.9em;
-    margin-right: 16px;
 }
 
 .focus-button {
