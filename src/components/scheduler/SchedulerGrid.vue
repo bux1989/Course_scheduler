@@ -1,5 +1,5 @@
 <template>
-    <div class="scheduler-grid" role="grid" aria-label="School schedule grid">
+    <div class="scheduler-grid" role="grid" aria-label="School schedule grid" :data-readonly="isReadOnly">
         <!-- Toolbar -->
         <div class="scheduler-toolbar">
             <div class="toolbar-section">
@@ -71,10 +71,21 @@
             </div>
 
             <div class="toolbar-actions">
-                <button @click="$emit('undo-last')" :disabled="!canUndo" class="undo-button" title="Undo last change">
+                <button
+                    v-if="!isReadOnly"
+                    @click="$emit('undo-last')"
+                    :disabled="!canUndo"
+                    class="undo-button"
+                    title="Undo last change"
+                >
                     ↶ Undo
                 </button>
-                <button @click="$emit('save-draft')" class="save-button" :class="{ saving: isSaving }">
+                <button
+                    v-if="!isReadOnly"
+                    @click="$emit('save-draft')"
+                    class="save-button"
+                    :class="{ saving: isSaving }"
+                >
                     {{ isSaving ? 'Saving...' : 'Save Draft' }}
                 </button>
             </div>
@@ -152,10 +163,10 @@
                         @keydown.enter="handleCellClick(day.id, period.id, period)"
                         @keydown.space.prevent="handleCellClick(day.id, period.id, period)"
                         :aria-label="getCellAriaLabel(day, period)"
-                        @dragover.prevent="handleCellDragOver($event, day.id, period.id)"
-                        @dragenter.prevent="handleCellDragEnter($event, day.id, period.id)"
-                        @dragleave="handleCellDragLeave($event, day.id, period.id)"
-                        @drop="handleCellDrop($event, day.id, period.id)"
+                        @dragover.prevent="!isReadOnly ? handleCellDragOver($event, day.id, period.id) : null"
+                        @dragenter.prevent="!isReadOnly ? handleCellDragEnter($event, day.id, period.id) : null"
+                        @dragleave="!isReadOnly ? handleCellDragLeave($event, day.id, period.id) : null"
+                        @drop="!isReadOnly ? handleCellDrop($event, day.id, period.id) : null"
                         :data-day-id="day.id"
                         :data-period-id="period.id"
                     >
@@ -169,9 +180,13 @@
                                 :style="getAssignmentStyles(assignment)"
                                 @click.stop="handleAssignmentClick(assignment, day.id, period.id)"
                                 @contextmenu.prevent="handleAssignmentRightClick($event, assignment, day.id, period.id)"
-                                :draggable="!isEditing(assignment.id)"
-                                @dragstart="handleAssignmentDragStart($event, assignment, day.id, period.id)"
-                                @dragend="handleAssignmentDragEnd($event)"
+                                :draggable="!isReadOnly && !isEditing(assignment.id)"
+                                @dragstart="
+                                    !isReadOnly
+                                        ? handleAssignmentDragStart($event, assignment, day.id, period.id)
+                                        : null
+                                "
+                                @dragend="!isReadOnly ? handleAssignmentDragEnd($event) : null"
                                 :data-assignment-id="assignment.id"
                                 :data-day-id="day.id"
                                 :data-period-id="period.id"
@@ -203,6 +218,7 @@
 
                             <!-- Add More Button for cells with assignments -->
                             <button
+                                v-if="!isReadOnly"
                                 class="add-more-button"
                                 @click.stop="openAssignmentModal(day.id, period.id, period)"
                                 title="Add another assignment"
@@ -213,8 +229,13 @@
 
                         <!-- Empty Cell -->
                         <div v-else class="empty-cell">
-                            <span class="add-icon">+</span>
-                            <span class="add-text">Add Course</span>
+                            <template v-if="!isReadOnly">
+                                <span class="add-icon">+</span>
+                                <span class="add-text">Add Course</span>
+                            </template>
+                            <template v-else>
+                                <span class="empty-text">No assignments</span>
+                            </template>
                         </div>
                     </div>
                 </div>
@@ -287,8 +308,8 @@
             </div>
         </div>
 
-        <!-- Available Courses for Focused Period -->
-        <div v-if="focusedPeriodId" class="available-courses-panel">
+        <!-- Available Courses for Focused Period (only in planner mode) -->
+        <div v-if="focusedPeriodId && !isReadOnly" class="available-courses-panel">
             <h3>Available Courses for {{ getFocusedPeriodName() }}</h3>
             <div class="focused-period-info">
                 <em>Courses that can be scheduled during this period on each day</em>
@@ -302,14 +323,14 @@
                             :key="course.id"
                             class="course-card draggable-course"
                             :style="getCourseCardStyle(course)"
-                            @click="assignCourseToSlot(course, day.id, focusedPeriodId)"
-                            :title="`Click to assign or drag ${course.name || course.course_name} to schedule`"
-                            :draggable="true"
+                            @click="!isReadOnly ? assignCourseToSlot(course, day.id, focusedPeriodId) : null"
+                            :title="`${!isReadOnly ? 'Click to assign or drag' : 'Course:'} ${course.name || course.course_name} ${!isReadOnly ? 'to schedule' : ''}`"
+                            :draggable="!isReadOnly"
                             :data-course-id="course.id"
                             :data-day-id="day.id"
                             :data-period-id="focusedPeriodId"
-                            @dragstart="handleCourseDragStart($event, course)"
-                            @dragend="handleCourseDragEnd($event)"
+                            @dragstart="!isReadOnly ? handleCourseDragStart($event, course) : null"
+                            @dragend="!isReadOnly ? handleCourseDragEnd($event) : null"
                         >
                             <div class="course-name">{{ course.name || course.course_name || course.title }}</div>
                             <div class="course-details">
@@ -340,8 +361,8 @@
                         :key="`no-pref-${course.id}`"
                         class="course-card"
                         :style="getCourseCardStyle(course)"
-                        @click="assignCourseToFocusedSlot(course)"
-                        :title="`${course.name || course.course_name} - Can be scheduled on any day`"
+                        @click="!isReadOnly ? assignCourseToFocusedSlot(course) : null"
+                        :title="`${course.name || course.course_name} - ${!isReadOnly ? 'Can be scheduled on any day' : 'Available on any day'}`"
                     >
                         <div class="course-name">{{ course.name || course.course_name || course.title }}</div>
                         <div class="course-details">
@@ -2449,6 +2470,33 @@ export default {
 
 .scheduler-grid[data-readonly='true'] .schedule-cell:hover {
     background: inherit;
+}
+
+.scheduler-grid[data-readonly='true'] .draggable-course,
+.scheduler-grid[data-readonly='true'] .draggable-assignment {
+    cursor: default;
+    pointer-events: none;
+}
+
+.scheduler-grid[data-readonly='true'] .course-card {
+    cursor: default;
+    opacity: 0.8;
+}
+
+.scheduler-grid[data-readonly='true'] .course-card:hover {
+    transform: none;
+    box-shadow: none;
+    border-color: inherit;
+}
+
+.scheduler-grid[data-readonly='true'] .empty-cell {
+    color: #999;
+}
+
+.scheduler-grid[data-readonly='true'] .empty-text {
+    font-style: italic;
+    color: #999;
+    font-size: 0.8em;
 }
 
 /* New styles for enhanced functionality */
