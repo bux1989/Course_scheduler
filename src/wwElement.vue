@@ -194,8 +194,8 @@ export default {
             const rawPeriodsData = props.content.periods;
             const normalizedPeriods = normalizePeriods(rawPeriodsData);
 
+            // No logging for empty data - this is normal during initial load
             if (!nonEmpty(normalizedPeriods)) {
-                console.log('📋 [Periods] No periods data available');
                 return [];
             }
 
@@ -206,9 +206,7 @@ export default {
             const rawCourses = props.content.courses;
             const coursesArray = toArray(rawCourses);
 
-            if (!nonEmpty(coursesArray)) {
-                console.log('🎯 [wwElement] Courses processing: no data available');
-            }
+            // No logging for empty data - this is normal during initial load
 
             // CRITICAL FIX: Apply normalizeCourse to handle possible_time_slots dayId parsing
             return coursesArray.map((course, idx) => normalizeCourse(course, idx));
@@ -218,9 +216,7 @@ export default {
             const rawTeachers = props.content.teachers;
             const teachersArray = toArray(rawTeachers);
 
-            if (!nonEmpty(teachersArray)) {
-                console.log('👥 [wwElement] Teachers processing: no data available');
-            }
+            // No logging for empty data - this is normal during initial load
 
             return teachersArray;
         });
@@ -229,9 +225,7 @@ export default {
             const rawClasses = props.content.classes;
             const classesArray = toArray(rawClasses);
 
-            if (!nonEmpty(classesArray)) {
-                console.log('🏫 [wwElement] Classes processing: no data available');
-            }
+            // No logging for empty data - this is normal during initial load
 
             return classesArray;
         });
@@ -240,9 +234,7 @@ export default {
             const rawRooms = props.content.rooms;
             const roomsArray = toArray(rawRooms);
 
-            if (!nonEmpty(roomsArray)) {
-                console.log('🏠 [wwElement] Rooms processing: no data available');
-            }
+            // No logging for empty data - this is normal during initial load
 
             return roomsArray;
         });
@@ -251,8 +243,8 @@ export default {
             const rawDaysData = props.content.schoolDays;
             const validatedDays = toArray(rawDaysData); // Enhanced toArray handles all cases
 
+            // No logging for empty data - this is normal during initial load
             if (!nonEmpty(validatedDays)) {
-                console.log('📅 [wwElement] SchoolDays processing: no data available');
                 return [];
             }
 
@@ -283,10 +275,7 @@ export default {
             const rawDrafts = props.content.draftSchedules;
             const finalDraftArray = toArray(rawDrafts); // Enhanced toArray handles all WeWeb formats
 
-            // Only log if no data available (for debugging data issues)
-            if (!nonEmpty(finalDraftArray)) {
-                console.log('📝 [wwElement] Draft Schedules processing: no data available');
-            }
+            // No logging for empty data - this is normal during initial load
 
             return finalDraftArray;
         });
@@ -295,10 +284,7 @@ export default {
             const rawLive = props.content.liveSchedules;
             const finalLiveArray = toArray(rawLive); // Enhanced toArray handles all WeWeb formats
 
-            // Only log if no data available (for debugging data issues)
-            if (!nonEmpty(finalLiveArray)) {
-                console.log('📺 [wwElement] Live Schedules processing: no data available');
-            }
+            // No logging for empty data - this is normal during initial load
 
             return finalLiveArray;
         });
@@ -307,9 +293,7 @@ export default {
             const rawSubjects = props.content.subjects;
             const subjectsArray = toArray(rawSubjects);
 
-            if (!nonEmpty(subjectsArray)) {
-                console.log('📚 [wwElement] Subjects processing: no data available');
-            }
+            // No logging for empty data - this is normal during initial load
 
             return subjectsArray;
         });
@@ -335,12 +319,13 @@ export default {
             const currentDayId = selectedCell.value.dayId;
             const currentPeriodId = selectedCell.value.periodId;
 
-            // Only log if we have debug context
-            if (currentDayId && currentPeriodId) {
+            // Only log if we have debug context and this is an actual filtering operation
+            if (currentDayId && currentPeriodId && filteredCourses.length !== courses.value.length) {
                 console.log('🎯 [wwElement] availableCoursesForSlot filtering:', {
                     currentDayId,
                     currentPeriodId,
                     totalCourses: safeLength(courses.value),
+                    filteredCourses: filteredCourses.length,
                 });
             }
 
@@ -357,7 +342,7 @@ export default {
                 if (isAvailable) {
                     console.log('  ✅ Available course:', {
                         courseName: course.name,
-                        possibleSlots: course.possibleSlots,
+                        possibleSlots: course.possibleSlots.length,
                     });
                 }
 
@@ -492,7 +477,7 @@ export default {
                 // Simulate save delay
                 await new Promise(resolve => setTimeout(resolve, 1000));
 
-                // Only log success once, not repeatedly
+                // Simple success log
                 console.log('💾 [wwElement] Draft saved successfully');
             } catch (error) {
                 console.error('❌ [wwElement] Error saving draft:', error);
@@ -534,6 +519,7 @@ export default {
         }
 
         function handleToggleNonInstructional(show) {
+            // UI controls removed - handler kept for compatibility
             emit('trigger-event', {
                 name: 'toggleNonInstructional',
                 event: { showNonInstructional: show },
@@ -541,6 +527,7 @@ export default {
         }
 
         function handleToggleLessonSchedules(show) {
+            // UI controls removed - handler kept for compatibility  
             emit('trigger-event', {
                 name: 'toggleLessonSchedules',
                 event: { showLessonSchedules: show },
@@ -589,13 +576,12 @@ export default {
                 ...(eventData?.action !== undefined && { action: eventData.action }),
             };
 
-            console.log('🚀 [WeWeb Event] scheduler:drop - Emitting trigger-event with data:', safeEventData);
+            console.log('🚀 [WeWeb Event] scheduler:drop - Emitting trigger-event');
             try {
                 emit('trigger-event', {
                     name: 'scheduler:drop',
                     event: safeEventData,
                 });
-                console.log('✅ [WeWeb Event] scheduler:drop emitted successfully');
             } catch (error) {
                 console.error('❌ [WeWeb Event] scheduler:drop emission failed:', error);
             }
@@ -611,13 +597,12 @@ export default {
                 timestamp: eventData?.timestamp || new Date().toISOString(),
             };
 
-            console.log('🚀 [WeWeb Event] scheduler:drag-start - Emitting trigger-event with data:', safeEventData);
+            console.log('🚀 [WeWeb Event] scheduler:drag-start - Emitting trigger-event');
             try {
                 emit('trigger-event', {
                     name: 'scheduler:drag-start',
                     event: safeEventData,
                 });
-                console.log('✅ [WeWeb Event] scheduler:drag-start emitted successfully');
             } catch (error) {
                 console.error('❌ [WeWeb Event] scheduler:drag-start emission failed:', error);
             }
@@ -634,13 +619,12 @@ export default {
                 timestamp: eventData?.timestamp || new Date().toISOString(),
             };
 
-            console.log('🚀 [WeWeb Event] scheduler:drag-end - Emitting trigger-event with data:', safeEventData);
+            console.log('🚀 [WeWeb Event] scheduler:drag-end - Emitting trigger-event');
             try {
                 emit('trigger-event', {
                     name: 'scheduler:drag-end',
                     event: safeEventData,
                 });
-                console.log('✅ [WeWeb Event] scheduler:drag-end emitted successfully');
             } catch (error) {
                 console.error('❌ [WeWeb Event] scheduler:drag-end emission failed:', error);
             }
@@ -648,9 +632,7 @@ export default {
 
         // Test function for manual event emission debugging
         function testEventEmission() {
-            console.log('🧪 [WeWeb Event Test] =================================');
             console.log('🧪 [WeWeb Event Test] Manual scheduler:drop event test');
-            console.log('🧪 [WeWeb Event Test] =================================');
 
             const testData = {
                 dayId: 1,
@@ -662,16 +644,12 @@ export default {
                 timestamp: new Date().toISOString(),
             };
 
-            console.log('📋 [WeWeb Event Test] Test event data:', testData);
-
             try {
-                console.log('🚀 [WeWeb Event Test] Attempting to emit scheduler:drop...');
                 emit('trigger-event', {
                     name: 'scheduler:drop',
                     event: testData,
                 });
-                console.log('✅ [WeWeb Event Test] ✅ SUCCESS: scheduler:drop trigger-event emitted!');
-                console.log('📌 [WeWeb Event Test] Event data should be accessible directly in workflows');
+                console.log('✅ [WeWeb Event Test] scheduler:drop trigger-event emitted');
             } catch (error) {
                 console.error('❌ [WeWeb Event Test] scheduler:drop test failed:', error);
             }
@@ -779,11 +757,9 @@ export default {
                         },
                     },
                 });
-                console.log('✅ Test WeWeb element event emitted successfully!');
-                alert('Test WeWeb element event emitted successfully!');
+                console.log('✅ Test WeWeb element event emitted successfully');
             } catch (error) {
                 console.error('❌ Failed to emit test WeWeb element event:', error);
-                alert('Error emitting WeWeb element event: ' + error.message);
             }
         }
 
@@ -838,9 +814,9 @@ export default {
             { deep: true }
         );
 
-        // Debug logging on mount
+        // Debug logging on mount - reduced verbosity
         onMounted(() => {
-            console.log('🚀 [wwElement] Component mounted - Course Scheduler loaded successfully');
+            console.log('🚀 [wwElement] Course Scheduler mounted successfully');
         });
 
         // Watch for changes in props.content (only log significant changes)
