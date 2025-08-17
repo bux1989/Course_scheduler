@@ -200,14 +200,13 @@
                             visiblePeriods.map(p => p.name || p.label).join(', ')
                         }})
                     </li>
-                    <li>Show Non-Instructional: {{ showNonInstructional }}</li>
+
                     <li>Focused Period: {{ focusedPeriodId }}</li>
                     <li>Total Periods Available: {{ safeLength(periods) }}</li>
                     <li>Total School Days Available: {{ safeLength(schoolDays) }}</li>
                 </ul>
                 <button
                     @click="
-                        showNonInstructional = true;
                         focusedPeriodId = null;
                     "
                     class="emergency-show-btn"
@@ -499,7 +498,6 @@ export default {
                 console.log('🔍 [SchedulerGrid] Period processing summary:', {
                     totalPeriods: safeLength(validatedPeriods),
                     focusedPeriodId: focusedPeriodId.value,
-                    showNonInstructional: showNonInstructional.value,
                     stableIds: validatedPeriods.slice(0, 3).map(p => p.id), // Show stable IDs generated
                 });
             }
