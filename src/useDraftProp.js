@@ -1,10 +1,12 @@
 import { computed, watch } from "vue";
 import { applyDraftPropToStore } from "./pinia/draftIngest";
 
-// Lightweight wiring: watches the draft schedule prop(s) and syncs them to Pinia.
+// Watches for drafts on props and syncs them to Pinia.
+// Supports any of these sources: props.draftSchedules, props.draftSchedule, or props.content.draftSchedules.
 export function useDraftProp(props, store) {
-  // Support both draftSchedules (plural) and draftSchedule (singular) just in case
-  const draftsProp = computed(() => props.draftSchedules ?? props.draftSchedule ?? []);
+  const draftsProp = computed(
+    () => props.draftSchedules ?? props.draftSchedule ?? props.content?.draftSchedules ?? []
+  );
 
   watch(
     draftsProp,
