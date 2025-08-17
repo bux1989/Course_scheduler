@@ -125,21 +125,12 @@
                                 </div>
                             </div>
 
-                            <!-- Add More Button for cells with assignments -->
-                            <button
-                                v-if="!isReadOnly"
-                                class="add-more-button"
-                                @click.stop="openAssignmentModal(day.id, period.id, period)"
-                                title="Add another assignment"
-                            >
-                                +
-                            </button>
+                            <!-- Add More Button removed for external management -->
                         </div>
 
                         <!-- Empty Cell -->
                         <div v-else class="empty-cell">
                             <template v-if="!isReadOnly">
-                                <span class="add-icon">+</span>
                                 <span class="add-text">Add Course</span>
                             </template>
                             <template v-else>
@@ -205,14 +196,7 @@
                     <li>Total Periods Available: {{ safeLength(periods) }}</li>
                     <li>Total School Days Available: {{ safeLength(schoolDays) }}</li>
                 </ul>
-                <button
-                    @click="
-                        focusedPeriodId = null;
-                    "
-                    class="emergency-show-btn"
-                >
-                    🚨 Emergency: Show All Data
-                </button>
+                <button @click="focusedPeriodId = null" class="emergency-show-btn">🚨 Emergency: Show All Data</button>
             </div>
         </div>
 
@@ -768,8 +752,11 @@ export default {
             // Check if cell has assignments
             const assignments = getCellAssignments(dayId, periodId);
             if (assignments.length === 0) {
-                console.log('📋 [SchedulerGrid] Empty cell clicked - opening course selection modal');
-                openAssignmentModal(dayId, periodId, period);
+                console.log(
+                    '📋 [SchedulerGrid] Empty cell clicked - add functionality removed for external management'
+                );
+                // Assignment modal functionality removed for external management
+                return;
             } else {
                 console.log('📋 [SchedulerGrid] Cell with assignments clicked - emitting cell-click event');
                 emit('cell-click', { dayId, periodId, period });
@@ -1823,20 +1810,7 @@ export default {
     font-size: 0.7em;
 }
 
-.add-more-button {
-    margin-top: 2px;
-    padding: 2px 4px;
-    background: #f0f0f0;
-    border: 1px dashed #ccc;
-    border-radius: 2px;
-    cursor: pointer;
-    font-size: 0.8em;
-    align-self: stretch;
-}
-
-.add-more-button:hover {
-    background: #e0e0e0;
-}
+/* Add button styles removed for external management */
 
 .empty-cell {
     height: 100%;
@@ -1849,10 +1823,7 @@ export default {
     gap: 4px;
 }
 
-.add-icon {
-    font-size: 20px;
-    opacity: 0.6;
-}
+/* Add icon styles removed for external management */
 
 .add-text {
     opacity: 0.8;
