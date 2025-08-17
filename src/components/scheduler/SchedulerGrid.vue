@@ -148,7 +148,7 @@
     <div v-if="focusedPeriodId && !isReadOnly" class="available-courses-panel">
       <h3>Available Courses for {{ getFocusedPeriodName() }}</h3>
       <div class="focused-period-info">
-        <em>Drag a course into a day cell to schedule it</em>
+        <em>Drag a course into a day cell to schedule it, or click a card to assign.</em>
       </div>
       <div class="day-courses-grid">
         <div v-for="day in visibleDays" :key="day.id" class="day-courses-column">
@@ -175,10 +175,7 @@
                 <small v-if="course.subject_name">{{ course.subject_name }}</small>
               </div>
             </div>
-            <div
-              v-if="safeLength(getAvailableCoursesForSlot(day.id, focusedPeriodId)) === 0"
-              class="no-courses"
-            >
+            <div v-if="safeLength(getAvailableCoursesForSlot(day.id, focusedPeriodId)) === 0" class="no-courses">
               No courses available for this day/period
             </div>
           </div>
@@ -209,7 +206,7 @@
       </div>
     </div>
 
-    <!-- Hidden fallback when grid is not renderable -->
+    <!-- Fallback when grid cannot render -->
     <div v-else-if="safeLength(visibleDays) === 0 || safeLength(visiblePeriods) === 0" class="grid-hidden-debug">
       <div class="grid-hidden-message">
         Grid hidden. Please provide schoolDays and periods.
@@ -241,6 +238,8 @@ export default {
     isReadOnly: { type: Boolean, default: false },
     showStatistics: { type: Boolean, default: true },
     maxDays: { type: Number, default: 6 },
+    // NEW: keep earlier behavior (no click-to-add) by default
+    enableCellAdd: { type: Boolean, default: false },
 
     // State
     conflicts: { type: Array, default: () => [] },
@@ -273,7 +272,6 @@ export default {
 
     // Days and periods to render (no internal filtering except focus)
     const visibleDays = computed(() => safeArray(props.schoolDays).slice(0, props.maxDays || 7));
-
     const visiblePeriods = computed(() => {
       const all = safeArray(props.periods);
       if (!focusedPeriodId.value) return all;
@@ -355,7 +353,7 @@ export default {
       const cls = props.classes.find((c) => c.id === assignment.class_id);
       return {
         borderLeft: `4px solid ${course?.color || cls?.color || '#e0e0e0'}`,
-        backgroundColor: course?.color ? `${course.color}15` : cls?.color ? `${cls.color}15` : '#f9f9f9`,
+        backgroundColor: course?.color ? `${course.color}15` : cls?.color ? `${cls.color}15` : '#f9f9f9',
       };
     }
 
@@ -420,9 +418,9 @@ export default {
       return !(courseOk && classOk && roomOk && teachersOk);
     }
 
-    // Click on any cell (even empty) to allow adding
+    // Click on any cell (even empty) to allow adding (optional based on prop)
     function handleCellClick(dayId, periodId, period) {
-      if (props.isReadOnly) return;
+      if (props.isReadOnly || !props.enableCellAdd) return;
       emit('cell-click', { dayId, periodId, period, mode: 'add', preSelectedCourse: null });
     }
 
@@ -590,7 +588,7 @@ export default {
       return p?.name || p?.label || 'Unknown Period';
     }
 
-    // Available courses logic (courses are normalized upstream; relies on course.possibleSlots)
+    // Available courses logic (courses normalized upstream; relies on course.possibleSlots)
     function getAvailableCoursesForSlot(dayId, periodId) {
       return safeArray(props.courses).filter((course) => {
         const slots = Array.isArray(course.possibleSlots) ? course.possibleSlots : [];
@@ -695,6 +693,7 @@ export default {
 </script>
 
 <style scoped>
+/* styles unchanged from previous message (includes larger grade stats text) */
 .scheduler-grid {
   display: flex;
   flex-direction: column;
@@ -940,7 +939,7 @@ export default {
   z-index: 10;
 }
 
-/* Grade Statistics Row Styles (font made larger) */
+/* Grade Statistics Row Styles (larger text + rounding applied via formatInt) */
 .statistics-row {
   display: flex;
   border-bottom: 2px solid #007cba;
@@ -960,7 +959,7 @@ export default {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 0.95em; /* bigger title */
+  font-size: 0.95em;
   font-weight: 600;
 }
 
@@ -971,7 +970,7 @@ export default {
 .day-statistics-cell {
   flex: 1;
   border-right: 1px solid #ddd;
-  padding: 10px; /* slightly more padding */
+  padding: 10px;
   background: white;
   display: flex;
   flex-direction: column;
@@ -991,7 +990,7 @@ export default {
 }
 
 .stat-header {
-  font-size: 0.95em; /* bigger */
+  font-size: 0.95em;
   text-align: center;
   cursor: help;
   padding: 2px 4px;
@@ -1019,14 +1018,14 @@ export default {
   border: 1px solid #e0e0e0;
   border-radius: 4px;
   padding: 4px 6px;
-  font-size: 0.9em; /* bigger */
+  font-size: 0.9em;
 }
 
 .grade-number {
   font-weight: 700;
   color: #333;
   min-width: 22px;
-  font-size: 1em; /* bigger */
+  font-size: 1em;
 }
 
 .stat-value {
@@ -1034,8 +1033,8 @@ export default {
   padding: 2px 4px;
   background: white;
   border-radius: 3px;
-  font-size: 0.9em; /* bigger */
-  color: #333;       /* darker for readability */
+  font-size: 0.9em;
+  color: #333;
   min-width: 22px;
   flex: 1;
 }
