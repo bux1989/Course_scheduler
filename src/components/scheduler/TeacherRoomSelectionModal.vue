@@ -3,10 +3,27 @@
         <div class="modal-content" @click.stop>
             <div class="modal-header">
                 <h3>Assign {{ courseName }} to Schedule</h3>
-                <button @click="cancelSelection" class="close-btn">&times;</button>
+                <button @click="cancelSelection" class="close-btn" aria-label="Close">&times;</button>
             </div>
 
             <div class="modal-body">
+                <!-- Scheduling options -->
+                <div class="selection-section scheduling-options">
+                    <label class="section-label">Scheduling options:</label>
+                    <label class="checkbox-row">
+                        <input
+                            type="checkbox"
+                            v-model="isRecurring"
+                            class="checkbox-input"
+                            aria-describedby="recurring-help"
+                        />
+                        <span>Schedule multiple times this week</span>
+                    </label>
+                    <p id="recurring-help" class="help-text">
+                        If checked, you can add this course to multiple day/period slots without it being hidden from the Available list.
+                    </p>
+                </div>
+
                 <!-- Teacher Selection -->
                 <div class="selection-section">
                     <label class="section-label">Teachers:</label>
@@ -30,9 +47,7 @@
                             @click="toggleTeacher(teacher.id)"
                         >
                             <div class="teacher-info">
-                                <span class="teacher-name">{{
-                                    teacher.name || `${teacher.first_name} ${teacher.last_name}`
-                                }}</span>
+                                <span class="teacher-name">{{ teacher.name || `${teacher.first_name} ${teacher.last_name}` }}</span>
                                 <span v-if="teacher.email" class="teacher-email">{{ teacher.email }}</span>
                             </div>
                             <div class="teacher-controls">
@@ -99,6 +114,9 @@ export default {
     },
     emits: ['submit', 'cancel'],
     setup(props, { emit }) {
+        // Scheduling option
+        const isRecurring = ref(false); // unchecked by default → one-off
+
         // Search terms
         const teacherSearchTerm = ref('');
         const roomSearchTerm = ref('');
@@ -111,66 +129,51 @@ export default {
         // Filtered lists
         const filteredTeachers = computed(() => {
             if (!teacherSearchTerm.value) return props.teachers;
-
-            const searchLower = teacherSearchTerm.value.toLowerCase();
-            return props.teachers.filter(teacher => {
-                const name = teacher.name || `${teacher.first_name} ${teacher.last_name}`;
-                const email = teacher.email || '';
-                return name.toLowerCase().includes(searchLower) || email.toLowerCase().includes(searchLower);
+            const q = teacherSearchTerm.value.toLowerCase();
+            return props.teachers.filter(t => {
+                const name = (t.name || `${t.first_name ?? ''} ${t.last_name ?? ''}`).trim();
+                const email = t.email || '';
+                return name.toLowerCase().includes(q) || email.toLowerCase().includes(q);
             });
         });
 
         const filteredRooms = computed(() => {
             if (!roomSearchTerm.value) return props.rooms;
-
-            const searchLower = roomSearchTerm.value.toLowerCase();
-            return props.rooms.filter(room => {
-                const name = room.name || room.room_name || '';
-                return name.toLowerCase().includes(searchLower);
-            });
+            const q = roomSearchTerm.value.toLowerCase();
+            return props.rooms.filter(r => (r.name || r.room_name || '').toLowerCase().includes(q));
         });
 
-        // Validation
-        const isValid = computed(() => {
-            // At least one teacher must be selected
-            return selectedTeachers.value.length > 0;
-        });
+        // Validation: at least one teacher required
+        const isValid = computed(() => selectedTeachers.value.length > 0);
 
-        // Watch for primary teacher changes
-        watch(selectedTeachers, newTeachers => {
-            // If primary teacher is no longer selected, clear it
-            if (primaryTeacherId.value && !newTeachers.includes(primaryTeacherId.value)) {
+        // Keep primary in sync
+        watch(selectedTeachers, (newList) => {
+            if (primaryTeacherId.value && !newList.includes(primaryTeacherId.value)) {
                 primaryTeacherId.value = null;
             }
-
-            // If only one teacher selected, make them primary
-            if (newTeachers.length === 1) {
-                primaryTeacherId.value = newTeachers[0];
+            if (newList.length === 1) {
+                primaryTeacherId.value = newList[0];
             }
         });
 
-        function toggleTeacher(teacherId) {
-            const index = selectedTeachers.value.indexOf(teacherId);
-            if (index > -1) {
-                selectedTeachers.value.splice(index, 1);
-            } else {
-                selectedTeachers.value.push(teacherId);
+        function toggleTeacher(id) {
+            const idx = selectedTeachers.value.indexOf(id);
+            if (idx > -1) selectedTeachers.value.splice(idx, 1);
+            else selectedTeachers.value.push(id);
+        }
+
+        function setPrimaryTeacher(id) {
+            if (selectedTeachers.value.includes(id)) {
+                primaryTeacherId.value = id;
             }
         }
 
-        function setPrimaryTeacher(teacherId) {
-            if (selectedTeachers.value.includes(teacherId)) {
-                primaryTeacherId.value = teacherId;
-            }
-        }
-
-        function selectRoom(roomId) {
-            selectedRoomId.value = selectedRoomId.value === roomId ? null : roomId;
+        function selectRoom(id) {
+            selectedRoomId.value = selectedRoomId.value === id ? null : id;
         }
 
         function submitAssignment() {
             if (!isValid.value) return;
-
             const payload = {
                 courseId: props.courseId,
                 courseName: props.courseName,
@@ -178,13 +181,15 @@ export default {
                 primaryTeacherId: primaryTeacherId.value,
                 roomId: selectedRoomId.value,
                 periodId: props.periodId,
-                draftId: null, // Parent will provide draftId when processing event
                 dayId: props.dayId,
-                schoolId: null, // Parent will provide schoolId when processing event
+                // New: frequency field
+                frequency: isRecurring.value ? 'recurring' : 'one-off',
+                // Compatibility fields (parent can fill if desired)
+                draftId: null,
+                schoolId: null,
                 source: 'modal-assignment',
                 timestamp: new Date().toISOString(),
             };
-
             emit('submit', payload);
         }
 
@@ -193,14 +198,19 @@ export default {
         }
 
         return {
+            // scheduling
+            isRecurring,
+            // search and state
             teacherSearchTerm,
             roomSearchTerm,
             selectedTeachers,
             primaryTeacherId,
             selectedRoomId,
+            // computed
             filteredTeachers,
             filteredRooms,
             isValid,
+            // actions
             toggleTeacher,
             setPrimaryTeacher,
             selectRoom,
@@ -214,231 +224,78 @@ export default {
 <style scoped>
 .modal-overlay {
     position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
+    top: 0; left: 0; right: 0; bottom: 0;
     background: rgba(0, 0, 0, 0.5);
-    display: flex;
-    justify-content: center;
-    align-items: center;
+    display: flex; justify-content: center; align-items: center;
     z-index: 1000;
 }
-
 .modal-content {
-    background: white;
-    border-radius: 8px;
+    background: white; border-radius: 8px;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
-    width: 90vw;
-    max-width: 600px;
-    max-height: 80vh;
-    display: flex;
-    flex-direction: column;
+    width: 90vw; max-width: 600px; max-height: 80vh;
+    display: flex; flex-direction: column;
 }
-
 .modal-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 16px 20px;
-    border-bottom: 1px solid #e0e0e0;
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 16px 20px; border-bottom: 1px solid #e0e0e0;
 }
-
-.modal-header h3 {
-    margin: 0;
-    color: #333;
-    font-size: 18px;
-}
-
+.modal-header h3 { margin: 0; color: #333; font-size: 18px; }
 .close-btn {
-    background: none;
-    border: none;
-    font-size: 24px;
-    cursor: pointer;
-    color: #666;
-    padding: 0;
-    width: 30px;
-    height: 30px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    background: none; border: none; font-size: 24px; cursor: pointer; color: #666;
+    padding: 0; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;
 }
+.close-btn:hover { color: #333; }
+.modal-body { padding: 20px; overflow-y: auto; flex: 1; }
+.selection-section { margin-bottom: 24px; }
+.scheduling-options { margin-top: -8px; }
+.section-label { display: block; font-weight: bold; margin-bottom: 8px; color: #333; }
+.checkbox-row { display: inline-flex; align-items: center; gap: 8px; user-select: none; }
+.checkbox-input { width: 16px; height: 16px; }
+.help-text { margin: 6px 0 0; font-size: 12px; color: #666; }
 
-.close-btn:hover {
-    color: #333;
-}
-
-.modal-body {
-    padding: 20px;
-    overflow-y: auto;
-    flex: 1;
-}
-
-.selection-section {
-    margin-bottom: 24px;
-}
-
-.section-label {
-    display: block;
-    font-weight: bold;
-    margin-bottom: 8px;
-    color: #333;
-}
-
-.search-box {
-    margin-bottom: 12px;
-}
-
+.search-box { margin-bottom: 12px; }
 .search-input {
-    width: 100%;
-    padding: 8px 12px;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    font-size: 14px;
+    width: 100%; padding: 8px 12px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;
 }
+.search-input:focus { outline: none; border-color: #007cba; box-shadow: 0 0 0 2px rgba(0, 124, 186, 0.2); }
 
-.search-input:focus {
-    outline: none;
-    border-color: #007cba;
-    box-shadow: 0 0 0 2px rgba(0, 124, 186, 0.2);
+.teacher-list, .room-list {
+    max-height: 200px; overflow-y: auto; border: 1px solid #e0e0e0; border-radius: 4px;
 }
+.teacher-item, .room-item {
+    padding: 12px; border-bottom: 1px solid #f0f0f0; cursor: pointer;
+    display: flex; justify-content: space-between; align-items: center; transition: background-color 0.2s;
+}
+.teacher-item:last-child, .room-item:last-child { border-bottom: none; }
+.teacher-item:hover, .room-item:hover { background-color: #f8f9fa; }
+.teacher-item.selected, .room-item.selected { background-color: #e3f2fd; border-left: 3px solid #007cba; }
+.teacher-item.primary { background-color: #fff3e0; border-left: 3px solid #ff9800; }
 
-.teacher-list,
-.room-list {
-    max-height: 200px;
-    overflow-y: auto;
-    border: 1px solid #e0e0e0;
-    border-radius: 4px;
-}
-
-.teacher-item,
-.room-item {
-    padding: 12px;
-    border-bottom: 1px solid #f0f0f0;
-    cursor: pointer;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    transition: background-color 0.2s;
-}
-
-.teacher-item:last-child,
-.room-item:last-child {
-    border-bottom: none;
-}
-
-.teacher-item:hover,
-.room-item:hover {
-    background-color: #f8f9fa;
-}
-
-.teacher-item.selected,
-.room-item.selected {
-    background-color: #e3f2fd;
-    border-left: 3px solid #007cba;
-}
-
-.teacher-item.primary {
-    background-color: #fff3e0;
-    border-left: 3px solid #ff9800;
-}
-
-.teacher-info {
-    display: flex;
-    flex-direction: column;
-    flex: 1;
-}
-
-.teacher-name {
-    font-weight: 500;
-    color: #333;
-}
-
-.teacher-email {
-    font-size: 12px;
-    color: #666;
-    margin-top: 2px;
-}
-
-.teacher-controls {
-    display: flex;
-    align-items: center;
-}
+.teacher-info { display: flex; flex-direction: column; flex: 1; }
+.teacher-name { font-weight: 500; color: #333; }
+.teacher-email { font-size: 12px; color: #666; margin-top: 2px; }
+.teacher-controls { display: flex; align-items: center; }
 
 .primary-btn {
-    background: none;
-    border: 1px solid #ddd;
-    border-radius: 3px;
-    padding: 4px 8px;
-    cursor: pointer;
-    font-size: 14px;
-    color: #666;
-    transition: all 0.2s;
+    background: none; border: 1px solid #ddd; border-radius: 3px; padding: 4px 8px; cursor: pointer;
+    font-size: 14px; color: #666; transition: all 0.2s;
 }
+.primary-btn:hover { background-color: #f0f0f0; }
+.primary-btn.active { background-color: #ff9800; border-color: #ff9800; color: white; }
 
-.primary-btn:hover {
-    background-color: #f0f0f0;
-}
-
-.primary-btn.active {
-    background-color: #ff9800;
-    border-color: #ff9800;
-    color: white;
-}
-
-.room-name {
-    font-weight: 500;
-    color: #333;
-}
-
-.room-capacity {
-    font-size: 12px;
-    color: #666;
-}
+.room-name { font-weight: 500; color: #333; }
+.room-capacity { font-size: 12px; color: #666; }
 
 .modal-footer {
-    display: flex;
-    justify-content: flex-end;
-    gap: 12px;
-    padding: 16px 20px;
-    border-top: 1px solid #e0e0e0;
+    display: flex; justify-content: flex-end; gap: 12px;
+    padding: 16px 20px; border-top: 1px solid #e0e0e0;
 }
-
-.cancel-btn,
-.submit-btn {
-    padding: 8px 16px;
-    border-radius: 4px;
-    font-size: 14px;
-    cursor: pointer;
-    border: 1px solid;
-    transition: all 0.2s;
+.cancel-btn, .submit-btn {
+    padding: 8px 16px; border-radius: 4px; font-size: 14px; cursor: pointer; border: 1px solid; transition: all 0.2s;
 }
-
-.cancel-btn {
-    background: white;
-    border-color: #ddd;
-    color: #666;
-}
-
-.cancel-btn:hover {
-    background-color: #f8f9fa;
-}
-
-.submit-btn {
-    background: #007cba;
-    border-color: #007cba;
-    color: white;
-}
-
-.submit-btn:hover:not(:disabled) {
-    background: #005a84;
-    border-color: #005a84;
-}
-
-.submit-btn:disabled {
-    background: #ccc;
-    border-color: #ccc;
-    cursor: not-allowed;
-    opacity: 0.6;
-}
+.cancel-btn { background: white; border-color: #ddd; color: #666; }
+.cancel-btn:hover { background-color: #f8f9fa; }
+.submit-btn { background: #007cba; border-color: #007cba; color: white; }
+.submit-btn:hover:not(:disabled) { background: #005a84; border-color: #005a84; }
+.submit-btn:disabled { background: #ccc; border-color: #ccc; cursor: not-allowed; opacity: 0.6; }
 </style>
