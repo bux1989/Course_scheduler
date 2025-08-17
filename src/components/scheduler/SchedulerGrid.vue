@@ -842,15 +842,251 @@ export default {
 </script>
 
 <style scoped>
-/* Minimal styling kept; your existing CSS can remain as before */
-
-/* Context Menu */
-.context-menu {
-  position: fixed; background: white; border: 1px solid #ccc; border-radius: 6px;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.12); z-index: 2000; min-width: 160px; padding: 4px 0;
+/* Root */
+.scheduler-grid {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #fff;
 }
-.context-menu-item { padding: 8px 12px; cursor: pointer; font-size: 13px; display: flex; align-items: center; gap: 8px; transition: background-color 0.15s; }
-.context-menu-item:hover { background-color: #f5f5f5; }
-.context-menu-item.delete:hover { background-color: #ffe6e6; color: #d32f2f; }
-.context-menu-backdrop { position: fixed; inset: 0; z-index: 1999; }
+
+/* Header row (force horizontal layout) */
+.grid-header {
+  display: flex !important;
+  align-items: stretch;
+  background: #f5f5f5;
+  border-bottom: 1px solid #ddd;
+  font-weight: 600;
+}
+
+/* Period header (left column) */
+.period-header-cell {
+  width: 140px;
+  min-width: 140px;
+  max-width: 140px;
+  padding: 10px 8px;
+  border-right: 1px solid #ddd;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+}
+
+/* Day headers (columns) */
+.day-header-cell {
+  flex: 1 1 0;
+  min-width: 160px; /* helps prevent columns collapsing on narrow screens */
+  padding: 10px 8px;
+  border-right: 1px solid #ddd;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  box-sizing: border-box;
+}
+.day-header-cell:last-child { border-right: 0; }
+.day-name { font-size: 0.95em; }
+.day-date { font-size: 0.8em; color: #666; font-weight: normal; }
+
+/* Body container */
+.grid-body {
+  display: block;
+}
+
+/* Each period row (force horizontal layout) */
+.grid-row {
+  display: flex !important;
+  align-items: stretch;
+  border-bottom: 1px solid #ddd;
+  min-height: 72px;
+}
+.grid-row:last-child { border-bottom: 0; }
+.grid-row.non-instructional { background: #f8f9fa; }
+
+/* Period label cell (left column in body) */
+.period-label-cell {
+  width: 140px;
+  min-width: 140px;
+  max-width: 140px;
+  padding: 8px;
+  border-right: 1px solid #ddd;
+  background: #f9f9f9;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  box-sizing: border-box;
+}
+.period-label-cell:hover { background: #f0f7ff !important; }
+.period-label-cell.focused { background: #e6f7ff !important; border-left: 4px solid #007cba; }
+.period-info { display: flex; flex-direction: column; gap: 2px; }
+.period-name { font-weight: 600; font-size: 0.9em; }
+.period-time { font-size: 0.78em; color: #666; }
+.non-instructional-badge { font-size: 0.72em; color: #888; background: #e9ecef; padding: 1px 4px; border-radius: 3px; align-self: flex-start; }
+
+/* Schedule cells (day columns) */
+.schedule-cell {
+  flex: 1 1 0;
+  min-width: 160px;
+  border-right: 1px solid #ddd;
+  position: relative;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  min-height: 72px;
+  box-sizing: border-box;
+}
+.schedule-cell:last-child { border-right: 0; }
+.schedule-cell:hover { background: #f0f7ff; }
+.schedule-cell.has-assignments { background: #eaf7ff; }
+.schedule-cell.multiple-assignments { background: #def3ff; }
+.schedule-cell.has-conflicts { background: #fff2f0; border-left: 3px solid #ff4d4f; }
+
+/* Assignment items */
+.assignments-container {
+  padding: 4px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  position: relative;
+  box-sizing: border-box;
+}
+.assignment-item {
+  padding: 4px 6px;
+  border-radius: 4px;
+  border: 1px solid #e0e0e0;
+  position: relative;
+  transition: all 0.2s;
+  background: #fff;
+}
+.assignment-item:hover { transform: translateX(1px); box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+.assignment-item.has-conflict { border-color: #ff4d4f; background: #fff2f0; }
+.assignment-item.has-deleted-entities { border-color: #faad14; background: #fff7e6; }
+.assignment-item.lesson-schedule { opacity: 0.75; border-style: dashed; background: #f5f5f5 !important; font-style: italic; font-size: 0.8em; }
+.assignment-content { display: flex; flex-direction: column; gap: 2px; }
+.course-name { font-weight: 600; font-size: 0.9em; line-height: 1.2; }
+.meta-line { font-size: 0.78em; color: #666; line-height: 1.2; display: inline-flex; gap: 4px; align-items: baseline; }
+.conflict-indicator, .deleted-warning { position: absolute; top: 4px; right: 4px; font-size: 0.8em; line-height: 1; }
+
+/* Empty cell */
+.empty-cell {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #999;
+  font-size: 0.85em;
+  gap: 4px;
+}
+
+/* Drag targets */
+.drop-zone { position: relative; transition: all 0.2s ease; }
+.drop-zone.drag-over { background: rgba(0,123,186,0.08) !important; border: 2px dashed #007cba !important; transform: scale(1.01); }
+.drop-zone.drag-over::after {
+  content: '📋 Drop here'; position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
+  background: rgba(0,123,186,0.9); color: white; padding: 3px 6px; border-radius: 4px; font-size: 12px; font-weight: 600; pointer-events: none; z-index: 10;
+}
+
+/* Grade Statistics */
+.statistics-row { display: flex !important; border-bottom: 2px solid #007cba; background: #f0f8ff; border-top: 2px solid #007cba; }
+.stats-label-cell {
+  width: 140px; min-width: 140px; max-width: 140px;
+  background: #007cba !important; color: white;
+  display: flex; align-items: center; justify-content: center;
+  border-right: 1px solid #ddd;
+  box-sizing: border-box;
+}
+.stats-title { display: flex; align-items: center; gap: 6px; font-size: 0.95em; font-weight: 600; }
+.stats-emoji { font-size: 1.15em; }
+
+.day-statistics-cell {
+  --grade-col: 28px;
+  flex: 1 1 0;
+  min-width: 160px;
+  border-right: 1px solid #ddd;
+  padding: 6px;
+  background: white;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 96px;
+  box-sizing: border-box;
+}
+.day-statistics-cell:last-child { border-right: 0; }
+
+.stats-headers {
+  display: grid;
+  grid-template-columns: var(--grade-col) 1fr 1fr 1fr;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 4px;
+  padding: 3px 4px;
+  background: rgba(0,124,186,0.1);
+  border-radius: 4px;
+}
+.header-spacer { width: 100%; height: 1px; opacity: 0; }
+.stat-header { display: flex; align-items: center; justify-content: center; font-size: 0.95em; line-height: 1; padding: 2px 4px; border-radius: 3px; }
+.stat-header:hover { background: rgba(0,124,186,0.2); }
+
+.stats-rows { display: flex; flex-direction: column; gap: 3px; flex-grow: 1; }
+.grade-stats-row {
+  display: grid;
+  grid-template-columns: var(--grade-col) 1fr 1fr 1fr;
+  align-items: center;
+  gap: 6px;
+  background: #f8f9fa;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  padding: 3px 4px;
+  font-size: 0.88em;
+}
+.grade-number { font-weight: 700; color: #333; min-width: var(--grade-col); font-size: 0.95em; }
+.stat-value { text-align: center; padding: 2px 4px; background: white; border-radius: 3px; font-size: 0.88em; color: #333; }
+
+/* Available Courses Panel */
+.available-courses-panel { padding: 12px; background: #f0f8ff; border-top: 1px solid #007cba; border-bottom: 1px solid #ddd; }
+.available-courses-panel h3 { margin: 0 0 6px 0; color: #007cba; font-size: 1.05em; }
+.focused-period-info { margin: 0 0 10px 0; color: #666; font-size: 0.9em; }
+.day-courses-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.day-courses-column h4 { margin: 0 0 10px 0; padding: 6px 10px; background: #007cba; color: white; border-radius: 4px; text-align: center; font-size: 0.88em; }
+.available-courses-list { display: flex; flex-direction: column; gap: 8px; max-height: 320px; overflow-y: auto; }
+.course-card { padding: 8px 10px; background: white; border: 1px solid #ddd; border-radius: 4px; cursor: grab; transition: all 0.2s; font-size: 0.9em; }
+.course-card:hover { transform: translateY(-1px); box-shadow: 0 2px 4px rgba(0,124,186,0.15); border-color: #007cba; }
+.course-card:active { cursor: grabbing; }
+.course-card.is-dragging { opacity: 0.6; }
+.course-card .course-name { font-weight: 600; color: #333; margin-bottom: 2px; display: block; }
+.course-card .course-details { display: flex; flex-direction: column; gap: 2px; }
+.course-card .course-details small { color: #666; font-size: 0.8em; }
+.no-courses { padding: 12px; text-align: center; color: #999; font-style: italic; background: #f9f9f9; border: 1px dashed #ddd; border-radius: 4px; }
+
+/* No Preferred Days Panel */
+.no-preferred-days-panel { padding: 12px; background: #f0f8e6; border: 1px solid #52c41a; border-radius: 4px; margin-top: 12px; }
+.no-preferred-days-panel h4 { margin: 0 0 8px 0; color: #52c41a; font-size: 1em; display: flex; align-items: center; gap: 8px; }
+.panel-description { margin: 0 0 10px 0; color: #666; font-size: 0.9em; font-style: italic; }
+.no-preferred-courses-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; }
+.flexible-tag { color: #52c41a !important; font-weight: 600; }
+
+/* Read-only */
+.scheduler-grid[data-readonly='true'] .schedule-cell { cursor: default; }
+.scheduler-grid[data-readonly='true'] .schedule-cell:hover { background: inherit; }
+.scheduler-grid[data-readonly='true'] .draggable-assignment,
+.scheduler-grid[data-readonly='true'] .draggable-course { cursor: default; pointer-events: none; }
+.scheduler-grid[data-readonly='true'] .empty-cell { color: #999; }
+.scheduler-grid[data-readonly='true'] .empty-text { font-style: italic; color: #999; font-size: 0.8em; }
+
+/* Fallback hidden message */
+.grid-hidden-debug { padding: 16px; background: #fffbeb; border: 1px solid #fde68a; border-radius: 6px; margin: 16px; text-align: center; color: #92400e; }
+
+/* Responsive */
+@media (max-width: 1024px) {
+  .day-header-cell, .schedule-cell, .day-statistics-cell { min-width: 200px; }
+}
+@media (max-width: 768px) {
+  .period-header-cell, .period-label-cell, .stats-label-cell { width: 120px; min-width: 120px; max-width: 120px; }
+  .day-header-cell, .schedule-cell, .day-statistics-cell { min-width: 180px; }
+}
 </style>
