@@ -209,14 +209,11 @@ export default {
             conflicts: [],
         });
 
-        // Computed properties for data access using safe arrays
-
         // Safe array computed properties with enhanced WeWeb collection support
         const periods = computed(() => {
             const rawPeriodsData = props.content.periods;
             const normalizedPeriods = normalizePeriods(rawPeriodsData);
 
-            // No logging for empty data - this is normal during initial load
             if (!nonEmpty(normalizedPeriods)) {
                 return [];
             }
@@ -228,64 +225,47 @@ export default {
             const rawCourses = props.content.courses;
             const coursesArray = toArray(rawCourses);
 
-            // No logging for empty data - this is normal during initial load
-
-            // CRITICAL FIX: Apply normalizeCourse to handle possible_time_slots dayId parsing
             return coursesArray.map((course, idx) => normalizeCourse(course, idx));
         });
 
         const teachers = computed(() => {
             const rawTeachers = props.content.teachers;
             const teachersArray = toArray(rawTeachers);
-
-            // No logging for empty data - this is normal during initial load
-
             return teachersArray;
         });
 
         const classes = computed(() => {
             const rawClasses = props.content.classes;
             const classesArray = toArray(rawClasses);
-
-            // No logging for empty data - this is normal during initial load
-
             return classesArray;
         });
 
         const rooms = computed(() => {
             const rawRooms = props.content.rooms;
             const roomsArray = toArray(rawRooms);
-
-            // No logging for empty data - this is normal during initial load
-
             return roomsArray;
         });
 
         const schoolDays = computed(() => {
             const rawDaysData = props.content.schoolDays;
-            const validatedDays = toArray(rawDaysData); // Enhanced toArray handles all cases
+            const validatedDays = toArray(rawDaysData);
 
-            // No logging for empty data - this is normal during initial load
             if (!nonEmpty(validatedDays)) {
                 return [];
             }
 
-            // Create fallback day names if missing
             const defaultDayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
             const processedDays = validatedDays.map((day, index) => {
-                // Use the correct field names from the actual data structure
                 const dayName = day.name || day.name_en || day.day_name || defaultDayNames[index] || `Day ${index + 1}`;
 
                 return {
                     ...day,
-                    // Use day_id as the main identifier if available, otherwise use id
                     id: day.day_id || day.id,
                     name: dayName,
                     date: day.date || day.day_date || null,
                     is_active: day.is_active !== undefined ? day.is_active : true,
                     day_number: day.day_number || index + 1,
-                    // Keep both for compatibility
                     day_id: day.day_id || day.id,
                 };
             });
@@ -295,28 +275,19 @@ export default {
 
         const draftSchedules = computed(() => {
             const rawDrafts = props.content.draftSchedules;
-            const finalDraftArray = toArray(rawDrafts); // Enhanced toArray handles all WeWeb formats
-
-            // No logging for empty data - this is normal during initial load
-
+            const finalDraftArray = toArray(rawDrafts);
             return finalDraftArray;
         });
 
         const liveSchedules = computed(() => {
             const rawLive = props.content.liveSchedules;
-            const finalLiveArray = toArray(rawLive); // Enhanced toArray handles all WeWeb formats
-
-            // No logging for empty data - this is normal during initial load
-
+            const finalLiveArray = toArray(rawLive);
             return finalLiveArray;
         });
 
         const subjects = computed(() => {
             const rawSubjects = props.content.subjects;
             const subjectsArray = toArray(rawSubjects);
-
-            // No logging for empty data - this is normal during initial load
-
             return subjectsArray;
         });
 
@@ -337,7 +308,7 @@ export default {
                 return courses.value;
             }
 
-            // CRITICAL FIX: Use dayId (backend ID) directly instead of dayNumber (UI order)
+            // Use backend IDs
             const currentDayId = selectedCell.value.dayId;
             const currentPeriodId = selectedCell.value.periodId;
 
@@ -346,7 +317,7 @@ export default {
                 // If no restrictions, course is available
                 if (safeLength(course.possibleSlots) === 0) return true;
 
-                // Check if current slot is in possible slots using dayId + periodId
+                // Check if current slot matches
                 const isAvailable = course.possibleSlots.some(slot => {
                     return slot.dayId === currentDayId && slot.periodId === currentPeriodId;
                 });
@@ -387,12 +358,10 @@ export default {
         function handleCellClick({ dayId, periodId, period, mode, preSelectedCourse }) {
             if (isReadOnly.value) return;
 
-            // Get existing assignments for this cell
             const assignments = draftSchedules.value.filter(
                 assignment => assignment.day_id === dayId && assignment.period_id === periodId
             );
 
-            // Get conflicts for this cell
             const conflicts = allConflicts.value.filter(
                 conflict => conflict.day_id === dayId && conflict.period_id === periodId
             );
@@ -403,7 +372,7 @@ export default {
                 period,
                 assignments,
                 conflicts,
-                preSelectedCourse, // Pass the pre-selected course
+                preSelectedCourse,
             };
 
             showAssignmentModal.value = true;
@@ -430,8 +399,7 @@ export default {
         }
 
         function editAssignment(assignment) {
-            // For editing, we'll close the modal and emit an event
-            // This could open a separate edit form
+            // Close the modal and emit an event
             closeAssignmentModal();
             emit('edit-assignment-requested', assignment);
         }
@@ -507,7 +475,6 @@ export default {
                 // Simulate save delay
                 await new Promise(resolve => setTimeout(resolve, 1000));
 
-                // Simple success log
                 console.log('💾 [wwElement] Draft saved successfully');
             } catch (error) {
                 console.error('❌ [wwElement] Error saving draft:', error);
@@ -517,7 +484,6 @@ export default {
         }
 
         function handleAssignmentDetails(assignment) {
-            // Open assignment details or edit mode
             emit('trigger-event', {
                 name: 'scheduler:assignment-details',
                 event: {
@@ -535,7 +501,6 @@ export default {
         }
 
         function handleCourseEdit(courseData) {
-            // Emit course edit event for external navigation
             emit('trigger-event', {
                 name: 'scheduler:course-edit',
                 event: {
@@ -549,7 +514,6 @@ export default {
         }
 
         function handleToggleNonInstructional(show) {
-            // UI controls removed - handler kept for compatibility
             emit('trigger-event', {
                 name: 'toggleNonInstructional',
                 event: { showNonInstructional: show },
@@ -557,7 +521,6 @@ export default {
         }
 
         function handleToggleLessonSchedules(show) {
-            // UI controls removed - handler kept for compatibility
             emit('trigger-event', {
                 name: 'toggleLessonSchedules',
                 event: { showLessonSchedules: show },
@@ -588,7 +551,6 @@ export default {
 
         // WeWeb Element Event Handlers
         function handleSchedulerDrop(eventData) {
-            // Ensure eventData has all required fields with proper defaults
             const safeEventData = {
                 dayId: eventData?.dayId || 0,
                 periodId: eventData?.periodId || '',
@@ -600,7 +562,6 @@ export default {
                 roomId: eventData?.roomId || null,
                 source: eventData?.source || 'drag-drop',
                 timestamp: eventData?.timestamp || new Date().toISOString(),
-                // Include assignment move fields when present
                 ...(eventData?.fromDayId !== undefined && { fromDayId: eventData.fromDayId }),
                 ...(eventData?.fromPeriodId !== undefined && { fromPeriodId: eventData.fromPeriodId }),
                 ...(eventData?.action !== undefined && { action: eventData.action }),
@@ -618,7 +579,6 @@ export default {
         }
 
         function handleSchedulerDragStart(eventData) {
-            // Ensure eventData has all required fields with proper defaults
             const safeEventData = {
                 courseId: eventData?.courseId || '',
                 courseName: eventData?.courseName || '',
@@ -639,7 +599,6 @@ export default {
         }
 
         function handleSchedulerDragEnd(eventData) {
-            // Ensure eventData has all required fields with proper defaults
             const safeEventData = {
                 courseId: eventData?.courseId || '',
                 courseName: eventData?.courseName || '',
