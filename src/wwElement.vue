@@ -1,5 +1,44 @@
 <template>
     <div class="course-scheduler-wrapper">
+        <!-- Header with Planning Mode Controls -->
+        <div class="scheduler-header">
+            <h2>Course Scheduler</h2>
+            <div class="scheduler-controls">
+                <div class="mode-indicator" :class="{ 'read-only': isReadOnly }">
+                    {{ isReadOnly ? 'Published Schedule (Read-Only) - Event Testing Available' : 'Planning Mode' }}
+                </div>
+                <div class="header-actions">
+                    <!-- Always show test button for WeWeb event testing -->
+                    <button
+                        @click="testEventEmission"
+                        class="test-btn"
+                        style="
+                            background: #007bff;
+                            color: white;
+                            border: none;
+                            padding: 8px 12px;
+                            border-radius: 4px;
+                            margin-right: 8px;
+                        "
+                        title="Test WeWeb events (always available)"
+                    >
+                        🧪 Test Event
+                    </button>
+                    <!-- Only show editing controls when not read-only -->
+                    <div v-if="!isReadOnly" class="editing-controls">
+                        <button @click="undo" :disabled="!canUndo" class="undo-btn">↶ Undo</button>
+                        <button
+                            @click="showConflicts = !showConflicts"
+                            class="conflicts-btn"
+                            :class="{ active: showConflicts }"
+                        >
+                            ⚠️ Conflicts ({{ safeLength(allConflicts) }})
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Main Scheduler Grid -->
         <div class="scheduler-content">
             <SchedulerGrid
@@ -16,7 +55,6 @@
                 :can-undo="canUndo"
                 :is-saving="isSaving"
                 :is-read-only="isReadOnly"
-                :is-live-mode="isLive"
                 :show-statistics="true"
                 :parent-emit="$emit"
                 :emit-drop-events="true"
@@ -33,7 +71,6 @@
                 @undo-last="undo"
                 @save-draft="saveDraft"
                 @update-assignments="updateAssignments"
-                @mode-changed="handleModeChanged"
             />
         </div>
 
@@ -101,21 +138,23 @@
 </template>
 
 <script>
-import { ref, computed, watch, onMounted, getCurrentInstance, reactive } from 'vue';
+import { ref, computed, watch, onMounted } from 'vue';
 import SchedulerGrid from './components/scheduler/SchedulerGrid.vue';
 import AssignmentModal from './components/scheduler/AssignmentModal.vue';
 import ConflictPanel from './components/scheduler/ConflictPanel.vue';
+
+// NOTE: We avoid importing a conflicting safeLength. We define a local one below.
 import {
-    validateAndUnwrapArray,
-    safeLength,
-    safeArray,
+    // validateAndUnwrapArray, // not used currently
+    // safeLength,            // DO NOT import; we define local to avoid "not a function"
+    // safeArray,             // not used currently
     toArray,
-    len,
+    // len,                   // not used currently
     nonEmpty,
     normalizePeriods,
     normalizeCourse,
-    normalizePossibleSlots,
 } from './utils/arrayUtils.js';
+
 import { emitSchedulerRemoveEvent } from './utils/events.js';
 import { detectConflicts } from './utils/conflictDetection.js';
 import { useSchedulerStore } from './state/schedulerState';
@@ -142,53 +181,61 @@ export default {
                 liveSchedules: [],
                 subjects: [],
                 emitDropEvents: false,
-                mode: 'planner',
             }),
         },
+        // Accept draft schedules directly via prop(s)
+        draftSchedules: { type: [Array, Object], default: () => [] },
+        draftSchedule: { type: [Array, Object], default: () => [] },
+
         wwElementState: { type: Object, required: true },
         /* wwEditor:start */
         wwEditorState: { type: Object, required: true },
         /* wwEditor:end */
     },
     setup(props, { emit }) {
-        // Initialize scheduler store - now using simple Vue reactivity
-        const store = useSchedulerStore();
+        // Local helpers (avoid external mismatch)
+        const safeLength = v => (Array.isArray(v) ? v.length : 0);
 
-        // Hydration guard to prevent reactive feedback loops
-        let hydrating = true;
-        const internalState = reactive({
-            initializedDraft: null,
-            hasHydrated: false,
-        });
-
-        // Helper function to check deep equality for draft schedules
-        function deepEqual(a, b) {
-            if (a === b) return true;
-            if (!a || !b) return false;
-            if (a.length !== b.length) return false;
-            return JSON.stringify(a) === JSON.stringify(b);
-        }
-
-        // One-way hydration function - only reads from props, never writes back
-        function hydrateFromDraft(draftData) {
+        // Optional debug logger to prevent ReferenceError
+        function logCurrentData() {
             try {
-                const normalizedDraft = toArray(draftData);
-                // Clone data to internal state - never mutate props
-                internalState.initializedDraft = normalizedDraft.map(item => ({ ...item }));
-                internalState.hasHydrated = true;
-
-                // Initialize store with cloned data only
-                if (store.initialize) {
-                    store.initialize(null, null, null, {
-                        periods: toArray(props.content.periods).map(p => ({ ...p })),
-                        draftSchedules: [...internalState.initializedDraft],
-                    });
-                }
-            } catch (error) {
-                console.warn('🔄 [wwElement] Draft hydration warning:', error);
-                internalState.hasHydrated = true; // Prevent infinite retry
+                console.log('[wwElement] Debug data snapshot:', {
+                    counts: {
+                        periods: safeLength(periods.value),
+                        courses: safeLength(courses.value),
+                        teachers: safeLength(teachers.value),
+                        classes: safeLength(classes.value),
+                        rooms: safeLength(rooms.value),
+                        subjects: safeLength(subjects.value),
+                        schoolDays: safeLength(schoolDays.value),
+                        draftSchedules: safeLength(draftSchedules.value),
+                        liveSchedules: safeLength(liveSchedules.value),
+                        conflicts: safeLength(allConflicts.value),
+                    },
+                    sampleDraft: draftSchedules.value?.[0] || null,
+                });
+            } catch (e) {
+                console.warn('logCurrentData error:', e);
             }
         }
+
+        // Initialize scheduler store
+        const store = useSchedulerStore();
+
+        // Initialize store with component data (periods + initial drafts)
+        watch(
+            () => props.content,
+            newContent => {
+                if (newContent && store.initialize) {
+                    store.initialize(null, null, null, {
+                        periods: toArray(newContent.periods),
+                        // For initial store state; component uses computed draftSchedules below
+                        draftSchedules: toArray(newContent.draftSchedules),
+                    });
+                }
+            },
+            { immediate: true, deep: true }
+        );
 
         // Local state
         const showAssignmentModal = ref(false);
@@ -207,168 +254,135 @@ export default {
             period: null,
             assignments: [],
             conflicts: [],
+            preSelectedCourse: null,
         });
 
-        // Computed properties for data access using safe arrays
-
-        // Safe array computed properties with enhanced WeWeb collection support
+        // Safe array computed properties
         const periods = computed(() => {
             const rawPeriodsData = props.content.periods;
-            const normalizedPeriods = normalizePeriods(rawPeriodsData);
-
-            // No logging for empty data - this is normal during initial load
-            if (!nonEmpty(normalizedPeriods)) {
+            const normalized = normalizePeriods(rawPeriodsData);
+            if (!nonEmpty(normalized)) {
+                console.log('📋 [Periods] No periods data available');
                 return [];
             }
-
-            return normalizedPeriods;
+            return normalized;
         });
 
         const courses = computed(() => {
             const rawCourses = props.content.courses;
-            const coursesArray = toArray(rawCourses);
-
-            // No logging for empty data - this is normal during initial load
-
-            // CRITICAL FIX: Apply normalizeCourse to handle possible_time_slots dayId parsing
-            return coursesArray.map((course, idx) => normalizeCourse(course, idx));
+            const arr = toArray(rawCourses);
+            if (!nonEmpty(arr)) {
+                console.log('🎯 [wwElement] Courses processing: no data available');
+            }
+            return arr.map((course, idx) => normalizeCourse(course, idx));
         });
 
-        const teachers = computed(() => {
-            const rawTeachers = props.content.teachers;
-            const teachersArray = toArray(rawTeachers);
-
-            // No logging for empty data - this is normal during initial load
-
-            return teachersArray;
-        });
-
-        const classes = computed(() => {
-            const rawClasses = props.content.classes;
-            const classesArray = toArray(rawClasses);
-
-            // No logging for empty data - this is normal during initial load
-
-            return classesArray;
-        });
-
-        const rooms = computed(() => {
-            const rawRooms = props.content.rooms;
-            const roomsArray = toArray(rawRooms);
-
-            // No logging for empty data - this is normal during initial load
-
-            return roomsArray;
-        });
+        const teachers = computed(() => toArray(props.content.teachers || []));
+        const classes = computed(() => toArray(props.content.classes || []));
+        const rooms = computed(() => toArray(props.content.rooms || []));
 
         const schoolDays = computed(() => {
-            const rawDaysData = props.content.schoolDays;
-            const validatedDays = toArray(rawDaysData); // Enhanced toArray handles all cases
-
-            // No logging for empty data - this is normal during initial load
+            const validatedDays = toArray(props.content.schoolDays || []);
             if (!nonEmpty(validatedDays)) {
+                console.log('📅 [wwElement] SchoolDays processing: no data available');
                 return [];
             }
 
-            // Create fallback day names if missing
             const defaultDayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
-            const processedDays = validatedDays.map((day, index) => {
-                // Use the correct field names from the actual data structure
+            return validatedDays.map((day, index) => {
                 const dayName = day.name || day.name_en || day.day_name || defaultDayNames[index] || `Day ${index + 1}`;
-
                 return {
                     ...day,
-                    // Use day_id as the main identifier if available, otherwise use id
                     id: day.day_id || day.id,
                     name: dayName,
                     date: day.date || day.day_date || null,
                     is_active: day.is_active !== undefined ? day.is_active : true,
                     day_number: day.day_number || index + 1,
-                    // Keep both for compatibility
                     day_id: day.day_id || day.id,
                 };
             });
-
-            return processedDays;
         });
 
+        // Prefer draftSchedules/draftSchedule props; fallback to content.draftSchedules; normalize + dedupe
         const draftSchedules = computed(() => {
-            const rawDrafts = props.content.draftSchedules;
-            const finalDraftArray = toArray(rawDrafts); // Enhanced toArray handles all WeWeb formats
+            const propDraftsA = toArray(props.draftSchedules);
+            const propDraftsB = toArray(props.draftSchedule);
+            const fromProp = nonEmpty(propDraftsA) ? propDraftsA : propDraftsB;
+            const source = nonEmpty(fromProp) ? fromProp : toArray(props.content.draftSchedules);
 
-            // No logging for empty data - this is normal during initial load
+            const normalized = source
+                .filter(v => v && typeof v === 'object')
+                .map(n => {
+                    const fallbackId = `${n.class_id ?? ''}:${n.day_id ?? ''}:${n.period_id ?? ''}`;
+                    const id = String(n.id ?? fallbackId);
 
-            return finalDraftArray;
+                    return {
+                        ...n,
+                        id,
+                        isDraft: n.isDraft === false ? false : true,
+                        day_id: Number(n.day_id ?? 0),
+                        period_id: String(n.period_id ?? ''),
+                        room_id: n.room_id != null ? String(n.room_id) : n.room_id ?? null,
+                        class_id: n.class_id != null ? String(n.class_id) : n.class_id ?? null,
+                        subject_id: n.subject_id != null ? String(n.subject_id) : n.subject_id ?? null,
+                        staff_ids: Array.isArray(n.staff_ids)
+                            ? n.staff_ids.filter(s => typeof s === 'string' && s)
+                            : [],
+                        teacher_names: Array.isArray(n.teacher_names)
+                            ? n.teacher_names.filter(s => typeof s === 'string')
+                            : [],
+                        room_name: typeof n.room_name === 'string' ? n.room_name : '',
+                        class_name: typeof n.class_name === 'string' ? n.class_name : '',
+                        course_name: typeof n.course_name === 'string' ? n.course_name : '',
+                        subject_name: typeof n.subject_name === 'string' ? n.subject_name : '',
+                        day_name_de: typeof n.day_name_de === 'string' ? n.day_name_de : '',
+                        day_name_en: typeof n.day_name_en === 'string' ? n.day_name_en : '',
+                        display_cell: typeof n.display_cell === 'string' ? n.display_cell : '',
+                        scheduled_room_name: typeof n.scheduled_room_name === 'string' ? n.scheduled_room_name : '',
+                        subject_color: n.subject_color ?? null,
+                        subject_icon_id: n.subject_icon_id ?? null,
+                        class_grade_level:
+                            typeof n.class_grade_level === 'number'
+                                ? n.class_grade_level
+                                : n.class_grade_level ?? null,
+                        currentlyScheduled: n.currentlyScheduled === true,
+                    };
+                });
+
+            // Deduplicate by id (last one wins)
+            const byId = new Map();
+            for (const item of normalized) byId.set(item.id, item);
+            const out = Array.from(byId.values());
+
+            if (!nonEmpty(out)) {
+                console.log('📝 [wwElement] Draft Schedules processing: no data available');
+            }
+
+            return out;
         });
 
-        const liveSchedules = computed(() => {
-            const rawLive = props.content.liveSchedules;
-            const finalLiveArray = toArray(rawLive); // Enhanced toArray handles all WeWeb formats
-
-            // No logging for empty data - this is normal during initial load
-
-            return finalLiveArray;
-        });
-
-        const subjects = computed(() => {
-            const rawSubjects = props.content.subjects;
-            const subjectsArray = toArray(rawSubjects);
-
-            // No logging for empty data - this is normal during initial load
-
-            return subjectsArray;
-        });
+        const liveSchedules = computed(() => toArray(props.content.liveSchedules || []));
+        const subjects = computed(() => toArray(props.content.subjects || []));
 
         // Computed state
-        const currentMode = computed(() => props.content.mode || 'planner');
-        const isLive = computed(() => currentMode.value === 'live');
-        const isReadOnly = computed(() => isLive.value); // Live mode is read-only
+        const isReadOnly = computed(() => false); // always editable here
         const canUndo = computed(() => safeLength(undoStack.value) > 0);
 
         // Conflict detection
-        const allConflicts = computed(() => {
-            return detectConflicts(draftSchedules.value);
-        });
+        const allConflicts = computed(() => detectConflicts(draftSchedules.value));
 
         // Available courses for selected slot
         const availableCoursesForSlot = computed(() => {
             if (!selectedCell.value.dayId || !selectedCell.value.periodId) {
                 return courses.value;
             }
-
-            // CRITICAL FIX: Use dayId (backend ID) directly instead of dayNumber (UI order)
             const currentDayId = selectedCell.value.dayId;
             const currentPeriodId = selectedCell.value.periodId;
 
-            // Only log if we have debug context and this is an actual filtering operation
-            if (currentDayId && currentPeriodId && filteredCourses.length !== courses.value.length) {
-                console.log('🎯 [wwElement] availableCoursesForSlot filtering:', {
-                    currentDayId,
-                    currentPeriodId,
-                    totalCourses: safeLength(courses.value),
-                    filteredCourses: filteredCourses.length,
-                });
-            }
-
-            // Filter courses based on normalized possibleSlots (using dayId + periodId)
             const filteredCourses = courses.value.filter(course => {
-                // If no restrictions, course is available
                 if (safeLength(course.possibleSlots) === 0) return true;
-
-                // Check if current slot is in possible slots using dayId + periodId
-                const isAvailable = course.possibleSlots.some(slot => {
-                    return slot.dayId === currentDayId && slot.periodId === currentPeriodId;
-                });
-
-                if (isAvailable) {
-                    console.log('  ✅ Available course:', {
-                        courseName: course.name,
-                        possibleSlots: course.possibleSlots.length,
-                    });
-                }
-
-                return isAvailable;
+                return course.possibleSlots.some(slot => slot.dayId === currentDayId && slot.periodId === currentPeriodId);
             });
 
             return filteredCourses;
@@ -378,7 +392,6 @@ export default {
         function saveToUndoStack() {
             const currentState = JSON.stringify(draftSchedules.value);
             undoStack.value.push(currentState);
-
             if (safeLength(undoStack.value) > maxUndoSteps) {
                 undoStack.value.shift();
             }
@@ -387,12 +400,10 @@ export default {
         function handleCellClick({ dayId, periodId, period, mode, preSelectedCourse }) {
             if (isReadOnly.value) return;
 
-            // Get existing assignments for this cell
             const assignments = draftSchedules.value.filter(
                 assignment => assignment.day_id === dayId && assignment.period_id === periodId
             );
 
-            // Get conflicts for this cell
             const conflicts = allConflicts.value.filter(
                 conflict => conflict.day_id === dayId && conflict.period_id === periodId
             );
@@ -403,7 +414,7 @@ export default {
                 period,
                 assignments,
                 conflicts,
-                preSelectedCourse, // Pass the pre-selected course
+                preSelectedCourse,
             };
 
             showAssignmentModal.value = true;
@@ -423,15 +434,12 @@ export default {
 
         function addAssignment(newAssignment) {
             saveToUndoStack();
-
             const updatedSchedules = [...draftSchedules.value, newAssignment];
             updateDraftSchedules(updatedSchedules);
             closeAssignmentModal();
         }
 
         function editAssignment(assignment) {
-            // For editing, we'll close the modal and emit an event
-            // This could open a separate edit form
             closeAssignmentModal();
             emit('edit-assignment-requested', assignment);
         }
@@ -439,7 +447,6 @@ export default {
         function removeAssignment(assignmentToRemove) {
             saveToUndoStack();
 
-            // Emit scheduler:remove event if configured
             if (props.content.emitDropEvents) {
                 emitSchedulerRemoveEvent(emit, {
                     dayId: assignmentToRemove.day_id,
@@ -463,10 +470,6 @@ export default {
         }
 
         function updateDraftSchedules(newSchedules) {
-            // Update internal state to prevent feedback loops
-            internalState.initializedDraft = newSchedules.map(item => ({ ...item }));
-
-            // Emit to external systems - but never mutate props directly
             emit('trigger-event', {
                 name: 'updateDraftSchedules',
                 event: { draftSchedules: newSchedules },
@@ -475,39 +478,29 @@ export default {
 
         function undo() {
             if (safeLength(undoStack.value) === 0) return;
-
             const previousState = undoStack.value.pop();
             const previousSchedules = JSON.parse(previousState);
             updateDraftSchedules(previousSchedules);
         }
 
         async function saveDraft() {
-            if (hydrating) return; // Skip during initialization
-
             isSaving.value = true;
             try {
-                const currentDraft = draftSchedules.value;
-
-                // Emit WeWeb external event - never mutate props/variables here
                 emit('trigger-event', {
                     name: 'saveDraft',
                     event: {
-                        schedules: currentDraft,
+                        schedules: draftSchedules.value,
                         timestamp: new Date().toISOString(),
                         action: 'save_draft',
                     },
                 });
 
-                // Also emit direct WeWeb event for external handling
                 emit('save-draft-external', {
-                    schedules: currentDraft,
+                    schedules: draftSchedules.value,
                     timestamp: new Date().toISOString(),
                 });
 
-                // Simulate save delay
-                await new Promise(resolve => setTimeout(resolve, 1000));
-
-                // Simple success log
+                await new Promise(resolve => setTimeout(resolve, 500));
                 console.log('💾 [wwElement] Draft saved successfully');
             } catch (error) {
                 console.error('❌ [wwElement] Error saving draft:', error);
@@ -517,7 +510,6 @@ export default {
         }
 
         function handleAssignmentDetails(assignment) {
-            // Open assignment details or edit mode
             emit('trigger-event', {
                 name: 'scheduler:assignment-details',
                 event: {
@@ -535,7 +527,6 @@ export default {
         }
 
         function handleCourseEdit(courseData) {
-            // Emit course edit event for external navigation
             emit('trigger-event', {
                 name: 'scheduler:course-edit',
                 event: {
@@ -549,7 +540,6 @@ export default {
         }
 
         function handleToggleNonInstructional(show) {
-            // UI controls removed - handler kept for compatibility
             emit('trigger-event', {
                 name: 'toggleNonInstructional',
                 event: { showNonInstructional: show },
@@ -557,7 +547,6 @@ export default {
         }
 
         function handleToggleLessonSchedules(show) {
-            // UI controls removed - handler kept for compatibility
             emit('trigger-event', {
                 name: 'toggleLessonSchedules',
                 event: { showLessonSchedules: show },
@@ -578,17 +567,8 @@ export default {
             });
         }
 
-        function handleModeChanged(mode) {
-            console.log('🔄 [wwElement] Mode changed to:', mode);
-            emit('trigger-event', {
-                name: 'scheduler:mode-changed',
-                event: { mode, timestamp: new Date().toISOString() },
-            });
-        }
-
         // WeWeb Element Event Handlers
         function handleSchedulerDrop(eventData) {
-            // Ensure eventData has all required fields with proper defaults
             const safeEventData = {
                 dayId: eventData?.dayId || 0,
                 periodId: eventData?.periodId || '',
@@ -600,13 +580,11 @@ export default {
                 roomId: eventData?.roomId || null,
                 source: eventData?.source || 'drag-drop',
                 timestamp: eventData?.timestamp || new Date().toISOString(),
-                // Include assignment move fields when present
                 ...(eventData?.fromDayId !== undefined && { fromDayId: eventData.fromDayId }),
                 ...(eventData?.fromPeriodId !== undefined && { fromPeriodId: eventData.fromPeriodId }),
                 ...(eventData?.action !== undefined && { action: eventData.action }),
             };
 
-            console.log('🚀 [WeWeb Event] scheduler:drop - Emitting trigger-event');
             try {
                 emit('trigger-event', {
                     name: 'scheduler:drop',
@@ -618,7 +596,6 @@ export default {
         }
 
         function handleSchedulerDragStart(eventData) {
-            // Ensure eventData has all required fields with proper defaults
             const safeEventData = {
                 courseId: eventData?.courseId || '',
                 courseName: eventData?.courseName || '',
@@ -627,7 +604,6 @@ export default {
                 timestamp: eventData?.timestamp || new Date().toISOString(),
             };
 
-            console.log('🚀 [WeWeb Event] scheduler:drag-start - Emitting trigger-event');
             try {
                 emit('trigger-event', {
                     name: 'scheduler:drag-start',
@@ -639,7 +615,6 @@ export default {
         }
 
         function handleSchedulerDragEnd(eventData) {
-            // Ensure eventData has all required fields with proper defaults
             const safeEventData = {
                 courseId: eventData?.courseId || '',
                 courseName: eventData?.courseName || '',
@@ -649,7 +624,6 @@ export default {
                 timestamp: eventData?.timestamp || new Date().toISOString(),
             };
 
-            console.log('🚀 [WeWeb Event] scheduler:drag-end - Emitting trigger-event');
             try {
                 emit('trigger-event', {
                     name: 'scheduler:drag-end',
@@ -662,8 +636,6 @@ export default {
 
         // Test function for manual event emission debugging
         function testEventEmission() {
-            console.log('🧪 [WeWeb Event Test] Manual scheduler:drop event test');
-
             const testData = {
                 dayId: 1,
                 periodId: 'test-period-id',
@@ -679,7 +651,7 @@ export default {
                     name: 'scheduler:drop',
                     event: testData,
                 });
-                console.log('✅ [WeWeb Event Test] scheduler:drop trigger-event emitted');
+                console.log('✅ [WeWeb Event Test] scheduler:drop emitted');
             } catch (error) {
                 console.error('❌ [WeWeb Event Test] scheduler:drop test failed:', error);
             }
@@ -687,48 +659,30 @@ export default {
 
         function updateAssignments(payload) {
             if (payload.action === 'move' && payload.assignment) {
-                // Handle drag-and-drop assignment move
                 const updatedSchedules = [...draftSchedules.value];
+                const idx = updatedSchedules.findIndex(a => a.id === payload.assignment.id);
 
-                // Find the assignment to move
-                const assignmentIndex = updatedSchedules.findIndex(a => a.id === payload.assignment.id);
-
-                if (assignmentIndex !== -1) {
-                    // Create updated assignment with new position
+                if (idx !== -1) {
                     const updatedAssignment = {
-                        ...updatedSchedules[assignmentIndex],
+                        ...updatedSchedules[idx],
                         day_id: payload.toDayId,
                         period_id: payload.toPeriodId,
-                        // Update display fields if they exist
                         day_name_de: schoolDays.value.find(d => d.id === payload.toDayId)?.name_de,
                         day_name_en: schoolDays.value.find(d => d.id === payload.toDayId)?.name_en,
                     };
 
-                    // Update the schedules array
-                    updatedSchedules[assignmentIndex] = updatedAssignment;
-
-                    // Push to undo stack
+                    updatedSchedules[idx] = updatedAssignment;
                     undoStack.value.push(JSON.stringify(draftSchedules.value));
-
-                    // Update draft schedules
                     updateDraftSchedules(updatedSchedules);
-
-                    console.log('✅ [DragDrop] Assignment moved successfully:', {
-                        assignmentId: payload.assignment.id,
-                        from: `${payload.fromDayId}-${payload.fromPeriodId}`,
-                        to: `${payload.toDayId}-${payload.toPeriodId}`,
-                    });
                 } else {
                     console.warn('⚠️ [DragDrop] Could not find assignment to move:', payload.assignment.id);
                 }
             } else {
-                // Handle other assignment updates (existing functionality)
                 updateDraftSchedules(payload);
             }
         }
 
         function navigateToConflict(conflict) {
-            // Navigate to the conflict location in the grid
             selectedCell.value = {
                 dayId: conflict.day_id,
                 periodId: conflict.period_id,
@@ -737,13 +691,13 @@ export default {
                     a => a.day_id === conflict.day_id && a.period_id === conflict.period_id
                 ),
                 conflicts: [conflict],
+                preSelectedCourse: null,
             };
             showAssignmentModal.value = true;
             showConflicts.value = false;
         }
 
         function applySuggestion(suggestion) {
-            // Apply suggested conflict resolution
             emit('trigger-event', {
                 name: 'applySuggestion',
                 event: { suggestion },
@@ -751,7 +705,6 @@ export default {
         }
 
         function ignoreConflict(conflict) {
-            // Mark conflict as ignored
             emit('trigger-event', {
                 name: 'ignoreConflict',
                 event: { conflictId: conflict.id },
@@ -759,127 +712,48 @@ export default {
         }
 
         function autoResolveConflicts() {
-            // Attempt to auto-resolve conflicts
             emit('trigger-event', {
                 name: 'autoResolveConflicts',
                 event: { conflicts: allConflicts.value.filter(c => c.auto_resolvable) },
             });
         }
 
-        function emitTestEvent() {
-            try {
-                // Test WeWeb element event format
-                emit('element-event', {
-                    name: 'scheduler:drop',
-                    event: 'scheduler:drop',
-                    data: {
-                        message: 'Test WeWeb element event from Course Scheduler!',
-                        timestamp: new Date().toISOString(),
-                        testData: {
-                            periods: safeLength(periods.value),
-                            courses: safeLength(courses.value),
-                            teachers: safeLength(teachers.value),
-                            classes: safeLength(classes.value),
-                            rooms: safeLength(rooms.value),
-                            draftSchedules: safeLength(draftSchedules.value),
-                            conflicts: safeLength(allConflicts.value),
-                            isReadOnly: isReadOnly.value,
-                        },
-                    },
-                });
-                console.log('✅ Test WeWeb element event emitted successfully');
-            } catch (error) {
-                console.error('❌ Failed to emit test WeWeb element event:', error);
-            }
-        }
-
-        function logCurrentData() {
-            console.log('🐛 [wwElement] === COMPLETE DATA DUMP ===');
-            console.log('Raw content object:', props.content);
-
-            // Detailed periods analysis
-            console.log('📅 PERIODS ANALYSIS:');
-            console.log('  Raw periods:', props.content.periods);
-            console.log('  Processed periods:', periods.value);
-            if (safeLength(periods.value) > 0) {
-                const samplePeriod = periods.value[0];
-                console.log('  Sample period object keys:', Object.keys(samplePeriod));
-                console.log('  Sample period values:', samplePeriod);
-            }
-
-            // Detailed schoolDays analysis
-            console.log('🗓️ SCHOOL DAYS ANALYSIS:');
-            console.log('  Raw schoolDays:', props.content.schoolDays);
-            console.log('  Processed schoolDays:', schoolDays.value);
-            if (safeLength(schoolDays.value) > 0) {
-                const sampleDay = schoolDays.value[0];
-                console.log('  Sample day object keys:', Object.keys(sampleDay));
-                console.log('  Sample day values:', sampleDay);
-            }
-
-            console.log('Courses:', safeLength(courses.value), courses.value.slice(0, 2));
-            console.log('Teachers:', safeLength(teachers.value), teachers.value.slice(0, 2));
-            console.log('Classes:', safeLength(classes.value), classes.value.slice(0, 2));
-            console.log('Rooms:', safeLength(rooms.value), rooms.value.slice(0, 2));
-            console.log('Draft Schedules:', safeLength(draftSchedules.value), draftSchedules.value.slice(0, 2));
-            console.log('Live Schedules:', safeLength(liveSchedules.value), liveSchedules.value.slice(0, 2));
-            console.log('Is Read Only:', isReadOnly.value);
-            console.log('Can Undo:', canUndo.value);
-            console.log('All Conflicts:', safeLength(allConflicts.value), allConflicts.value);
-            console.log('🐛 [wwElement] === END COMPLETE DATA DUMP ===');
-        }
-
-        // Auto-save functionality - prevent feedback loops with hydration guard
+        // Auto-save functionality
         let saveTimeout;
         watch(
             draftSchedules,
-            (newDraft, prevDraft) => {
-                if (hydrating) return; // Skip during initialization
+            () => {
                 if (isReadOnly.value) return;
-                if (deepEqual(newDraft, prevDraft)) return; // Skip no-op updates
-
                 clearTimeout(saveTimeout);
                 saveTimeout = setTimeout(() => {
-                    // Only save if we're not in a feedback loop
-                    if (!hydrating && !deepEqual(newDraft, internalState.initializedDraft)) {
-                        saveDraft();
-                    }
-                }, 2000); // Auto-save after 2 seconds of no changes
+                    saveDraft();
+                }, 2000);
             },
             { deep: true }
         );
 
-        // Debug logging on mount - reduced verbosity
         onMounted(() => {
-            // One-way initialization on mount
-            if (props.content?.draftSchedules) {
-                hydrateFromDraft(props.content.draftSchedules);
-            }
-            hydrating = false; // Allow watchers after initial hydration
-            console.log('🚀 [wwElement] Course Scheduler mounted successfully');
+            console.log('🚀 [wwElement] Component mounted - Course Scheduler loaded successfully');
         });
 
-        // Guarded watcher for draft schedule updates - only after hydration
+        // Also react if the direct draftSchedules prop changes, to keep store hints in sync
         watch(
-            () => props.content?.draftSchedules,
-            (newDraft, prevDraft) => {
-                if (hydrating) return; // Skip during initialization
-                if (deepEqual(newDraft, prevDraft)) return; // Skip no-op updates
-                if (deepEqual(newDraft, internalState.initializedDraft)) return; // Skip self-updates
-
-                // Only hydrate if data actually changed
-                hydrateFromDraft(newDraft);
+            () => [props.draftSchedules, props.draftSchedule],
+            () => {
+                if (store.initialize) {
+                    store.initialize(null, null, null, {
+                        periods: toArray(props.content.periods),
+                        draftSchedules: draftSchedules.value,
+                    });
+                }
             },
-            { deep: true }
+            { immediate: true, deep: true }
         );
 
-        // Watch for changes in props.content structure only - no state mutations
+        // Watch for significant structural changes in content for debug
         watch(
             () => props.content,
             (newContent, oldContent) => {
-                if (hydrating) return; // Skip during initialization
-
-                // Only log when there are actual structural changes, not on every reactive update
                 if (
                     newContent &&
                     oldContent &&
@@ -917,8 +791,6 @@ export default {
             isSaving,
 
             // Computed
-            currentMode,
-            isLive,
             isReadOnly,
             canUndo,
             allConflicts,
@@ -939,7 +811,6 @@ export default {
             handleToggleLessonSchedules,
             handlePeriodFocusChanged,
             handleFilterYear,
-            handleModeChanged,
             handleSchedulerDrop,
             handleSchedulerDragStart,
             handleSchedulerDragEnd,
@@ -948,10 +819,9 @@ export default {
             applySuggestion,
             ignoreConflict,
             autoResolveConflicts,
-            emitTestEvent,
             logCurrentData,
 
-            // Public API methods for programmatic control
+            // Public API methods for programmatic control (from store)
             setViewMode: store.setViewMode,
             toggleTeacher: store.toggleTeacher,
             setSelectedClass: store.setSelectedClass,
@@ -960,9 +830,8 @@ export default {
             persistDraft: store.persistDraft,
             publish: store.publish,
 
-            // Utility functions
+            // Local helpers
             safeLength,
-            safeArray,
         };
     },
 };
@@ -976,161 +845,73 @@ export default {
     position: relative;
 }
 
-.scheduler-content {
+.scheduler-header {
     display: flex;
-    gap: 16px;
-    position: relative;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    background: #f8f9fa;
+    border-bottom: 1px solid #e0e0e0;
+    border-radius: 6px 6px 0 0;
+
+    h2 {
+        margin: 0;
+        color: #333;
+        font-size: 1.3em;
+    }
+
+    .scheduler-controls {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+    }
+
+    .mode-indicator {
+        padding: 6px 12px;
+        border-radius: 4px;
+        font-size: 0.9em;
+        font-weight: 500;
+        background: #e6f7ff;
+        color: #1890ff;
+
+        &.read-only {
+            background: #fff2f0;
+            color: #ff4d4f;
+        }
+    }
 }
 
-.conflicts-sidebar {
-    width: 400px;
-    position: sticky;
-    top: 20px;
-    height: fit-content;
+.scheduler-content {
+    padding: 12px 0;
 }
 
-.test-data-section {
+.test-toggle,
+.debug-toggle {
     position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background: white;
-    padding: 20px;
+    bottom: 16px;
+    right: 16px;
+    margin-left: 8px;
+    background: #eee;
     border: 1px solid #ddd;
-    border-radius: 8px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    z-index: 2000;
-    min-width: 400px;
-}
-
-.close-test {
-    position: absolute;
-    top: 8px;
-    right: 12px;
-    background: none;
-    border: none;
-    font-size: 1.2em;
-    cursor: pointer;
-    color: #999;
-}
-
-.test-info {
-    margin-top: 16px;
-}
-
-.test-info > div {
-    margin-bottom: 8px;
-    font-size: 0.9em;
-}
-
-.test-button {
-    margin-top: 12px;
-    padding: 8px 16px;
-    background: #007cba;
-    color: white;
-    border: none;
+    padding: 8px 10px;
     border-radius: 4px;
-    cursor: pointer;
 }
 
 .test-toggle {
+    right: 56px;
+}
+
+.conflicts-sidebar {
     position: fixed;
-    bottom: 20px;
-    right: 20px;
-    width: 40px;
-    height: 40px;
-    border: none;
-    border-radius: 50%;
-    background: #007cba;
-    color: white;
-    font-size: 1.2em;
-    cursor: pointer;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-    z-index: 1000;
-    transition: all 0.2s;
-
-    &:hover {
-        transform: scale(1.1);
-    }
-}
-
-.debug-toggle {
-    position: fixed;
-    bottom: 70px;
-    right: 20px;
-    width: 40px;
-    height: 40px;
-    border: none;
-    border-radius: 50%;
-    background: #ff6b6b;
-    color: white;
-    font-size: 1.2em;
-    cursor: pointer;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-    z-index: 1000;
-    transition: all 0.2s;
-
-    &:hover {
-        transform: scale(1.1);
-    }
-}
-
-/* Responsive Design */
-@media (max-width: 1200px) {
-    .conflicts-sidebar {
-        width: 350px;
-    }
-}
-
-@media (max-width: 900px) {
-    .scheduler-content {
-        flex-direction: column;
-    }
-
-    .conflicts-sidebar {
-        width: 100%;
-        position: relative;
-        top: auto;
-    }
-}
-
-@media (max-width: 600px) {
-    .course-scheduler-wrapper {
-        font-size: 0.9em;
-    }
-
-    .test-data-section {
-        width: 90vw;
-        min-width: unset;
-    }
-
-    .test-toggle {
-        bottom: 10px;
-        right: 10px;
-        width: 35px;
-        height: 35px;
-        font-size: 1em;
-    }
-}
-
-/* Accessibility improvements */
-@media (prefers-reduced-motion: reduce) {
-    * {
-        transition-duration: 0.01ms !important;
-        animation-duration: 0.01ms !important;
-    }
-}
-
-/* High contrast mode support */
-@media (prefers-contrast: high) {
-    /* No specific styles needed */
-}
-
-/* Print styles */
-@media print {
-    .test-toggle,
-    .conflicts-sidebar {
-        display: none !important;
-    }
+    top: 80px;
+    right: 16px;
+    width: 360px;
+    max-height: calc(100vh - 100px);
+    overflow: auto;
+    background: #fff;
+    border: 1px solid #eee;
+    border-radius: 6px;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.08);
+    padding: 12px;
 }
 </style>
