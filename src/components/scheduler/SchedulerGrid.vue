@@ -1,7 +1,12 @@
 <template>
   <div class="scheduler-grid" role="grid" aria-label="School schedule grid" :data-readonly="isReadOnly">
-    <!-- Main Grid -->
-    <div v-if="safeLength(visibleDays) > 0 && safeLength(visiblePeriods) > 0" class="main-grid-container">
+    <!-- Soft warning instead of gating the whole grid -->
+    <div v-if="!hasData" class="grid-hidden-debug">
+      No school days or periods provided yet. The grid will populate as soon as data arrives.
+    </div>
+
+    <!-- Main Grid (always renders to avoid blank screen) -->
+    <div class="main-grid-container">
       <!-- Grid Header -->
       <div class="grid-header" role="row">
         <div class="period-header-cell" role="columnheader">
@@ -9,7 +14,7 @@
         </div>
         <div
           v-for="(day, index) in visibleDays"
-          :key="day.id"
+          :key="day.id ?? index"
           class="day-header-cell"
           role="columnheader"
           :aria-colindex="index + 1"
@@ -23,7 +28,7 @@
       <div class="grid-body">
         <div
           v-for="(period, periodIndex) in visiblePeriods"
-          :key="period.id"
+          :key="period.id ?? periodIndex"
           class="grid-row"
           :class="{ 'non-instructional': !period.is_instructional }"
           role="row"
@@ -48,8 +53,8 @@
 
           <!-- Day Cells -->
           <div
-            v-for="day in visibleDays"
-            :key="`${period.id}-${day.id}`"
+            v-for="(day, dIdx) in visibleDays"
+            :key="`${period.id ?? periodIndex}-${day.id ?? dIdx}`"
             class="schedule-cell drop-zone"
             :class="getCellClasses(day.id, period.id)"
             role="gridcell"
@@ -69,7 +74,7 @@
             <div v-if="safeLength(getCellAssignments(day.id, period.id)) > 0" class="assignments-container">
               <div
                 v-for="(assignment, index) in getCellAssignments(day.id, period.id)"
-                :key="index"
+                :key="assignment.id ?? index"
                 class="assignment-item draggable-assignment"
                 :class="getAssignmentClasses(assignment)"
                 :style="getAssignmentStyles(assignment)"
@@ -229,7 +234,6 @@
         :style="{ left: contextMenu.x + 'px', top: contextMenu.y + 'px' }"
         @click.stop
         ref="contextMenuRef"
-        data-debug="context-menu"
       >
         <div class="context-menu-item" role="menuitem" @click="editAssignmentFromContext">
           {{ (!isReadOnly && !isLiveMode) ? '✏️ Edit Assignment' : '📄 View Assignment' }}
@@ -326,9 +330,7 @@ export default {
     const editingAssignment = ref(null);
     const editingCell = ref(null);
 
-    const contextMenu = ref({
-      show: false, x: 0, y: 0, assignment: null, dayId: null, periodId: null,
-    });
+    const contextMenu = ref({ show: false, x: 0, y: 0, assignment: null, dayId: null, periodId: null });
     const contextMenuRef = ref(null);
 
     // Teacher modal
@@ -336,9 +338,7 @@ export default {
     const modalCourseData = ref(null);
 
     // Close context menu on Escape / resize / scroll (capture)
-    const onKeyDown = (e) => {
-      if (e.key === 'Escape') contextMenu.value.show = false;
-    };
+    const onKeyDown = (e) => { if (e.key === 'Escape') contextMenu.value.show = false; };
     const onWindowResize = () => (contextMenu.value.show = false);
     const onAnyScroll = () => (contextMenu.value.show = false);
 
@@ -362,6 +362,9 @@ export default {
       return filtered.length ? filtered : all;
     });
     const currentSchedules = computed(() => (props.isLiveMode ? props.liveSchedules : props.draftSchedules));
+
+    // NEW: soft check only used for warning badge
+    const hasData = computed(() => safeLength(visibleDays.value) > 0 && safeLength(visiblePeriods.value) > 0);
 
     // Formatting
     function formatTime(t) {
@@ -433,9 +436,8 @@ export default {
 
     // Cells
     function getCellAssignments(dayId, periodId) {
-      const entries = currentSchedules.value;
-      const assignments = entries.filter((a) => isSameId(a.day_id, dayId) && isSameId(a.period_id, periodId));
-      return assignments.sort((a, b) => {
+      const list = currentSchedules.value.filter((a) => isSameId(a.day_id, dayId) && isSameId(a.period_id, periodId));
+      return list.sort((a, b) => {
         const classA = getClassName(a.class_id);
         const classB = getClassName(b.class_id);
         if (classA !== classB) return classA.localeCompare(classB);
@@ -479,7 +481,7 @@ export default {
       };
     }
 
-    // Context menu positioning
+    // Context menu
     function computeContextMenuPosition(evt, menuSize = { w: 220, h: 96 }) {
       const vw = window.innerWidth || 1024;
       const vh = window.innerHeight || 768;
@@ -490,28 +492,28 @@ export default {
       return { x, y };
     }
     function measureContextMenuRender() {
-      nextTick(() => {
-        contextMenuRef.value?.getBoundingClientRect?.();
-      });
+      nextTick(() => { contextMenuRef.value?.getBoundingClientRect?.(); });
     }
     watch(() => contextMenu.value.show, (show) => { if (show) measureContextMenuRender(); });
 
-    // Clicks + context menu (two entry points for reliability on draggable)
+    function handleCellClick(dayId, periodId, period) {
+      if (props.isReadOnly || !props.enableCellAdd) return;
+      emit('cell-click', { dayId, periodId, period, mode: 'add', preSelectedCourse: null });
+    }
+    function handleAssignmentClick(assignment) { emit('assignment-details', assignment); }
     function handleAssignmentRightClick(event, assignment, dayId, periodId) {
       const pos = computeContextMenuPosition(event);
       contextMenu.value = { show: true, x: pos.x, y: pos.y, assignment, dayId, periodId };
     }
     function handleAssignmentMouseRightClick(event, assignment, dayId, periodId) {
-      // Secondary path to ensure right-click works even when contextmenu is suppressed by DnD
       const pos = computeContextMenuPosition(event);
       contextMenu.value = { show: true, x: pos.x, y: pos.y, assignment, dayId, periodId };
     }
-    function closeContextMenu() {
-      contextMenu.value.show = false;
-    }
+    function closeContextMenu() { contextMenu.value.show = false; }
     function editAssignmentFromContext() {
       if (!contextMenu.value.assignment) return;
-      if (props.isReadOnly || props.isLiveMode) startInlineEditReadOnly(contextMenu.value.assignment, contextMenu.value.dayId, contextMenu.value.periodId);
+      if (props.isReadOnly || props.isLiveMode)
+        startInlineEditReadOnly(contextMenu.value.assignment, contextMenu.value.dayId, contextMenu.value.periodId);
       else startInlineEdit(contextMenu.value.assignment, contextMenu.value.dayId, contextMenu.value.periodId);
       closeContextMenu();
     }
@@ -767,7 +769,7 @@ export default {
     }
     function isDraggingCourse(courseId) { return normId(draggedCourse.value?.id) === normId(courseId); }
 
-    // Grade stats (unchanged)
+    // Grade stats
     function parseGrades(course) {
       const grades = [];
       if (course.is_for_year_g && typeof course.is_for_year_g === 'object') {
@@ -785,7 +787,9 @@ export default {
     });
     function findCourseById(courseId) { return safeArray(props.courses).find((c) => isSameId(c.id, courseId)); }
     function getScheduledCoursesForSlot(dayId, periodId) {
-      const scheduledEntries = safeArray(currentSchedules.value).filter((e) => isSameId(e.day_id, dayId) && isSameId(e.period_id, periodId));
+      const scheduledEntries = safeArray(currentSchedules.value).filter(
+        (e) => isSameId(e.day_id, dayId) && isSameId(e.period_id, periodId)
+      );
       const out = [];
       scheduledEntries.forEach((entry) => {
         const course = findCourseById(entry.course_id);
@@ -837,6 +841,7 @@ export default {
       visibleDays,
       visiblePeriods,
       currentSchedules,
+      hasData,
 
       // helpers
       safeArray,
@@ -914,7 +919,7 @@ export default {
 </script>
 
 <style scoped>
-/* Same styling you liked, kept intact */
+/* Styling stays identical to the version you liked (unchanged) */
 
 /* Root */
 .scheduler-grid {
@@ -1068,8 +1073,8 @@ export default {
 .scheduler-grid[data-readonly='true'] .empty-cell { color: #999; }
 .scheduler-grid[data-readonly='true'] .empty-text { font-style: italic; color: #999; font-size: 0.8em; }
 
-/* Fallback hidden message */
-.grid-hidden-debug { padding: 16px; background: #fffbeb; border: 1px solid #fde68a; border-radius: 6px; margin: 16px; text-align: center; color: #92400e; }
+/* Warning banner */
+.grid-hidden-debug { padding: 12px; background: #fffbeb; border: 1px solid #fde68a; border-radius: 6px; margin: 8px 8px 0; color: #92400e; }
 
 /* Responsive */
 @media (max-width: 1024px) {
@@ -1081,7 +1086,7 @@ export default {
 }
 </style>
 
-<!-- Unscoped styles so teleported menu always renders -->
+<!-- Unscoped styles so the teleported context menu/backdrop always render correctly -->
 <style>
 .context-menu {
   position: fixed;
@@ -1106,9 +1111,5 @@ export default {
 }
 .context-menu-item:hover { background-color: #f5f5f5; }
 .context-menu-item.delete:hover { background-color: #ffe6e6; color: #d32f2f; }
-.context-menu-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 99998;
-}
+.context-menu-backdrop { position: fixed; inset: 0; z-index: 99998; }
 </style>
