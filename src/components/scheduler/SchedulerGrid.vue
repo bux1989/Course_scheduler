@@ -75,6 +75,7 @@
                 :style="getAssignmentStyles(assignment)"
                 @click.stop="handleAssignmentClick(assignment, day.id, period.id)"
                 @contextmenu.prevent="handleAssignmentRightClick($event, assignment, day.id, period.id)"
+                @mousedown.right.prevent="handleAssignmentMouseRightClick($event, assignment, day.id, period.id)"
                 :draggable="(!isReadOnly && !isLiveMode) && !isEditing(assignment.id)"
                 @dragstart="(!isReadOnly && !isLiveMode) ? handleAssignmentDragStart($event, assignment, day.id, period.id) : null"
                 @dragend="(!isReadOnly && !isLiveMode) ? handleAssignmentDragEnd($event) : null"
@@ -224,17 +225,19 @@
       <div
         v-if="contextMenu.show"
         class="context-menu"
+        role="menu"
         :style="{ left: contextMenu.x + 'px', top: contextMenu.y + 'px' }"
         @click.stop
         ref="contextMenuRef"
         data-debug="context-menu"
       >
-        <div class="context-menu-item" @click="editAssignmentFromContext">
+        <div class="context-menu-item" role="menuitem" @click="editAssignmentFromContext">
           {{ (!isReadOnly && !isLiveMode) ? '✏️ Edit Assignment' : '📄 View Assignment' }}
         </div>
         <div
           v-if="!isReadOnly && !isLiveMode"
           class="context-menu-item delete"
+          role="menuitem"
           @click="deleteAssignmentFromContext"
         >
           🗑️ Delete Assignment
@@ -261,7 +264,7 @@
 </template>
 
 <script>
-import { computed, ref, watch, nextTick } from 'vue';
+import { computed, ref, watch, nextTick, onMounted, onBeforeUnmount } from 'vue';
 import InlineAssignmentEditor from './InlineAssignmentEditor.vue';
 import TeacherRoomSelectionModal from './TeacherRoomSelectionModal.vue';
 import { emitSchedulerRemoveEvent } from '../../utils/events.js';
@@ -302,28 +305,55 @@ export default {
     'course-edit',
   ],
   setup(props, { emit }) {
+    // Helpers
     const safeArray = (v) => (Array.isArray(v) ? v : []);
     const safeLength = (v) => (Array.isArray(v) ? v.length : 0);
     const normId = (v) => String(v ?? '');
     const isSameId = (a, b) => normId(a) === normId(b);
 
+    // Focus
     const focusedPeriodId = ref(null);
+
+    // Drag state
     const draggedCourse = ref(null);
     const draggedAssignment = ref(null);
 
-    // Available-list behavior (fix for “not taken out”)
+    // Available list behavior
     const optimisticallyScheduled = ref(new Set()); // key: day|period|course
-    const recurringWhitelist = ref(new Set());       // keep visible for recurring
+    const recurringWhitelist = ref(new Set());
 
+    // Inline editor/context menu
     const editingAssignment = ref(null);
     const editingCell = ref(null);
 
-    const contextMenu = ref({ show: false, x: 0, y: 0, assignment: null, dayId: null, periodId: null });
+    const contextMenu = ref({
+      show: false, x: 0, y: 0, assignment: null, dayId: null, periodId: null,
+    });
     const contextMenuRef = ref(null);
 
+    // Teacher modal
     const showTeacherRoomModal = ref(false);
     const modalCourseData = ref(null);
 
+    // Close context menu on Escape / resize / scroll (capture)
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') contextMenu.value.show = false;
+    };
+    const onWindowResize = () => (contextMenu.value.show = false);
+    const onAnyScroll = () => (contextMenu.value.show = false);
+
+    onMounted(() => {
+      window.addEventListener('keydown', onKeyDown, true);
+      window.addEventListener('resize', onWindowResize, { passive: true });
+      window.addEventListener('scroll', onAnyScroll, true);
+    });
+    onBeforeUnmount(() => {
+      window.removeEventListener('keydown', onKeyDown, true);
+      window.removeEventListener('resize', onWindowResize);
+      window.removeEventListener('scroll', onAnyScroll, true);
+    });
+
+    // Visible data
     const visibleDays = computed(() => safeArray(props.schoolDays).slice(0, props.maxDays || 7));
     const visiblePeriods = computed(() => {
       const all = safeArray(props.periods);
@@ -333,6 +363,7 @@ export default {
     });
     const currentSchedules = computed(() => (props.isLiveMode ? props.liveSchedules : props.draftSchedules));
 
+    // Formatting
     function formatTime(t) {
       if (!t) return '';
       const parts = String(t).split(':');
@@ -341,40 +372,44 @@ export default {
     function formatDate(d) {
       return d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
     }
-    function formatInt(v) {
-      const n = Number(v);
-      return Number.isFinite(n) ? Math.round(n) : v;
+    function formatInt(val) {
+      const n = Number(val);
+      return Number.isFinite(n) ? Math.round(n) : val;
     }
 
-    function getCourseName(id) {
-      if (!id) return null;
-      const c = props.courses.find((x) => isSameId(x.id, id));
-      return c?.name || c?.course_name || c?.title || null;
+    // Lookups
+    function getCourseName(courseId) {
+      if (!courseId) return null;
+      const course = props.courses.find((c) => isSameId(c.id, courseId));
+      return course?.name || course?.course_name || course?.title || null;
     }
-    function getSubjectName(id) {
-      if (!id) return null;
-      const s = props.subjects.find((x) => isSameId(x.id, id));
-      return s?.name || s?.title || s?.subject_name || null;
+    function getSubjectName(subjectId) {
+      if (!subjectId) return null;
+      const subject = props.subjects.find((s) => isSameId(s.id, subjectId));
+      return subject?.name || subject?.title || subject?.subject_name || null;
     }
     function getDisplayName(a) {
       return getCourseName(a.course_id) || getSubjectName(a.subject_id) || 'No Course';
     }
-    function getClassName(id) {
-      if (!id) return '';
-      return props.classes.find((x) => isSameId(x.id, id))?.name || '';
+    function getClassName(classId) {
+      if (!classId) return '';
+      const cls = props.classes.find((c) => isSameId(c.id, classId));
+      return cls?.name || '';
     }
-    function getTeacherNames(ids) {
-      if (!ids?.length) return '';
-      return ids.map((id) => props.teachers.find((t) => isSameId(t.id, id))?.name).filter(Boolean).join(', ');
+    function getTeacherNames(teacherIds) {
+      if (!teacherIds?.length) return '';
+      const names = teacherIds.map((id) => props.teachers.find((t) => isSameId(t.id, id))?.name).filter(Boolean);
+      return names.join(', ');
     }
     function getAssignmentTeachers(a) {
       if (Array.isArray(a.teacher_names) && a.teacher_names.length) return a.teacher_names.join(', ');
       const ids = a.staff_ids || a.teacher_ids;
       return ids?.length ? getTeacherNames(ids) : '';
     }
-    function getRoomName(id) {
-      if (!id) return 'No Room';
-      return props.rooms.find((r) => isSameId(r.id, id))?.name || 'Unknown Room';
+    function getRoomName(roomId) {
+      if (!roomId) return 'No Room';
+      const room = props.rooms.find((r) => isSameId(r.id, roomId));
+      return room?.name || 'Unknown Room';
     }
 
     function hasConflicts(a) {
@@ -396,49 +431,55 @@ export default {
       return !(courseOk && classOk && roomOk && teachersOk);
     }
 
+    // Cells
     function getCellAssignments(dayId, periodId) {
-      const list = currentSchedules.value.filter((a) => isSameId(a.day_id, dayId) && isSameId(a.period_id, periodId));
-      return list.sort((a, b) => {
-        const ca = getClassName(a.class_id);
-        const cb = getClassName(b.class_id);
-        if (ca !== cb) return ca.localeCompare(cb);
-        const pa = getCourseName(a.course_id) || getSubjectName(a.subject_id) || '';
-        const pb = getCourseName(b.course_id) || getSubjectName(b.subject_id) || '';
-        return pa.localeCompare(pb);
+      const entries = currentSchedules.value;
+      const assignments = entries.filter((a) => isSameId(a.day_id, dayId) && isSameId(a.period_id, periodId));
+      return assignments.sort((a, b) => {
+        const classA = getClassName(a.class_id);
+        const classB = getClassName(b.class_id);
+        if (classA !== classB) return classA.localeCompare(classB);
+        const courseA = getCourseName(a.course_id) || getSubjectName(a.subject_id) || '';
+        const courseB = getCourseName(b.course_id) || getSubjectName(b.subject_id) || '';
+        return courseA.localeCompare(courseB);
       });
     }
     function getCellClasses(dayId, periodId) {
-      const as = getCellAssignments(dayId, periodId);
-      const cls = [];
-      if (safeLength(as) > 0) cls.push('has-assignments');
-      if (safeLength(as) > 1) cls.push('multiple-assignments');
-      if (as.some((a) => props.conflicts.some((c) => isSameId(c.day_id, dayId) && isSameId(c.period_id, periodId))))
-        cls.push('has-conflicts');
-      return cls;
+      const assignments = getCellAssignments(dayId, periodId);
+      const classes = [];
+      if (safeLength(assignments) > 0) classes.push('has-assignments');
+      if (safeLength(assignments) > 1) classes.push('multiple-assignments');
+      const hasConflict = assignments.some((a) =>
+        props.conflicts.some((c) => isSameId(c.day_id, dayId) && isSameId(c.period_id, periodId))
+      );
+      if (hasConflict) classes.push('has-conflicts');
+      return classes;
     }
     function getCellAriaLabel(day, period) {
-      const as = getCellAssignments(day.id, period.id);
-      if (safeLength(as) === 0) return `${day.name} ${period.name}: Empty, click to add assignment`;
-      const names = as.map((a) => getDisplayName(a)).join(', ');
-      return `${day.name} ${period.name}: ${names}, ${as.length} assignment${as.length > 1 ? 's' : ''}`;
+      const assignments = getCellAssignments(day.id, period.id);
+      if (safeLength(assignments) === 0) return `${day.name} ${period.name}: Empty, click to add assignment`;
+      const names = assignments.map((a) => getDisplayName(a)).join(', ');
+      return `${day.name} ${period.name}: ${names}, ${assignments.length} assignment${assignments.length > 1 ? 's' : ''}`;
     }
 
-    function getAssignmentClasses(a) {
-      const cls = [];
-      if (hasConflicts(a)) cls.push('has-conflict');
-      if (hasDeletedEntities(a)) cls.push('has-deleted-entities');
-      if (!getCourseName(a.course_id) && a.subject_id) cls.push('lesson-schedule');
-      return cls;
+    function getAssignmentClasses(assignment) {
+      const classes = [];
+      if (hasConflicts(assignment)) classes.push('has-conflict');
+      if (hasDeletedEntities(assignment)) classes.push('has-deleted-entities');
+      const courseName = getCourseName(assignment.course_id);
+      if (!courseName && assignment.subject_id) classes.push('lesson-schedule');
+      return classes;
     }
-    function getAssignmentStyles(a) {
-      const course = props.courses.find((c) => isSameId(c.id, a.course_id));
-      const cls = props.classes.find((c) => isSameId(c.id, a.class_id));
+    function getAssignmentStyles(assignment) {
+      const course = props.courses.find((c) => isSameId(c.id, assignment.course_id));
+      const cls = props.classes.find((c) => isSameId(c.id, assignment.class_id));
       return {
         borderLeft: `4px solid ${course?.color || cls?.color || '#e0e0e0'}`,
         backgroundColor: course?.color ? `${course.color}15` : (cls?.color ? `${cls.color}15` : '#f9f9f9'),
       };
     }
 
+    // Context menu positioning
     function computeContextMenuPosition(evt, menuSize = { w: 220, h: 96 }) {
       const vw = window.innerWidth || 1024;
       const vh = window.innerHeight || 768;
@@ -450,20 +491,18 @@ export default {
     }
     function measureContextMenuRender() {
       nextTick(() => {
-        // touch layout to ensure it paints
         contextMenuRef.value?.getBoundingClientRect?.();
       });
     }
-    watch(() => contextMenu.value.show, (s) => s && measureContextMenuRender());
+    watch(() => contextMenu.value.show, (show) => { if (show) measureContextMenuRender(); });
 
-    function handleCellClick(dayId, periodId, period) {
-      if (props.isReadOnly || !props.enableCellAdd) return;
-      emit('cell-click', { dayId, periodId, period, mode: 'add', preSelectedCourse: null });
-    }
-    function handleAssignmentClick(a) {
-      emit('assignment-details', a);
-    }
+    // Clicks + context menu (two entry points for reliability on draggable)
     function handleAssignmentRightClick(event, assignment, dayId, periodId) {
+      const pos = computeContextMenuPosition(event);
+      contextMenu.value = { show: true, x: pos.x, y: pos.y, assignment, dayId, periodId };
+    }
+    function handleAssignmentMouseRightClick(event, assignment, dayId, periodId) {
+      // Secondary path to ensure right-click works even when contextmenu is suppressed by DnD
       const pos = computeContextMenuPosition(event);
       contextMenu.value = { show: true, x: pos.x, y: pos.y, assignment, dayId, periodId };
     }
@@ -472,8 +511,7 @@ export default {
     }
     function editAssignmentFromContext() {
       if (!contextMenu.value.assignment) return;
-      if (props.isReadOnly || props.isLiveMode)
-        startInlineEditReadOnly(contextMenu.value.assignment, contextMenu.value.dayId, contextMenu.value.periodId);
+      if (props.isReadOnly || props.isLiveMode) startInlineEditReadOnly(contextMenu.value.assignment, contextMenu.value.dayId, contextMenu.value.periodId);
       else startInlineEdit(contextMenu.value.assignment, contextMenu.value.dayId, contextMenu.value.periodId);
       closeContextMenu();
     }
@@ -484,6 +522,7 @@ export default {
       closeContextMenu();
     }
 
+    // Inline editor
     function isEditing(id) { return editingAssignment.value?.id === id; }
     function startInlineEdit(a, dayId, periodId) {
       if (props.isReadOnly || props.isLiveMode) return;
@@ -512,7 +551,8 @@ export default {
       editingAssignment.value = null; editingCell.value = null;
     }
 
-    function handleCourseDragStart(e, course) {
+    // Drag: course
+    function handleCourseDragStart(event, course) {
       draggedCourse.value = course;
       emit('scheduler-drag-start', {
         courseId: course.id,
@@ -521,11 +561,11 @@ export default {
         source: 'drag-start',
         timestamp: new Date().toISOString(),
       });
-      e.dataTransfer.setData('text/plain', JSON.stringify({ type: 'course', course, id: course.id }));
-      e.dataTransfer.effectAllowed = 'copy';
-      e.target.style.opacity = '0.5';
+      event.dataTransfer.setData('text/plain', JSON.stringify({ type: 'course', course, id: course.id }));
+      event.dataTransfer.effectAllowed = 'copy';
+      event.target.style.opacity = '0.5';
     }
-    function handleCourseDragEnd(e) {
+    function handleCourseDragEnd(event) {
       emit('scheduler-drag-end', {
         courseId: draggedCourse.value?.id || null,
         courseName: draggedCourse.value?.name || draggedCourse.value?.course_name || null,
@@ -535,51 +575,60 @@ export default {
         timestamp: new Date().toISOString(),
       });
       draggedCourse.value = null;
-      e.target.style.opacity = '1';
+      event.target.style.opacity = '1';
     }
-    function handleAssignmentDragStart(e, a, dayId, periodId) {
-      draggedAssignment.value = { assignment: a, originalDayId: dayId, originalPeriodId: periodId };
+
+    // Drag: assignment
+    function handleAssignmentDragStart(event, assignment, dayId, periodId) {
+      draggedAssignment.value = { assignment, originalDayId: dayId, originalPeriodId: periodId };
       emit('scheduler-drag-start', {
-        courseId: a.course_id || '',
-        courseName: a.course_name || a.display_cell || '',
-        courseCode: a.course_code || '',
+        courseId: assignment.course_id || '',
+        courseName: assignment.course_name || assignment.display_cell || '',
+        courseCode: assignment.course_code || '',
         source: 'drag-start',
         timestamp: new Date().toISOString(),
       });
-      e.dataTransfer.setData('text/plain', JSON.stringify({ type: 'assignment', assignment: a, originalDayId: dayId, originalPeriodId: periodId }));
-      e.dataTransfer.effectAllowed = 'move';
-      e.target.style.opacity = '0.5';
+      event.dataTransfer.setData(
+        'text/plain',
+        JSON.stringify({ type: 'assignment', assignment, originalDayId: dayId, originalPeriodId: periodId })
+      );
+      event.dataTransfer.effectAllowed = 'move';
+      event.target.style.opacity = '0.5';
     }
-    function handleAssignmentDragEnd(e) {
+    function handleAssignmentDragEnd(event) {
       emit('scheduler-drag-end', {
         courseId: draggedAssignment.value?.assignment?.course_id || null,
-        courseName: draggedAssignment.value?.assignment?.course_name || draggedAssignment.value?.assignment?.display_cell || null,
+        courseName:
+          draggedAssignment.value?.assignment?.course_name || draggedAssignment.value?.assignment?.display_cell || null,
         courseCode: draggedAssignment.value?.assignment?.course_code || null,
         success: false,
         source: 'drag-end',
         timestamp: new Date().toISOString(),
       });
       draggedAssignment.value = null;
-      e.target.style.opacity = '1';
+      event.target.style.opacity = '1';
     }
 
-    function handleCellDragOver(e) {
+    // Drop target handlers
+    function handleCellDragOver(event) {
       if (!draggedAssignment.value && !draggedCourse.value) return false;
-      e.dataTransfer.dropEffect = draggedAssignment.value ? 'move' : 'copy';
+      event.dataTransfer.dropEffect = draggedAssignment.value ? 'move' : 'copy';
       return false;
     }
-    function handleCellDragEnter(e) {
+    function handleCellDragEnter(event) {
       if (!draggedAssignment.value && !draggedCourse.value) return;
-      e.currentTarget.classList.add('drag-over');
+      event.currentTarget.classList.add('drag-over');
     }
-    function handleCellDragLeave(e) {
-      if (!e.currentTarget.contains(e.relatedTarget)) e.currentTarget.classList.remove('drag-over');
+    function handleCellDragLeave(event) {
+      if (!event.currentTarget.contains(event.relatedTarget)) {
+        event.currentTarget.classList.remove('drag-over');
+      }
     }
-    function handleCellDrop(e, dayId, periodId) {
-      e.preventDefault();
-      e.currentTarget.classList.remove('drag-over');
+    function handleCellDrop(event, dayId, periodId) {
+      event.preventDefault();
+      event.currentTarget.classList.remove('drag-over');
       try {
-        const data = JSON.parse(e.dataTransfer.getData('text/plain'));
+        const data = JSON.parse(event.dataTransfer.getData('text/plain'));
         if (data.type === 'course') {
           assignCourseToSlot(data.course || { id: data.id }, dayId, periodId);
         } else if (data.type === 'assignment') {
@@ -606,9 +655,10 @@ export default {
             });
           }
         }
-      } catch (err) { console.error('Drop error:', err); }
+      } catch (e) { console.error('Drop error:', e); }
     }
 
+    // Open modal
     function assignCourseToSlot(course, dayId, periodId) {
       if (!course || props.isReadOnly || props.isLiveMode) return;
       modalCourseData.value = {
@@ -619,7 +669,6 @@ export default {
       };
       showTeacherRoomModal.value = true;
     }
-
     function handleTeacherRoomSubmit(payload) {
       // frequency-aware optimistic hide
       const key = `${normId(payload.dayId)}|${normId(payload.periodId)}|${normId(payload.courseId)}`;
@@ -663,6 +712,7 @@ export default {
       modalCourseData.value = null;
     }
 
+    // Focus
     function togglePeriodFocus(periodId) {
       const pid = normId(periodId);
       focusedPeriodId.value = isSameId(focusedPeriodId.value, pid) ? null : pid;
@@ -673,6 +723,7 @@ export default {
       return props.periods.find((p) => isSameId(p.id, focusedPeriodId.value))?.name || 'Unknown Period';
     }
 
+    // Normalize slots helper
     function normalizeSlots(course) {
       if (Array.isArray(course.possibleSlots)) return course.possibleSlots;
       if (Array.isArray(course.possible_time_slots)) {
@@ -684,6 +735,7 @@ export default {
       return [];
     }
 
+    // Available courses
     function getAvailableCoursesForSlot(dayId, periodId) {
       const dayKey = normId(dayId);
       const periodKey = normId(periodId);
@@ -698,10 +750,8 @@ export default {
         const k = `${dayKey}|${periodKey}|${cid}`;
 
         // Apply optimistic hide unless whitelisted for recurring
-        if (!recurringWhitelist.value.has(k)) {
-          if (props.hideScheduledInAvailable) {
-            if (scheduledIds.has(cid) || optimisticallyScheduled.value.has(k)) return false;
-          }
+        if (!recurringWhitelist.value.has(k) && props.hideScheduledInAvailable) {
+          if (scheduledIds.has(cid) || optimisticallyScheduled.value.has(k)) return false;
         }
 
         const slots = normalizeSlots(course);
@@ -717,6 +767,7 @@ export default {
     }
     function isDraggingCourse(courseId) { return normId(draggedCourse.value?.id) === normId(courseId); }
 
+    // Grade stats (unchanged)
     function parseGrades(course) {
       const grades = [];
       if (course.is_for_year_g && typeof course.is_for_year_g === 'object') {
@@ -729,8 +780,7 @@ export default {
       return [...new Set(grades)].sort((a, b) => a - b);
     }
     const allGrades = computed(() => {
-      const set = new Set();
-      safeArray(props.courses).forEach((c) => parseGrades(c).forEach((g) => set.add(g)));
+      const set = new Set(); safeArray(props.courses).forEach((c) => parseGrades(c).forEach((g) => set.add(g)));
       return Array.from(set).sort((a, b) => a - b);
     });
     function findCourseById(courseId) { return safeArray(props.courses).find((c) => isSameId(c.id, courseId)); }
@@ -766,6 +816,8 @@ export default {
       });
       return out;
     }
+
+    function handleCourseEdit(d) { emit('course-edit', d); }
 
     return {
       // state
@@ -815,6 +867,7 @@ export default {
       handleCellClick,
       handleAssignmentClick,
       handleAssignmentRightClick,
+      handleAssignmentMouseRightClick,
       closeContextMenu,
       editAssignmentFromContext,
       deleteAssignmentFromContext,
@@ -826,7 +879,7 @@ export default {
       saveInlineEdit,
       cancelInlineEdit,
       deleteInlineAssignment,
-      handleCourseEdit: (d) => emit('course-edit', d),
+      handleCourseEdit,
 
       // drag/drop
       handleCourseDragStart,
@@ -861,7 +914,7 @@ export default {
 </script>
 
 <style scoped>
-/* Keep your styling exactly as you liked (unchanged from your reference) */
+/* Same styling you liked, kept intact */
 
 /* Root */
 .scheduler-grid {
@@ -1028,7 +1081,7 @@ export default {
 }
 </style>
 
-<!-- Unscoped styles so the teleported context menu/backdrop always render correctly -->
+<!-- Unscoped styles so teleported menu always renders -->
 <style>
 .context-menu {
   position: fixed;
@@ -1036,9 +1089,10 @@ export default {
   border: 1px solid #ccc;
   border-radius: 6px;
   box-shadow: 0 12px 32px rgba(0,0,0,0.18);
-  z-index: 99999; /* above app chrome */
+  z-index: 99999;
   min-width: 180px;
   padding: 4px 0;
+  pointer-events: auto;
 }
 .context-menu-item {
   padding: 8px 12px;
