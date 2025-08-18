@@ -1,137 +1,125 @@
 <template>
-    <div class="assignment-view-modal" @click.stop>
-        <div class="view-header">
-            <h3>{{ displayTitle }}</h3>
-            <div class="view-subtitle">{{ displaySubtitle }}</div>
-        </div>
-
-        <div class="view-content">
-            <!-- Main Assignment Info -->
-            <div class="info-section">
-                <h4>📅 Schedule Details</h4>
-                <div class="info-grid">
-                    <div class="info-item">
-                        <label>Day:</label>
-                        <span>{{ dayName }}</span>
-                    </div>
-                    <div class="info-item">
-                        <label>Period:</label>
-                        <span>{{ periodInfo }}</span>
-                    </div>
-                    <div class="info-item">
-                        <label>Time:</label>
-                        <span>{{ timeRange }}</span>
-                    </div>
-                    <div class="info-item">
-                        <label>Room:</label>
-                        <span>{{ roomName }}</span>
-                    </div>
+    <div class="assignment-view-content">
+        <!-- Main Assignment Info -->
+        <div class="info-section">
+            <h4>📅 Schedule Details</h4>
+            <div class="info-grid">
+                <div class="info-item">
+                    <label>Day:</label>
+                    <span>{{ dayName }}</span>
                 </div>
-            </div>
-
-            <!-- Course/Subject Information -->
-            <div class="info-section">
-                <h4>📚 {{ isCourse ? 'Course' : 'Subject' }} Information</h4>
-                <div class="info-grid">
-                    <div class="info-item">
-                        <label>{{ isCourse ? 'Course Name:' : 'Subject Name:' }}</label>
-                        <span class="primary-name">{{ primaryName }}</span>
-                    </div>
-                    <div v-if="assignment.subject_name && isCourse" class="info-item">
-                        <label>Subject:</label>
-                        <span>{{ assignment.subject_name }}</span>
-                    </div>
-                    <div v-if="assignment.course_id" class="info-item">
-                        <label>Course ID:</label>
-                        <span class="course-id">{{ assignment.course_id }}</span>
-                    </div>
+                <div class="info-item">
+                    <label>Period:</label>
+                    <span>{{ periodInfo }}</span>
                 </div>
-            </div>
-
-            <!-- Class/Grade Information -->
-            <div class="info-section">
-                <h4>👥 {{ hasClass ? 'Class' : 'Grade' }} Information</h4>
-                <div class="info-grid">
-                    <div v-if="hasClass" class="info-item">
-                        <label>Class:</label>
-                        <span>{{ assignment.class_name }}</span>
-                    </div>
-                    <div v-if="hasGrades" class="info-item">
-                        <label>{{ hasClass ? 'Grade Level:' : 'Grades:' }}</label>
-                        <span>{{ gradesDisplay }}</span>
-                    </div>
-                    <div v-if="assignment.enrolled_students_count !== undefined" class="info-item">
-                        <label>Enrolled Students:</label>
-                        <span class="enrollment-count">{{ assignment.enrolled_students_count || 0 }}</span>
-                    </div>
+                <div class="info-item">
+                    <label>Time:</label>
+                    <span>{{ timeRange }}</span>
                 </div>
-            </div>
-
-            <!-- Teacher Information -->
-            <div class="info-section">
-                <h4>👨‍🏫 Teaching Staff</h4>
-                <div class="teacher-list">
-                    <div v-if="teacherNames.length > 0" class="teachers-container">
-                        <div v-for="(teacher, index) in teacherNames" :key="index" class="teacher-item">
-                            <span class="teacher-name">{{ teacher }}</span>
-                        </div>
-                    </div>
-                    <div v-else class="no-teachers">
-                        <span class="empty-text">No teachers assigned</span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Schedule Validity -->
-            <div v-if="hasValidityInfo" class="info-section">
-                <h4>📆 Schedule Period</h4>
-                <div class="info-grid">
-                    <div v-if="assignment.start_date" class="info-item">
-                        <label>Start Date:</label>
-                        <span>{{ formatDate(assignment.start_date) }}</span>
-                    </div>
-                    <div v-if="assignment.end_date" class="info-item">
-                        <label>End Date:</label>
-                        <span>{{ formatDate(assignment.end_date) }}</span>
-                    </div>
-                    <div v-if="assignment.valid_from" class="info-item">
-                        <label>Valid From:</label>
-                        <span>{{ formatDate(assignment.valid_from) }}</span>
-                    </div>
-                    <div v-if="assignment.valid_until" class="info-item">
-                        <label>Valid Until:</label>
-                        <span>{{ formatDate(assignment.valid_until) }}</span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Additional Information -->
-            <div v-if="hasAdditionalInfo" class="info-section">
-                <h4>ℹ️ Additional Information</h4>
-                <div class="info-grid">
-                    <div v-if="assignment.meeting_name" class="info-item">
-                        <label>Meeting:</label>
-                        <span>{{ assignment.meeting_name }}</span>
-                    </div>
-                    <div v-if="assignment.notes" class="info-item">
-                        <label>Notes:</label>
-                        <span>{{ assignment.notes }}</span>
-                    </div>
-                    <div v-if="assignment.block_number" class="info-item">
-                        <label>Block Number:</label>
-                        <span>{{ assignment.block_number }}</span>
-                    </div>
-                    <div v-if="assignment.group_label" class="info-item">
-                        <label>Group:</label>
-                        <span>{{ assignment.group_label }}</span>
-                    </div>
+                <div class="info-item">
+                    <label>Room:</label>
+                    <span>{{ roomName }}</span>
                 </div>
             </div>
         </div>
 
-        <!-- Close Button -->
-        <div class="view-actions">
-            <button @click="closeView" class="close-btn">✖️ Close</button>
+        <!-- Course/Subject Information -->
+        <div class="info-section">
+            <h4>📚 {{ isCourse ? 'Course' : 'Subject' }} Information</h4>
+            <div class="info-grid">
+                <div class="info-item">
+                    <label>{{ isCourse ? 'Course Name:' : 'Subject Name:' }}</label>
+                    <span class="primary-name">{{ primaryName }}</span>
+                </div>
+                <div v-if="assignment.subject_name && isCourse" class="info-item">
+                    <label>Subject:</label>
+                    <span>{{ assignment.subject_name }}</span>
+                </div>
+                <div v-if="assignment.course_id" class="info-item">
+                    <label>Course ID:</label>
+                    <span class="course-id">{{ assignment.course_id }}</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Class/Grade Information -->
+        <div class="info-section">
+            <h4>👥 {{ hasClass ? 'Class' : 'Grade' }} Information</h4>
+            <div class="info-grid">
+                <div v-if="hasClass" class="info-item">
+                    <label>Class:</label>
+                    <span>{{ assignment.class_name }}</span>
+                </div>
+                <div v-if="hasGrades" class="info-item">
+                    <label>{{ hasClass ? 'Grade Level:' : 'Grades:' }}</label>
+                    <span>{{ gradesDisplay }}</span>
+                </div>
+                <div v-if="assignment.enrolled_students_count !== undefined" class="info-item">
+                    <label>Enrolled Students:</label>
+                    <span class="enrollment-count">{{ assignment.enrolled_students_count || 0 }}</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Teacher Information -->
+        <div class="info-section">
+            <h4>👨‍🏫 Teaching Staff</h4>
+            <div class="teacher-list">
+                <div v-if="teacherNames.length > 0" class="teachers-container">
+                    <div v-for="(teacher, index) in teacherNames" :key="index" class="teacher-item">
+                        <span class="teacher-name">{{ teacher }}</span>
+                    </div>
+                </div>
+                <div v-else class="no-teachers">
+                    <span class="empty-text">No teachers assigned</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Schedule Validity -->
+        <div v-if="hasValidityInfo" class="info-section">
+            <h4>📆 Schedule Period</h4>
+            <div class="info-grid">
+                <div v-if="assignment.start_date" class="info-item">
+                    <label>Start Date:</label>
+                    <span>{{ formatDate(assignment.start_date) }}</span>
+                </div>
+                <div v-if="assignment.end_date" class="info-item">
+                    <label>End Date:</label>
+                    <span>{{ formatDate(assignment.end_date) }}</span>
+                </div>
+                <div v-if="assignment.valid_from" class="info-item">
+                    <label>Valid From:</label>
+                    <span>{{ formatDate(assignment.valid_from) }}</span>
+                </div>
+                <div v-if="assignment.valid_until" class="info-item">
+                    <label>Valid Until:</label>
+                    <span>{{ formatDate(assignment.valid_until) }}</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Additional Information -->
+        <div v-if="hasAdditionalInfo" class="info-section">
+            <h4>ℹ️ Additional Information</h4>
+            <div class="info-grid">
+                <div v-if="assignment.meeting_name" class="info-item">
+                    <label>Meeting:</label>
+                    <span>{{ assignment.meeting_name }}</span>
+                </div>
+                <div v-if="assignment.notes" class="info-item">
+                    <label>Notes:</label>
+                    <span>{{ assignment.notes }}</span>
+                </div>
+                <div v-if="assignment.block_number" class="info-item">
+                    <label>Block Number:</label>
+                    <span>{{ assignment.block_number }}</span>
+                </div>
+                <div v-if="assignment.group_label" class="info-item">
+                    <label>Group:</label>
+                    <span>{{ assignment.group_label }}</span>
+                </div>
+            </div>
         </div>
     </div>
 </template>
@@ -159,14 +147,7 @@ export default {
             return props.assignment.subject_name || 'Unknown Subject';
         });
 
-        // Display title and subtitle
-        const displayTitle = computed(() => primaryName.value);
-        const displaySubtitle = computed(() => {
-            if (isCourse.value) {
-                return 'Course Details';
-            }
-            return 'Lesson Details';
-        });
+        // Display title and subtitle (removed - now handled by parent modal)
 
         // Day information
         const dayName = computed(() => {
@@ -283,15 +264,9 @@ export default {
             }
         }
 
-        function closeView() {
-            emit('close');
-        }
-
         return {
             isCourse,
             primaryName,
-            displayTitle,
-            displaySubtitle,
             dayName,
             periodInfo,
             timeRange,
@@ -303,53 +278,22 @@ export default {
             hasValidityInfo,
             hasAdditionalInfo,
             formatDate,
-            closeView,
         };
     },
 };
 </script>
 
 <style scoped>
-.assignment-view-modal {
-    background: white;
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
-    font-size: 14px;
-    width: 100%;
-    max-width: 600px;
-    box-sizing: border-box;
-    padding: 4px;
-}
-
-.view-header {
-    text-align: center;
-    padding: 12px 16px;
-    background: linear-gradient(135deg, #007cba 0%, #0056b3 100%);
-    color: white;
-    border-radius: 8px;
-    margin-bottom: 8px;
-}
-
-.view-header h3 {
-    margin: 0 0 4px 0;
-    font-size: 18px;
-    font-weight: 600;
-}
-
-.view-subtitle {
-    font-size: 13px;
-    opacity: 0.9;
-    font-weight: 400;
-}
-
-.view-content {
+.assignment-view-content {
     display: flex;
     flex-direction: column;
     gap: 16px;
+    font-size: 14px;
+    width: 100%;
+    box-sizing: border-box;
     max-height: 500px;
     overflow-y: auto;
-    padding: 0 4px;
+    padding: 8px;
 }
 
 .info-section {
@@ -465,34 +409,5 @@ export default {
     color: #6c757d;
     font-style: italic;
     font-size: 13px;
-}
-
-.view-actions {
-    display: flex;
-    justify-content: center;
-    padding: 12px 16px 8px;
-    border-top: 1px solid #e9ecef;
-    margin-top: 8px;
-}
-
-.close-btn {
-    padding: 10px 24px;
-    background: #6c757d;
-    color: white;
-    border: none;
-    border-radius: 6px;
-    font-size: 14px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.2s ease;
-}
-
-.close-btn:hover {
-    background: #5a6268;
-    transform: translateY(-1px);
-}
-
-.close-btn:active {
-    transform: translateY(0);
 }
 </style>
