@@ -312,11 +312,6 @@
     -->
 
         <!-- Assignment Editor Modal (POPUP) -->
-        <!-- Debug: editingAssignment value -->
-        <div v-if="editingAssignment" style="position: fixed; top: 10px; left: 10px; background: red; color: white; padding: 5px; z-index: 10000;">
-            DEBUG: Modal should be visible - editingAssignment: {{ editingAssignment?.id }}
-        </div>
-        <!-- Temporarily remove teleport to test if that's the issue -->
         <div v-if="editingAssignment" class="assignment-editor-backdrop" @click="cancelInlineEdit"></div>
         <div
             v-if="editingAssignment"
@@ -325,25 +320,25 @@
             aria-modal="true"
             :aria-label="editorModalTitle"
         >
-                <div class="editor-modal-header">
-                    <div class="editor-modal-title">{{ editorModalTitle }}</div>
-                    <button class="editor-modal-close" @click="cancelInlineEdit" aria-label="Close">×</button>
-                </div>
-                <div class="editor-modal-body">
-                    <InlineAssignmentEditor
-                        :assignment="editingAssignment"
-                        :courses="courses"
-                        :teachers="teachers"
-                        :classes="classes"
-                        :rooms="rooms"
-                        :subjects="subjects"
-                        @save="onEditorSave"
-                        @cancel="cancelInlineEdit"
-                        @delete="onEditorDelete"
-                        @edit-course="handleCourseEdit"
-                    />
-                </div>
+            <div class="editor-modal-header">
+                <div class="editor-modal-title">{{ editorModalTitle }}</div>
+                <button class="editor-modal-close" @click="cancelInlineEdit" aria-label="Close">×</button>
             </div>
+            <div class="editor-modal-body">
+                <InlineAssignmentEditor
+                    :assignment="editingAssignment"
+                    :courses="courses"
+                    :teachers="teachers"
+                    :classes="classes"
+                    :rooms="rooms"
+                    :subjects="subjects"
+                    @save="onEditorSave"
+                    @cancel="cancelInlineEdit"
+                    @delete="onEditorDelete"
+                    @edit-course="handleCourseEdit"
+                />
+            </div>
+        </div>
     </div>
 </template>
 
@@ -642,15 +637,11 @@ export default {
         // Inline editor (popup)
         const isEditing = id => editingAssignment.value?.id === id;
         const startInlineEdit = (a, dayId, periodId) => {
-            console.log('startInlineEdit called with:', { a, dayId, periodId, isReadOnly: props.isReadOnly, isLiveMode: props.isLiveMode });
             if (props.isReadOnly || props.isLiveMode) {
-                console.log('Edit blocked due to read-only or live mode');
                 return;
             }
             editingAssignment.value = a;
             editingCell.value = { dayId, periodId };
-            console.log('editingAssignment set to:', editingAssignment.value);
-            console.log('editingCell set to:', editingCell.value);
         };
         const startInlineEditReadOnly = (a, dayId, periodId) => {
             editingAssignment.value = a;
