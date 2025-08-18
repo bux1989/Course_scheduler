@@ -149,7 +149,7 @@
       </div>
     </div>
 
-    <!-- Available Courses Panel (ONLY in Planning Mode, not Live Mode) -->
+    <!-- Available Courses Panel (hidden in live or read-only), aligned with grid columns -->
     <div v-if="focusedPeriodId && !isReadOnly && !isLiveMode" class="available-courses-panel">
       <h3>Available Courses for {{ getFocusedPeriodName() }}</h3>
       <div class="focused-period-info">
@@ -220,7 +220,7 @@
       </div>
     </div>
 
-    <!-- Teacher/Room Selection Modal (preselects possible_staff_ids AND possible_room_id) -->
+    <!-- Teacher/Room Selection Modal (preselects possible_staff_ids and possible_room_id) -->
     <TeacherRoomSelectionModal
       v-if="showTeacherRoomModal && modalCourseData"
       :courseId="modalCourseData.courseId"
@@ -340,6 +340,7 @@ export default {
     const safeLength = (v) => (Array.isArray(v) ? v.length : 0);
     const normId = (v) => String(v ?? '');
     const isSameId = (a, b) => normId(a) === normId(b);
+    const normalizeStr = (s) => String(s ?? '').trim().toLowerCase();
 
     // DOM refs for measuring column widths
     const gridHeaderRef = ref(null);
@@ -518,17 +519,11 @@ export default {
       return { x, y };
     };
     const openContextMenu = (event, assignment, dayId, periodId) => {
-      console.log('Context menu triggered', { assignment, dayId, periodId });
       event.stopPropagation();
       event.preventDefault();
       const pos = computeContextMenuPosition(event);
-      console.log('Context menu position', pos);
       contextMenu.value = { show: true, x: pos.x, y: pos.y, assignment, dayId, periodId };
-      console.log('Context menu state', contextMenu.value);
-      nextTick(() => {
-        console.log('Context menu ref', contextMenuRef.value);
-        contextMenuRef.value?.focus?.();
-      });
+      nextTick(() => contextMenuRef.value?.focus?.());
     };
     const closeContextMenu = () => (contextMenu.value.show = false);
     const editAssignmentFromContext = () => {
@@ -544,15 +539,12 @@ export default {
       closeContextMenu();
     };
 
-    // Click handlers - FIX: Use separate parameters to avoid blocking context menu
+    // Click handlers
     const handleCellClick = (dayId, periodId, period) => {
       if (props.isReadOnly || !props.enableCellAdd) return;
       emit('cell-click', { dayId, periodId, period, mode: 'add', preSelectedCourse: null });
     };
-    const handleAssignmentClick = (assignment, dayId, periodId) => {
-      // Only emit details, don't prevent context menu
-      emit('assignment-details', assignment);
-    };
+    const handleAssignmentClick = (assignment) => emit('assignment-details', assignment);
 
     // Inline editor (popup)
     const isEditing = (id) => editingAssignment.value?.id === id;
@@ -701,7 +693,7 @@ export default {
       } catch (e) { console.error('Drop error:', e); }
     };
 
-    // Proposed teachers and room helper - ENHANCED to also handle possible_room_id
+    // Proposed teachers helper
     const getProposedTeacherIds = (course) => {
       const ids = [];
       if (Array.isArray(course?.possible_staff_ids)) ids.push(...course.possible_staff_ids);
@@ -711,12 +703,35 @@ export default {
       return ids.map((x) => String(x)).filter((x) => !!x && x !== 'null' && x !== 'undefined');
     };
 
+    // Proposed room helper (prefill room if course exposes it)
     const getProposedRoomId = (course) => {
-      if (course?.possible_room_id) return String(course.possible_room_id);
+      // Prefer explicit id(s)
+      const idCandidates = [];
+      if (course?.possible_room_id) idCandidates.push(course.possible_room_id);
+      if (Array.isArray(course?.possible_room_ids)) idCandidates.push(...course.possible_room_ids);
+      const firstValidId = idCandidates.find((x) => x != null && x !== 'null' && x !== 'undefined' && String(x).trim() !== '');
+      if (firstValidId) {
+        const rid = normId(firstValidId);
+        if (find(props.rooms, rid)) return rid;
+      }
+
+      // Fallback: try match by name/number if provided
+      const byName = course?.possible_room_name;
+      const byNumber = course?.possible_room_number;
+      if (byName || byNumber) {
+        const match = safeArray(props.rooms).find((r) => {
+          const rName = normalizeStr(r.name);
+          const rNum = normalizeStr(r.number ?? r.room_number);
+          const nameOk = byName ? rName === normalizeStr(byName) : true;
+          const numOk = byNumber ? rNum === normalizeStr(byNumber) : true;
+          return nameOk && numOk;
+        });
+        if (match?.id) return normId(match.id);
+      }
       return null;
     };
 
-    // Course assign modal (with allowed-slot confirmation + preselects teachers AND room)
+    // Course assign modal (with allowed-slot confirmation + preselects)
     const assignCourseToSlot = (course, dayId, periodId) => {
       if (!course || props.isReadOnly || props.isLiveMode) return;
 
@@ -737,7 +752,7 @@ export default {
         courseCode: course.code || course.course_code || '',
         dayId, periodId,
         preselectedTeacherIds: getProposedTeacherIds(course),
-        preselectedRoomId: getProposedRoomId(course), // NEW: pass room
+        preselectedRoomId: getProposedRoomId(course),
       };
       showTeacherRoomModal.value = true;
     };
@@ -1108,7 +1123,7 @@ export default {
 
 /* Match vertical grid lines by borders on day columns */
 .day-courses-column { min-width: 0; border-left: 1px solid #ddd; }
-.day-courses-column:first-of-type { 
+.day-courses-column:first-of-type { /* ensure line between period col and first day */
   border-left: 1px solid #ddd;
 }
 .available-courses-list { display: flex; flex-direction: column; gap: 8px; padding: 6px 8px; max-height: 320px; overflow-y: auto; }
@@ -1187,4 +1202,5 @@ export default {
 .context-menu-item:hover { background-color: #f5f5f5; }
 .context-menu-item.delete:hover { background-color: #ffe6e6; color: #d32f2f; }
 .context-menu-backdrop { position: fixed; inset: 0; z-index: 2147483646; }
+
 </style>
