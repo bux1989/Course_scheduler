@@ -154,8 +154,10 @@ export default {
     periodId: { type: [String, Number], required: true },
     teachers: { type: Array, default: () => [] },
     rooms: { type: Array, default: () => [] },
-    // NEW: proposed teachers to preselect (possible_staff_ids from the course)
+    // Preselect teachers (possible_staff_ids from the course)
     preselectedTeacherIds: { type: Array, default: () => [] },
+    // NEW: Preselect room (id calculated in the grid from possible_room_* fields)
+    preselectedRoomId: { type: [String, Number], default: null },
   },
   emits: ['submit', 'cancel'],
   setup(props, { emit }) {
@@ -248,12 +250,14 @@ export default {
     function selectRoom(id) {
       const sid = asId(id);
       selectedRoomId.value = sid;
+      userEdited.value = true;
       roomSearchTerm.value = '';
       roomDropdownOpen.value = false;
     }
 
     function removeRoom() {
       selectedRoomId.value = null;
+      userEdited.value = true;
     }
 
     function selectTeacher(id) {
@@ -326,28 +330,35 @@ export default {
       emit('cancel');
     }
 
-    // Initialize selection from preselectedTeacherIds (possible_staff_ids)
+    // Init preselection for teachers and room
     function initPreselection() {
       // Only run if we haven't let user edit yet (fresh open)
       if (userEdited.value) return;
 
-      // intersect preselected with the teachers actually available in this modal
+      // Teachers: intersect preselected with the teachers actually available in this modal
       const teacherIdSet = new Set(props.teachers.map((t) => asId(t.id)));
       const pre = uniq((props.preselectedTeacherIds || []).map(asId)).filter((id) => id && teacherIdSet.has(id));
-
       selectedTeachers.value = pre;
       primaryTeacherId.value = pre.length ? pre[0] : null;
+
+      // Room: only set if a preselected id exists and that room is in the rooms list
+      if (!selectedRoomId.value && props.preselectedRoomId != null) {
+        const rid = asId(props.preselectedRoomId);
+        const exists = props.rooms.some((r) => asId(r.id) === rid);
+        if (rid && exists) selectedRoomId.value = rid;
+      }
     }
 
     onMounted(() => {
       initPreselection();
     });
 
-    // If the course changes while the modal remains mounted, re-init
+    // If the course or preselect props change while the modal remains mounted, re-init
     watch(
-      () => [props.courseId, props.preselectedTeacherIds, props.teachers],
+      () => [props.courseId, props.preselectedTeacherIds, props.preselectedRoomId, props.teachers, props.rooms],
       () => {
-        userEdited.value = false; // treat as fresh open for a different course
+        // treat as fresh open for a different course / refreshed data
+        userEdited.value = false;
         initPreselection();
       },
       { deep: true }
@@ -651,4 +662,5 @@ export default {
 .submit-btn { background: #007cba; border-color: #007cba; color: white; }
 .submit-btn:hover:not(:disabled) { background: #005a84; border-color: #005a84; }
 .submit-btn:disabled { background: #ccc; border-color: #ccc; cursor: not-allowed; opacity: 0.6; }
+
 </style>
