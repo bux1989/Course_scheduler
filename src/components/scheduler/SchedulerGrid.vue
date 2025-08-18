@@ -312,6 +312,10 @@
     -->
 
         <!-- Assignment Editor Modal (POPUP) -->
+        <!-- Debug: editingAssignment value -->
+        <div v-if="editingAssignment" style="position: fixed; top: 10px; left: 10px; background: red; color: white; padding: 5px; z-index: 10000;">
+            DEBUG: Modal should be visible - editingAssignment: {{ editingAssignment?.id }}
+        </div>
         <teleport to="body">
             <div v-if="editingAssignment" class="assignment-editor-backdrop" @click="cancelInlineEdit"></div>
             <div
@@ -639,9 +643,15 @@ export default {
         // Inline editor (popup)
         const isEditing = id => editingAssignment.value?.id === id;
         const startInlineEdit = (a, dayId, periodId) => {
-            if (props.isReadOnly || props.isLiveMode) return;
+            console.log('startInlineEdit called with:', { a, dayId, periodId, isReadOnly: props.isReadOnly, isLiveMode: props.isLiveMode });
+            if (props.isReadOnly || props.isLiveMode) {
+                console.log('Edit blocked due to read-only or live mode');
+                return;
+            }
             editingAssignment.value = a;
             editingCell.value = { dayId, periodId };
+            console.log('editingAssignment set to:', editingAssignment.value);
+            console.log('editingCell set to:', editingCell.value);
         };
         const startInlineEditReadOnly = (a, dayId, periodId) => {
             editingAssignment.value = a;
