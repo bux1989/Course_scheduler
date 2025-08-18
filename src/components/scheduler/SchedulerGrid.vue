@@ -79,7 +79,7 @@
                 :class="getAssignmentClasses(assignment)"
                 :style="getAssignmentStyles(assignment)"
                 @click.stop="handleAssignmentClick(assignment, day.id, period.id)"
-                @contextmenu.stop.prevent="openContextMenu($event, assignment, day.id, period.id)"
+                @contextmenu.stop.prevent="console.log('RIGHT CLICK!', assignment)"
                 :draggable="(!isReadOnly && !isLiveMode) && !isEditing(assignment.id)"
                 @dragstart="(!isReadOnly && !isLiveMode) ? handleAssignmentDragStart($event, assignment, day.id, period.id) : null"
                 @dragend="(!isReadOnly && !isLiveMode) ? handleAssignmentDragEnd($event) : null"
