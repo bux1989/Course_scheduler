@@ -933,31 +933,47 @@ export default {
       await nextTick();
       measureAndApplyAvailableColumns();
       
-      // ADD THE NEW CODE HERE (after measureAndApplyAvailableColumns)
-      nextTick(() => {
-        const gridEl = document.querySelector('.scheduler-grid');
-        if (gridEl) {
-          gridEl.addEventListener('contextmenu', (e) => {
-            const assignmentEl = e.target.closest('.assignment-item');
-            if (assignmentEl) {
-              e.preventDefault();
-              e.stopPropagation();
-              console.log('Right click detected via DOM!', assignmentEl);
-              
-              // Get the assignment data from the element
-              const assignmentId = assignmentEl.dataset.assignmentId;
-              const dayId = assignmentEl.dataset.dayId;
-              const periodId = assignmentEl.dataset.periodId;
-              
-              // Find the assignment in your data
-              const assignment = currentSchedules.value.find(a => String(a.id) === String(assignmentId));
-              if (assignment) {
-                openContextMenu(e, assignment, dayId, periodId);
-              }
-            }
+      // TEST 1: Check if assignment elements exist
+      setTimeout(() => {
+        const assignments = document.querySelectorAll('.assignment-item');
+        console.log('Found assignment elements:', assignments.length);
+        
+        // TEST 2: Add a simple click listener to verify events work at all
+        assignments.forEach(el => {
+          el.addEventListener('click', (e) => {
+            console.log('Regular click on assignment:', el);
           });
-        }
-      });
+        });
+        
+        // TEST 3: Listen for contextmenu on the entire document
+        document.addEventListener('contextmenu', (e) => {
+          console.log('Context menu anywhere on page:', e.target);
+          
+          // Check if we clicked on an assignment
+          const assignmentEl = e.target.closest('.assignment-item');
+          if (assignmentEl) {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('Right click on assignment element!', assignmentEl);
+            
+            // Get the assignment data from the element
+            const assignmentId = assignmentEl.dataset.assignmentId;
+            const dayId = assignmentEl.dataset.dayId;
+            const periodId = assignmentEl.dataset.periodId;
+            
+            console.log('Assignment data:', { assignmentId, dayId, periodId });
+            
+            // Find the assignment in your data
+            const assignment = currentSchedules.value.find(a => String(a.id) === String(assignmentId));
+            if (assignment) {
+              console.log('Found assignment:', assignment);
+              openContextMenu(e, assignment, dayId, periodId);
+            } else {
+              console.log('Could not find assignment with id:', assignmentId);
+            }
+          }
+        }, true);
+      }, 2000); // Wait 2 seconds to ensure everything is loaded
     }); // This closes onMounted
     
     watch(() => visibleDays.value.length, async () => {
