@@ -8,7 +8,7 @@
     <!-- Main Grid (always renders) -->
     <div class="main-grid-container">
       <!-- Grid Header -->
-      <div class="grid-header" role="row">
+      <div class="grid-header" role="row" ref="gridHeaderRef">
         <div class="period-header-cell" role="columnheader">
           <span class="period-label">Period</span>
         </div>
@@ -149,16 +149,23 @@
       </div>
     </div>
 
-    <!-- Available Courses Panel (hidden in live or read-only) -->
+    <!-- Available Courses Panel (hidden in live or read-only), aligned with grid columns -->
     <div v-if="focusedPeriodId && !isReadOnly && !isLiveMode" class="available-courses-panel">
       <h3>Available Courses for {{ getFocusedPeriodName() }}</h3>
       <div class="focused-period-info">
         <em>Drag a course into a day cell to schedule it, or click a card to assign.</em>
       </div>
 
-      <!-- Aligned to grid: spacer equals period label width + one col per day -->
-      <div class="day-courses-grid" :style="{ '--days-count': String(visibleDays.length) }">
+      <!-- Exact column alignment: template set via availableGridTemplate -->
+      <div
+        class="day-courses-grid"
+        ref="availableGridRef"
+        :style="{ gridTemplateColumns: availableGridTemplate }"
+      >
+        <!-- First track is the label spacer (same width as period column) -->
         <div class="grid-label-spacer" aria-hidden="true"></div>
+
+        <!-- One column per visible day, widths match header day cells -->
         <div v-for="day in visibleDays" :key="`avail-${day.id}`" class="day-courses-column">
           <div class="available-courses-list">
             <div
@@ -333,6 +340,11 @@ export default {
     const normId = (v) => String(v ?? '');
     const isSameId = (a, b) => normId(a) === normId(b);
 
+    // DOM refs for measuring column widths
+    const gridHeaderRef = ref(null);
+    const availableGridRef = ref(null);
+    const availableGridTemplate = ref('var(--label-col,140px) repeat(var(--days-count,5), 1fr)');
+
     // Focus
     const focusedPeriodId = ref(null);
 
@@ -344,7 +356,7 @@ export default {
     const optimisticallyScheduled = ref(new Set());
     const recurringWhitelist = ref(new Set());
 
-    // Inline editor/context menu state
+    // Inline editor/context menu
     const editingAssignment = ref(null);
     const editingCell = ref(null);
 
@@ -454,7 +466,7 @@ export default {
       };
     };
 
-    // Normalize slots
+    // Normalize slots (supports objects or "day|period" strings)
     const normalizeSlots = (course) => {
       const out = [];
       const pushIfValid = (d, p) => { if (d != null && p != null) out.push({ dayId: String(d), periodId: String(p) }); };
@@ -494,7 +506,7 @@ export default {
       return Object.entries(byDay).map(([dn, per]) => `${dn} (${Array.from(new Set(per)).join(', ')})`).join('; ');
     };
 
-    // Context menu helpers
+    // Context menu
     const computeContextMenuPosition = (evt, menuSize = { w: 220, h: 96 }) => {
       const vw = window.innerWidth || 1024;
       const vh = window.innerHeight || 768;
@@ -525,37 +537,29 @@ export default {
       closeContextMenu();
     };
 
-    // MISSING BEFORE: define cell/assignment click handlers
+    // Click handlers
     const handleCellClick = (dayId, periodId, period) => {
       if (props.isReadOnly || !props.enableCellAdd) return;
       emit('cell-click', { dayId, periodId, period, mode: 'add', preSelectedCourse: null });
     };
-    const handleAssignmentClick = (assignment) => {
-      emit('assignment-details', assignment);
-    };
+    const handleAssignmentClick = (assignment) => emit('assignment-details', assignment);
 
     // Inline editor (popup)
     const isEditing = (id) => editingAssignment.value?.id === id;
     const startInlineEdit = (a, dayId, periodId) => {
       if (props.isReadOnly || props.isLiveMode) return;
-      editingAssignment.value = a;
-      editingCell.value = { dayId, periodId };
+      editingAssignment.value = a; editingCell.value = { dayId, periodId };
     };
     const startInlineEditReadOnly = (a, dayId, periodId) => {
-      editingAssignment.value = a;
-      editingCell.value = { dayId, periodId };
+      editingAssignment.value = a; editingCell.value = { dayId, periodId };
     };
     const saveInlineEdit = (updated) => {
       const data = currentSchedules.value;
       const updatedList = data.map((s) => (isSameId(s.id, updated.id) ? updated : s));
       emit('update-assignments', updatedList);
-      editingAssignment.value = null;
-      editingCell.value = null;
+      editingAssignment.value = null; editingCell.value = null;
     };
-    const cancelInlineEdit = () => {
-      editingAssignment.value = null;
-      editingCell.value = null;
-    };
+    const cancelInlineEdit = () => { editingAssignment.value = null; editingCell.value = null; };
     const deleteInlineAssignment = (a) => {
       if (props.emitDropEvents) {
         const fn = props.parentEmit || emit;
@@ -566,11 +570,8 @@ export default {
       }
       const data = currentSchedules.value.filter((s) => !isSameId(s.id, a.id));
       emit('update-assignments', data);
-      editingAssignment.value = null;
-      editingCell.value = null;
+      editingAssignment.value = null; editingCell.value = null;
     };
-
-    // Popup editor handlers
     const onEditorSave = (updated) => {
       if (props.isReadOnly || props.isLiveMode) return;
       saveInlineEdit(updated);
@@ -777,7 +778,7 @@ export default {
     const getFocusedPeriodName = () =>
       props.periods.find((p) => isSameId(p.id, focusedPeriodId.value))?.name || 'Unknown Period';
 
-    // Available courses
+    // Available courses list
     const getAvailableCoursesForSlot = (dayId, periodId) => {
       const dayKey = normId(dayId);
       const periodKey = normId(periodId);
@@ -856,23 +857,52 @@ export default {
 
     const handleCourseEdit = (d) => emit('course-edit', d);
 
-    // Close popups listeners (use passive where allowed)
+    // Measure header columns and apply to available panel
+    const measureAndApplyAvailableColumns = () => {
+      const header = gridHeaderRef.value;
+      const avail = availableGridRef.value;
+      if (!header || !avail) return;
+
+      // First track: period header cell width
+      const periodEl = header.querySelector('.period-header-cell');
+      const dayEls = header.querySelectorAll('.day-header-cell');
+      if (!periodEl || !dayEls?.length) return;
+
+      const labelW = Math.round(periodEl.getBoundingClientRect().width);
+      const dayWidths = Array.from(dayEls).map((el) => Math.round(el.getBoundingClientRect().width));
+
+      // Build explicit grid-template-columns string
+      availableGridTemplate.value = `${labelW}px ${dayWidths.map((w) => `${w}px`).join(' ')}`;
+    };
+
+    // Close popups listeners (use passive where allowed) and also re-measure on resize/changes
     const onKeyDown = (e) => {
       if (e.key === 'Escape') {
         contextMenu.value.show = false;
         if (editingAssignment.value) editingAssignment.value = null;
       }
     };
-    const onWindowResize = () => { contextMenu.value.show = false; };
-    const onAnyScroll = () => { contextMenu.value.show = false; };
+    const onWindowResize = () => {
+      contextMenu.value.show = false;
+      measureAndApplyAvailableColumns();
+    };
+    const onAnyScroll = () => {
+      contextMenu.value.show = false;
+    };
 
-    onMounted(() => {
+    onMounted(async () => {
       window.addEventListener('keydown', onKeyDown, true);
       window.addEventListener('resize', onWindowResize, { passive: true });
-      // passive + capture to avoid the warning and still catch scrolls anywhere
       window.addEventListener('scroll', onAnyScroll, { passive: true, capture: true });
-      console.log('🚀 Course Scheduler mounted');
+
+      await nextTick();
+      measureAndApplyAvailableColumns();
     });
+    watch(() => visibleDays.value.length, async () => {
+      await nextTick();
+      measureAndApplyAvailableColumns();
+    });
+
     onBeforeUnmount(() => {
       window.removeEventListener('keydown', onKeyDown, true);
       window.removeEventListener('resize', onWindowResize);
@@ -880,6 +910,11 @@ export default {
     });
 
     return {
+      // DOM
+      gridHeaderRef,
+      availableGridRef,
+      availableGridTemplate,
+
       // state
       focusedPeriodId,
       draggedCourse,
@@ -900,11 +935,9 @@ export default {
       hasData,
       editorModalTitle,
 
-      // helpers
+      // helpers + formatters
       safeArray,
       safeLength,
-
-      // formatters
       formatTime,
       formatDate,
       formatInt,
@@ -1053,11 +1086,16 @@ export default {
 .available-courses-panel h3 { margin: 0 0 6px 0; color: #007cba; font-size: 1.05em; }
 .focused-period-info { margin: 0 0 10px 0; color: #666; font-size: 0.9em; }
 
-/* Aligned grid for available courses (spacer + day columns) */
-.day-courses-grid { --label-col: 140px; display: grid; grid-template-columns: var(--label-col) repeat(var(--days-count, 5), 1fr); gap: 12px; }
-.grid-label-spacer { width: var(--label-col); }
-.day-courses-column { min-width: 160px; }
-.available-courses-list { display: flex; flex-direction: column; gap: 8px; max-height: 320px; overflow-y: auto; }
+/* Aligned grid for available courses (no gap; borders continue grid lines) */
+.day-courses-grid { display: grid; column-gap: 0; row-gap: 12px; }
+.grid-label-spacer { height: 100%; }
+
+/* Match vertical grid lines by borders on day columns */
+.day-courses-column { min-width: 0; border-left: 1px solid #ddd; }
+.day-courses-column:first-of-type { /* ensure line between period col and first day */
+  border-left: 1px solid #ddd;
+}
+.available-courses-list { display: flex; flex-direction: column; gap: 8px; padding: 6px 8px; max-height: 320px; overflow-y: auto; }
 .course-card { padding: 8px 10px; background: white; border: 1px solid #ddd; border-radius: 4px; cursor: grab; transition: all 0.2s; font-size: 0.9em; }
 .course-card:hover { transform: translateY(-1px); box-shadow: 0 2px 4px rgba(0,124,186,0.15); border-color: #007cba; }
 .course-card:active { cursor: grabbing; }
