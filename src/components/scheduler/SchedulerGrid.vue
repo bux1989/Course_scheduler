@@ -156,11 +156,10 @@
         <em>Drag a course into a day cell to schedule it, or click a card to assign.</em>
       </div>
 
-      <!-- Aligned to grid: include a spacer column (= period label width) + one column per visible day -->
+      <!-- Aligned to grid: spacer equals period label width + one col per day -->
       <div class="day-courses-grid" :style="{ '--days-count': String(visibleDays.length) }">
         <div class="grid-label-spacer" aria-hidden="true"></div>
         <div v-for="day in visibleDays" :key="`avail-${day.id}`" class="day-courses-column">
-          <!-- No day titles here anymore; aligned columns instead -->
           <div class="available-courses-list">
             <div
               v-for="course in getAvailableCoursesForSlot(day.id, focusedPeriodId)"
@@ -214,7 +213,7 @@
       </div>
     </div>
 
-    <!-- Teacher/Room Selection Modal (emits frequency) -->
+    <!-- Teacher/Room Selection Modal (preselects possible_staff_ids) -->
     <TeacherRoomSelectionModal
       v-if="showTeacherRoomModal && modalCourseData"
       :courseId="modalCourseData.courseId"
@@ -228,7 +227,7 @@
       @cancel="handleTeacherRoomCancel"
     />
 
-    <!-- Context Menu (teleported to body, max z-index) -->
+    <!-- Context Menu -->
     <teleport to="body">
       <div
         v-if="contextMenu.show"
@@ -341,11 +340,11 @@ export default {
     const draggedCourse = ref(null);
     const draggedAssignment = ref(null);
 
-    // Available list behavior (optimistic hide + recurring keep-visible)
-    const optimisticallyScheduled = ref(new Set()); // key: day|period|course
-    const recurringWhitelist = ref(new Set());       // key: day|period|course
+    // Available list behavior
+    const optimisticallyScheduled = ref(new Set());
+    const recurringWhitelist = ref(new Set());
 
-    // Inline editor/context menu
+    // Inline editor/context menu state
     const editingAssignment = ref(null);
     const editingCell = ref(null);
 
@@ -455,17 +454,10 @@ export default {
       };
     };
 
-    // Normalize slots: supports
-    // - course.possibleSlots: [{ dayId, periodId }]
-    // - course.possible_time_slots: array of:
-    //     - objects with { dayId, periodId } or variants (day_id/day/day_number, period_id/blockId/period)
-    //     - strings "dayId|periodId" (e.g., "2|<period-uuid>")
+    // Normalize slots
     const normalizeSlots = (course) => {
       const out = [];
-      const pushIfValid = (d, p) => {
-        if (d == null || p == null) return;
-        out.push({ dayId: String(d), periodId: String(p) });
-      };
+      const pushIfValid = (d, p) => { if (d != null && p != null) out.push({ dayId: String(d), periodId: String(p) }); };
 
       if (Array.isArray(course?.possibleSlots)) {
         course.possibleSlots.forEach((s) => pushIfValid(s.dayId, s.periodId));
@@ -484,28 +476,22 @@ export default {
       }
       return out;
     };
-
     const isCourseAllowedForSlot = (course, dayId, periodId) => {
       const slots = normalizeSlots(course);
-      // If no constraints provided, allow all
       if (!slots.length) return true;
-      const d = normId(dayId);
-      const p = normId(periodId);
+      const d = normId(dayId), p = normId(periodId);
       return slots.some((s) => isSameId(s.dayId, d) && isSameId(s.periodId, p));
     };
-
     const buildAllowedSlotsLabel = (course) => {
       const slots = normalizeSlots(course);
       if (!slots.length) return 'any day and period';
-      // collapse by day name -> period label(s)
       const byDay = {};
       slots.forEach(({ dayId, periodId }) => {
         const dayName = props.schoolDays.find((d) => isSameId(d.id, dayId))?.name || `Day ${dayId}`;
         const perName = props.periods.find((p) => isSameId(p.id, periodId))?.name || 'Period';
         byDay[dayName] = byDay[dayName] ? [...byDay[dayName], perName] : [perName];
       });
-      const parts = Object.entries(byDay).map(([day, periods]) => `${day} (${Array.from(new Set(periods)).join(', ')})`);
-      return parts.join('; ');
+      return Object.entries(byDay).map(([dn, per]) => `${dn} (${Array.from(new Set(per)).join(', ')})`).join('; ');
     };
 
     // Context menu helpers
@@ -518,7 +504,6 @@ export default {
       if (y + menuSize.h > vh) y = Math.max(8, vh - menuSize.h - 8);
       return { x, y };
     };
-
     const openContextMenu = (event, assignment, dayId, periodId) => {
       event.stopPropagation();
       event.preventDefault();
@@ -540,7 +525,16 @@ export default {
       closeContextMenu();
     };
 
-    // Inline editor (now in a popup)
+    // MISSING BEFORE: define cell/assignment click handlers
+    const handleCellClick = (dayId, periodId, period) => {
+      if (props.isReadOnly || !props.enableCellAdd) return;
+      emit('cell-click', { dayId, periodId, period, mode: 'add', preSelectedCourse: null });
+    };
+    const handleAssignmentClick = (assignment) => {
+      emit('assignment-details', assignment);
+    };
+
+    // Inline editor (popup)
     const isEditing = (id) => editingAssignment.value?.id === id;
     const startInlineEdit = (a, dayId, periodId) => {
       if (props.isReadOnly || props.isLiveMode) return;
@@ -576,7 +570,7 @@ export default {
       editingCell.value = null;
     };
 
-    // Popup editor handlers (guard live/read-only)
+    // Popup editor handlers
     const onEditorSave = (updated) => {
       if (props.isReadOnly || props.isLiveMode) return;
       saveInlineEdit(updated);
@@ -647,7 +641,7 @@ export default {
       event.target.style.opacity = '1';
     };
 
-    // Drop target handlers
+    // Drop targets
     const handleCellDragOver = (event) => {
       if (!draggedAssignment.value && !draggedCourse.value) return false;
       event.dataTransfer.dropEffect = draggedAssignment.value ? 'move' : 'copy';
@@ -668,7 +662,6 @@ export default {
       try {
         const data = JSON.parse(event.dataTransfer.getData('text/plain'));
         if (data.type === 'course') {
-          // assignCourseToSlot performs the allowed-slot confirmation
           assignCourseToSlot(data.course || { id: data.id }, dayId, periodId);
         } else if (data.type === 'assignment') {
           const a = data.assignment;
@@ -697,28 +690,20 @@ export default {
       } catch (e) { console.error('Drop error:', e); }
     };
 
-    // Extract proposed teachers (possible_staff_ids) from a course
+    // Proposed teachers helper
     const getProposedTeacherIds = (course) => {
       const ids = [];
-      // Arrays
-      if (Array.isArray(course?.possible_staff_ids)) {
-        ids.push(...course.possible_staff_ids);
-      }
-      // Also tolerate objects with numeric keys (0: "id", 1: "id")
-      if (course && typeof course === 'object') {
-        const maybeObj = course.possible_staff_ids;
-        if (maybeObj && !Array.isArray(maybeObj) && typeof maybeObj === 'object') {
-          Object.keys(maybeObj).forEach((k) => ids.push(maybeObj[k]));
-        }
+      if (Array.isArray(course?.possible_staff_ids)) ids.push(...course.possible_staff_ids);
+      if (course?.possible_staff_ids && typeof course.possible_staff_ids === 'object' && !Array.isArray(course.possible_staff_ids)) {
+        Object.keys(course.possible_staff_ids).forEach((k) => ids.push(course.possible_staff_ids[k]));
       }
       return ids.map((x) => String(x)).filter((x) => !!x && x !== 'null' && x !== 'undefined');
     };
 
-    // Course assign modal (with allowed-slot warning + preselect teachers)
+    // Course assign modal (with allowed-slot confirmation + preselects)
     const assignCourseToSlot = (course, dayId, periodId) => {
       if (!course || props.isReadOnly || props.isLiveMode) return;
 
-      // If slot is not allowed by course preference, confirm with user
       if (!isCourseAllowedForSlot(course, dayId, periodId)) {
         const allowedText = buildAllowedSlotsLabel(course);
         const name = course.name || course.course_name || course.title || 'This course';
@@ -871,20 +856,22 @@ export default {
 
     const handleCourseEdit = (d) => emit('course-edit', d);
 
-    // Close context menu/editor on Escape / resize / scroll (capture)
+    // Close popups listeners (use passive where allowed)
     const onKeyDown = (e) => {
       if (e.key === 'Escape') {
         contextMenu.value.show = false;
         if (editingAssignment.value) editingAssignment.value = null;
       }
     };
-    const onWindowResize = () => (contextMenu.value.show = false);
-    const onAnyScroll = () => (contextMenu.value.show = false);
+    const onWindowResize = () => { contextMenu.value.show = false; };
+    const onAnyScroll = () => { contextMenu.value.show = false; };
 
     onMounted(() => {
       window.addEventListener('keydown', onKeyDown, true);
       window.addEventListener('resize', onWindowResize, { passive: true });
-      window.addEventListener('scroll', onAnyScroll, true);
+      // passive + capture to avoid the warning and still catch scrolls anywhere
+      window.addEventListener('scroll', onAnyScroll, { passive: true, capture: true });
+      console.log('🚀 Course Scheduler mounted');
     });
     onBeforeUnmount(() => {
       window.removeEventListener('keydown', onKeyDown, true);
@@ -1066,15 +1053,9 @@ export default {
 .available-courses-panel h3 { margin: 0 0 6px 0; color: #007cba; font-size: 1.05em; }
 .focused-period-info { margin: 0 0 10px 0; color: #666; font-size: 0.9em; }
 
-/* New: aligned grid for available courses (spacer + N day columns) */
-.day-courses-grid {
-  --label-col: 140px;
-  display: grid;
-  grid-template-columns: var(--label-col) repeat(var(--days-count, 5), 1fr);
-  gap: 12px;
-}
+/* Aligned grid for available courses (spacer + day columns) */
+.day-courses-grid { --label-col: 140px; display: grid; grid-template-columns: var(--label-col) repeat(var(--days-count, 5), 1fr); gap: 12px; }
 .grid-label-spacer { width: var(--label-col); }
-
 .day-courses-column { min-width: 160px; }
 .available-courses-list { display: flex; flex-direction: column; gap: 8px; max-height: 320px; overflow-y: auto; }
 .course-card { padding: 8px 10px; background: white; border: 1px solid #ddd; border-radius: 4px; cursor: grab; transition: all 0.2s; font-size: 0.9em; }
@@ -1126,7 +1107,7 @@ export default {
 }
 </style>
 
-<!-- Unscoped styles so the teleported context menu/backdrop always render above EVERYTHING -->
+<!-- Context menu styles -->
 <style>
 .context-menu {
   position: fixed;
@@ -1134,7 +1115,7 @@ export default {
   border: 1px solid #ccc;
   border-radius: 6px;
   box-shadow: 0 12px 32px rgba(0,0,0,0.18);
-  z-index: 2147483647; /* max int z-index to beat all overlays */
+  z-index: 2147483647;
   min-width: 180px;
   padding: 4px 0;
   pointer-events: auto;
