@@ -157,17 +157,18 @@
                     </div>
                 </div>
 
-                <!-- Weekly Grade Statistics (only when period is focused) -->
+                <!-- Grade Statistics (only when period is focused) -->
                 <div v-if="showStatistics && focusedPeriodId" class="statistics-row">
+                    <!-- Weekly Stats in left column -->
                     <div class="period-label-cell stats-label-cell">
                         <div class="stats-title">
-                            <span class="stats-emoji">📈</span>
-                            <span>Grade Stats</span>
+                            <span class="stats-emoji">📊</span>
+                            <span>Weekly Stats</span>
                         </div>
                         <!-- Weekly totals for the selected period -->
-                        <div class="weekly-period-totals">
+                        <div class="weekly-stats-content">
                             <div class="weekly-stats-headers" role="presentation">
-                                <div class="header-spacer" aria-hidden="true">Grade:</div>
+                                <div class="grade-header">Grade:</div>
                                 <div class="stat-header" title="Total free spots available">📊</div>
                                 <div class="stat-header" title="Average spots available">⚖️</div>
                                 <div class="stat-header" title="Courses available">📚</div>
@@ -175,8 +176,8 @@
                             <div class="weekly-stats-rows">
                                 <div
                                     v-for="gradeStats in getWeeklyPeriodTotals(focusedPeriodId)"
-                                    :key="`weekly-period-${gradeStats.grade}`"
-                                    class="weekly-grade-stats-row"
+                                    :key="`weekly-${gradeStats.grade}`"
+                                    class="weekly-grade-row"
                                 >
                                     <div class="grade-number">{{ gradeStats.grade }}:</div>
                                     <div class="stat-value">{{ formatInt(gradeStats.totalSpots) }}</div>
@@ -187,30 +188,34 @@
                         </div>
                     </div>
 
-                    <!-- Empty cells to align with day columns -->
-                    <div v-for="day in visibleDays" :key="`weekly-spacer-${day.id}`" class="weekly-spacer-cell">
-                        <!-- Intentionally empty to maintain alignment -->
-                    </div>
-                </div>
-
-                <!-- Totals Row (only when period focused) -->
-                <div v-if="showStatistics && focusedPeriodId" class="totals-row compact">
-                    <div class="period-label-cell totals-label-cell compact">
-                        <div class="totals-title compact">
-                            <span class="totals-emoji">📊</span>
-                            <span>Totals</span>
+                    <!-- Daily Grade Stats for each day -->
+                    <div v-for="day in visibleDays" :key="`stats-${day.id}`" class="day-statistics-cell">
+                        <div class="stats-headers" role="presentation">
+                            <div class="header-spacer" aria-hidden="true"></div>
+                            <div class="stat-header" title="Total free spots available">📊</div>
+                            <div class="stat-header" title="Average spots available">⚖️</div>
+                            <div class="stat-header" title="Courses available">📚</div>
                         </div>
-                    </div>
-
-                    <div v-for="day in visibleDays" :key="`totals-${day.id}`" class="day-totals-cell compact">
-                        <div class="daily-totals compact">
-                            <div class="total-line compact">
-                                <span class="total-label">Spots:</span>
-                                <span class="total-value">{{ formatInt(getDailyTotals(day.id).totalSpots) }}</span>
+                        <div class="stats-rows">
+                            <div
+                                v-for="gradeStats in getDailyGradeStats(day.id, focusedPeriodId)"
+                                :key="`${day.id}-${gradeStats.grade}`"
+                                class="grade-stats-row"
+                            >
+                                <div class="grade-number">{{ gradeStats.grade }}:</div>
+                                <div class="stat-value">{{ formatInt(gradeStats.totalSpots) }}</div>
+                                <div class="stat-value">{{ formatInt(gradeStats.averageSpots) }}</div>
+                                <div class="stat-value">{{ formatInt(gradeStats.coursesCount) }}</div>
                             </div>
-                            <div class="total-line compact">
-                                <span class="total-label">Courses:</span>
-                                <span class="total-value">{{ formatInt(getDailyTotals(day.id).totalCourses) }}</span>
+                        </div>
+                        <div v-if="safeLength(getDailyGradeStats(day.id, focusedPeriodId)) === 0" class="no-stats">
+                            <span class="no-stats-text">No courses scheduled</span>
+                        </div>
+                        <!-- Daily totals at bottom of each day -->
+                        <div class="daily-totals-section">
+                            <div class="daily-total-row">
+                                <span class="total-label">Total:</span>
+                                <span class="total-value">{{ formatInt(getDailyTotals(day.id).totalSpots) }}</span>
                             </div>
                         </div>
                     </div>
@@ -1705,6 +1710,23 @@ export default {
     font-size: 0.9em;
 }
 
+/* Daily Totals Section */
+.daily-totals-section {
+    margin-top: 8px;
+    padding-top: 6px;
+    border-top: 1px solid #e0e0e0;
+}
+.daily-total-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 2px 4px;
+    background: #f8f9fa;
+    border: 1px solid #ccc;
+    border-radius: 3px;
+    font-size: 0.8em;
+}
+
 /* Totals Row */
 .totals-row {
     display: flex !important;
@@ -1784,11 +1806,12 @@ export default {
 .weekly-emoji {
     font-size: 1.15em;
 }
-.weekly-period-totals {
+.weekly-stats-content {
     display: flex;
     flex-direction: column;
     gap: 6px;
     flex-grow: 1;
+    margin-top: 8px;
 }
 .weekly-spacer-cell {
     flex: 1 1 0;
@@ -1826,29 +1849,33 @@ export default {
     display: grid;
     grid-template-columns: 40px 1fr 1fr 1fr;
     align-items: center;
-    gap: 8px;
-    padding: 4px 6px;
-    background: rgba(40, 167, 69, 0.1);
+    gap: 4px;
+    margin-bottom: 4px;
+    padding: 3px 4px;
+    background: rgba(0, 124, 186, 0.1);
     border-radius: 4px;
-    font-size: 0.9em;
-    font-weight: 500;
+    font-size: 0.75em;
+}
+.grade-header {
+    font-weight: 600;
+    color: #333;
 }
 .weekly-stats-rows {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 3px;
     flex-grow: 1;
 }
-.weekly-grade-stats-row {
+.weekly-grade-row {
     display: grid;
     grid-template-columns: 40px 1fr 1fr 1fr;
     align-items: center;
-    gap: 8px;
+    gap: 4px;
     background: #f8f9fa;
-    border: 1px solid #28a745;
+    border: 1px solid #e0e0e0;
     border-radius: 4px;
-    padding: 6px;
-    font-size: 0.9em;
+    padding: 3px 4px;
+    font-size: 0.75em;
 }
 
 /* Daily Totals */
