@@ -157,16 +157,23 @@
                     </div>
                 </div>
 
-                <!-- Grade Statistics Row -->
-                <div v-if="showStatistics && focusedPeriodId" class="statistics-row">
+                <!-- Grade Statistics with Weekly Totals -->
+                <div v-if="showStatistics" class="statistics-row">
                     <div class="period-label-cell stats-label-cell">
                         <div class="stats-title">
                             <span class="stats-emoji">📈</span>
-                            <span>Grade Stats</span>
+                            <span v-if="focusedPeriodId">Grade Stats</span>
+                            <span v-else>Week Totals (Yr 1-6)</span>
                         </div>
                     </div>
 
-                    <div v-for="day in visibleDays" :key="`stats-${day.id}`" class="day-statistics-cell">
+                    <!-- Daily Grade Stats (when period is focused) -->
+                    <div
+                        v-if="focusedPeriodId"
+                        v-for="day in visibleDays"
+                        :key="`stats-${day.id}`"
+                        class="day-statistics-cell"
+                    >
                         <div class="stats-headers" role="presentation">
                             <div class="header-spacer" aria-hidden="true"></div>
                             <div class="stat-header" title="Total free spots available">📊</div>
@@ -189,18 +196,9 @@
                             <span class="no-stats-text">No courses scheduled</span>
                         </div>
                     </div>
-                </div>
 
-                <!-- Weekly Grade Totals Row -->
-                <div v-if="showStatistics" class="weekly-totals-row">
-                    <div class="period-label-cell stats-label-cell">
-                        <div class="stats-title">
-                            <span class="stats-emoji">📋</span>
-                            <span>Week Totals (Yr 1-6)</span>
-                        </div>
-                    </div>
-
-                    <div class="weekly-totals-content">
+                    <!-- Weekly Grade Totals (when no period is focused) -->
+                    <div v-if="!focusedPeriodId" class="weekly-totals-content">
                         <div class="weekly-stats-headers" role="presentation">
                             <div class="header-spacer" aria-hidden="true">Grade:</div>
                             <div class="stat-header" title="Total free spots available">📊</div>
@@ -225,8 +223,8 @@
                     </div>
                 </div>
 
-                <!-- Daily Totals Row -->
-                <div v-if="showStatistics" class="daily-totals-row">
+                <!-- Daily Totals Row (only when period focused) -->
+                <div v-if="showStatistics && focusedPeriodId" class="daily-totals-row">
                     <div class="period-label-cell stats-label-cell">
                         <div class="stats-title">
                             <span class="stats-emoji">📊</span>
@@ -1682,20 +1680,16 @@ export default {
     color: #333;
 }
 
-/* Weekly Totals */
-.weekly-totals-row {
-    display: flex !important;
-    border-bottom: 2px solid #28a745;
-    background: #f0f9f0;
-    border-top: 1px solid #28a745;
-}
-.weekly-totals-content {
+/* Weekly Totals (when integrated in statistics row) */
+.statistics-row .weekly-totals-content {
     flex: 1;
     padding: 8px 12px;
     background: white;
     display: flex;
     flex-direction: column;
     gap: 6px;
+    /* Span across all columns when no period is focused */
+    grid-column: 1 / -1;
 }
 .weekly-stats-headers {
     display: grid;
