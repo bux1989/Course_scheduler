@@ -518,11 +518,17 @@ export default {
       return { x, y };
     };
     const openContextMenu = (event, assignment, dayId, periodId) => {
+      console.log('Context menu triggered', { assignment, dayId, periodId });
       event.stopPropagation();
       event.preventDefault();
       const pos = computeContextMenuPosition(event);
+      console.log('Context menu position', pos);
       contextMenu.value = { show: true, x: pos.x, y: pos.y, assignment, dayId, periodId };
-      nextTick(() => contextMenuRef.value?.focus?.());
+      console.log('Context menu state', contextMenu.value);
+      nextTick(() => {
+        console.log('Context menu ref', contextMenuRef.value);
+        contextMenuRef.value?.focus?.();
+      });
     };
     const closeContextMenu = () => (contextMenu.value.show = false);
     const editAssignmentFromContext = () => {
@@ -553,20 +559,6 @@ export default {
     const startInlineEdit = (a, dayId, periodId) => {
       if (props.isReadOnly || props.isLiveMode) return;
       editingAssignment.value = a; editingCell.value = { dayId, periodId };
-    };
-    // Add this temporary debug code to the openContextMenu function (around line 556)
-    const openContextMenu = (event, assignment, dayId, periodId) => {
-      console.log('Context menu triggered', { assignment, dayId, periodId }); // ADD THIS
-      event.stopPropagation();
-      event.preventDefault();
-      const pos = computeContextMenuPosition(event);
-      console.log('Context menu position', pos); // ADD THIS
-      contextMenu.value = { show: true, x: pos.x, y: pos.y, assignment, dayId, periodId };
-      console.log('Context menu state', contextMenu.value); // ADD THIS
-      nextTick(() => {
-        console.log('Context menu ref', contextMenuRef.value); // ADD THIS
-        contextMenuRef.value?.focus?.();
-      });
     };
     const startInlineEditReadOnly = (a, dayId, periodId) => {
       editingAssignment.value = a; editingCell.value = { dayId, periodId };
