@@ -929,10 +929,37 @@ export default {
       window.addEventListener('keydown', onKeyDown, true);
       window.addEventListener('resize', onWindowResize, { passive: true });
       window.addEventListener('scroll', onAnyScroll, { passive: true, capture: true });
-
+    
       await nextTick();
       measureAndApplyAvailableColumns();
-    });
+      
+      // ADD THE NEW CODE HERE (after measureAndApplyAvailableColumns)
+      nextTick(() => {
+        const gridEl = document.querySelector('.scheduler-grid');
+        if (gridEl) {
+          gridEl.addEventListener('contextmenu', (e) => {
+            const assignmentEl = e.target.closest('.assignment-item');
+            if (assignmentEl) {
+              e.preventDefault();
+              e.stopPropagation();
+              console.log('Right click detected via DOM!', assignmentEl);
+              
+              // Get the assignment data from the element
+              const assignmentId = assignmentEl.dataset.assignmentId;
+              const dayId = assignmentEl.dataset.dayId;
+              const periodId = assignmentEl.dataset.periodId;
+              
+              // Find the assignment in your data
+              const assignment = currentSchedules.value.find(a => String(a.id) === String(assignmentId));
+              if (assignment) {
+                openContextMenu(e, assignment, dayId, periodId);
+              }
+            }
+          });
+        }
+      });
+    }); // This closes onMounted
+    
     watch(() => visibleDays.value.length, async () => {
       await nextTick();
       measureAndApplyAvailableColumns();
