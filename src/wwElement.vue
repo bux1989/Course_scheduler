@@ -13,6 +13,15 @@
                     <button @click="showConflicts = !showConflicts" class="btn" :class="{ active: showConflicts }">
                         ⚠️ Conflicts ({{ safeLength(allConflicts) }})
                     </button>
+                    <button @click="showStatistics = !showStatistics" class="btn" :class="{ active: showStatistics }">
+                        📊 Statistics
+                    </button>
+                </div>
+
+                <div class="header-actions" v-if="isReadOnly">
+                    <button @click="showStatistics = !showStatistics" class="btn" :class="{ active: showStatistics }">
+                        📊 Statistics
+                    </button>
                 </div>
             </div>
         </div>
@@ -34,7 +43,7 @@
                 :is-saving="isSaving"
                 :is-read-only="isReadOnly"
                 :is-live-mode="isLiveMode"
-                :show-statistics="true"
+                :show-statistics="showStatistics"
                 :parent-emit="$emit"
                 :emit-drop-events="true"
                 @cell-click="handleCellClick"
@@ -152,6 +161,7 @@ export default {
         // UI state
         const showAssignmentModal = ref(false);
         const showConflicts = ref(false);
+        const showStatistics = ref(true);
         const isSaving = ref(false);
 
         // Undo
@@ -536,6 +546,7 @@ export default {
             // State
             showAssignmentModal,
             showConflicts,
+            showStatistics,
             isSaving,
             selectedCell,
 
