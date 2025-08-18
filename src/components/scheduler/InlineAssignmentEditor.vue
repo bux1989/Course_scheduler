@@ -1,7 +1,4 @@
 <template>
-    <!-- Modal Backdrop -->
-    <div class="modal-backdrop" @click="cancelEdit"></div>
-
     <div class="inline-editor" @click.stop>
         <!-- Assignment Info (Read-only) -->
         <div class="editor-field info-field">
@@ -75,7 +72,7 @@
 </template>
 
 <script>
-import { computed, ref, watch } from 'vue';
+import { computed, ref, watch, onMounted } from 'vue';
 
 export default {
     name: 'InlineAssignmentEditor',
@@ -191,6 +188,10 @@ export default {
             });
         }
 
+        onMounted(() => {
+            // Component mounted successfully
+        });
+
         return {
             editableAssignment,
             teacherSearchTerm,
@@ -210,37 +211,14 @@ export default {
 </script>
 
 <style scoped>
-.modal-backdrop {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0, 0, 0, 0.5);
-    z-index: 999;
-}
-
 .inline-editor {
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
     background: white;
-    border: 2px solid #007cba;
-    border-radius: 8px;
-    padding: 20px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-    z-index: 1000;
     display: flex;
     flex-direction: column;
     gap: 16px;
     font-size: 14px;
-    /* Modal sizing */
-    width: 450px;
-    max-width: 90vw;
-    max-height: 90vh;
+    width: 100%;
     box-sizing: border-box;
-    overflow-y: auto;
 }
 
 .editor-field {

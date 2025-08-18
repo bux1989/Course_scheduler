@@ -10,12 +10,17 @@
 
                 <div class="header-actions" v-if="!isReadOnly">
                     <button @click="undo" :disabled="!canUndo" class="btn">↶ Undo</button>
-                    <button
-                        @click="showConflicts = !showConflicts"
-                        class="btn"
-                        :class="{ active: showConflicts }"
-                    >
+                    <button @click="showConflicts = !showConflicts" class="btn" :class="{ active: showConflicts }">
                         ⚠️ Conflicts ({{ safeLength(allConflicts) }})
+                    </button>
+                    <button @click="showStatistics = !showStatistics" class="btn" :class="{ active: showStatistics }">
+                        📊 Statistics
+                    </button>
+                </div>
+
+                <div class="header-actions" v-if="isReadOnly">
+                    <button @click="showStatistics = !showStatistics" class="btn" :class="{ active: showStatistics }">
+                        📊 Statistics
                     </button>
                 </div>
             </div>
@@ -37,7 +42,8 @@
                 :can-undo="canUndo"
                 :is-saving="isSaving"
                 :is-read-only="isReadOnly"
-                :show-statistics="true"
+                :is-live-mode="isLiveMode"
+                :show-statistics="showStatistics"
                 :parent-emit="$emit"
                 :emit-drop-events="true"
                 @cell-click="handleCellClick"
@@ -125,6 +131,7 @@ export default {
                 liveSchedules: [],
                 subjects: [],
                 emitDropEvents: false,
+                mode: 'planner',
             }),
         },
         draftSchedules: { type: [Array, Object], default: () => [] },
@@ -154,6 +161,7 @@ export default {
         // UI state
         const showAssignmentModal = ref(false);
         const showConflicts = ref(false);
+        const showStatistics = ref(true);
         const isSaving = ref(false);
 
         // Undo
@@ -232,6 +240,7 @@ export default {
 
         // Flags
         const isReadOnly = computed(() => false);
+        const isLiveMode = computed(() => props.content.mode === 'live');
         const canUndo = computed(() => safeLength(undoStack.value) > 0);
 
         // Conflicts
@@ -537,11 +546,13 @@ export default {
             // State
             showAssignmentModal,
             showConflicts,
+            showStatistics,
             isSaving,
             selectedCell,
 
             // Flags
             isReadOnly,
+            isLiveMode,
             canUndo,
 
             // Derived
@@ -657,7 +668,7 @@ export default {
     background: #fff;
     border: 1px solid #eee;
     border-radius: 6px;
-    box-shadow: 0 6px 20px rgba(0,0,0,0.08);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
     padding: 12px;
 }
 
