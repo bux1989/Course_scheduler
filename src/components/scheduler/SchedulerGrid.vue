@@ -1198,3 +1198,12 @@ export default {
 }
 @media (max-width: 768px) {
   .period-header-cell, .period-label-cell, .stats-label-cell { width: 120px
+    width: 120px; 
+    min-width: 120px; 
+    max-width: 120px; 
+  }
+  .day-header-cell, .schedule-cell, .day-statistics-cell { 
+    min-width: 180px; 
+  }
+}
+</style>
