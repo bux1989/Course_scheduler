@@ -155,9 +155,12 @@
       <div class="focused-period-info">
         <em>Drag a course into a day cell to schedule it, or click a card to assign.</em>
       </div>
-      <div class="day-courses-grid">
-        <div v-for="day in visibleDays" :key="day.id" class="day-courses-column">
-          <h4>{{ day.name }}</h4>
+
+      <!-- Aligned to grid: include a spacer column (= period label width) + one column per visible day -->
+      <div class="day-courses-grid" :style="{ '--days-count': String(visibleDays.length) }">
+        <div class="grid-label-spacer" aria-hidden="true"></div>
+        <div v-for="day in visibleDays" :key="`avail-${day.id}`" class="day-courses-column">
+          <!-- No day titles here anymore; aligned columns instead -->
           <div class="available-courses-list">
             <div
               v-for="course in getAvailableCoursesForSlot(day.id, focusedPeriodId)"
@@ -220,6 +223,7 @@
       :periodId="modalCourseData.periodId"
       :teachers="teachers"
       :rooms="rooms"
+      :preselectedTeacherIds="modalCourseData.preselectedTeacherIds || []"
       @submit="handleTeacherRoomSubmit"
       @cancel="handleTeacherRoomCancel"
     />
@@ -337,11 +341,11 @@ export default {
     const draggedCourse = ref(null);
     const draggedAssignment = ref(null);
 
-    // Available list behavior
+    // Available list behavior (optimistic hide + recurring keep-visible)
     const optimisticallyScheduled = ref(new Set()); // key: day|period|course
-    const recurringWhitelist = ref(new Set());
+    const recurringWhitelist = ref(new Set());       // key: day|period|course
 
-    // Inline editor/context menu state
+    // Inline editor/context menu
     const editingAssignment = ref(null);
     const editingCell = ref(null);
 
@@ -351,31 +355,6 @@ export default {
     // Teacher modal
     const showTeacherRoomModal = ref(false);
     const modalCourseData = ref(null);
-
-    // Global listeners to close popups
-    const onKeyDown = (e) => {
-      if (e.key === 'Escape') {
-        contextMenu.value.show = false;
-        if (editingAssignment.value) editingAssignment.value = null;
-      }
-    };
-    const onWindowResize = () => {
-      contextMenu.value.show = false;
-    };
-    const onAnyScroll = () => {
-      contextMenu.value.show = false;
-    };
-
-    onMounted(() => {
-      window.addEventListener('keydown', onKeyDown, true);
-      window.addEventListener('resize', onWindowResize, { passive: true });
-      window.addEventListener('scroll', onAnyScroll, true);
-    });
-    onBeforeUnmount(() => {
-      window.removeEventListener('keydown', onKeyDown, true);
-      window.removeEventListener('resize', onWindowResize);
-      window.removeEventListener('scroll', onAnyScroll, true);
-    });
 
     // Visible data
     const visibleDays = computed(() => safeArray(props.schoolDays).slice(0, props.maxDays || 7));
@@ -476,7 +455,60 @@ export default {
       };
     };
 
-    // Context menu (single, global, always above everything)
+    // Normalize slots: supports
+    // - course.possibleSlots: [{ dayId, periodId }]
+    // - course.possible_time_slots: array of:
+    //     - objects with { dayId, periodId } or variants (day_id/day/day_number, period_id/blockId/period)
+    //     - strings "dayId|periodId" (e.g., "2|<period-uuid>")
+    const normalizeSlots = (course) => {
+      const out = [];
+      const pushIfValid = (d, p) => {
+        if (d == null || p == null) return;
+        out.push({ dayId: String(d), periodId: String(p) });
+      };
+
+      if (Array.isArray(course?.possibleSlots)) {
+        course.possibleSlots.forEach((s) => pushIfValid(s.dayId, s.periodId));
+      }
+      if (Array.isArray(course?.possible_time_slots)) {
+        course.possible_time_slots.forEach((s) => {
+          if (typeof s === 'string') {
+            const [d, p] = String(s).split('|');
+            pushIfValid(d, p);
+          } else if (s && typeof s === 'object') {
+            const d = s.dayId ?? s.day_id ?? s.day ?? s.day_number ?? s.dayNumber;
+            const p = s.periodId ?? s.period_id ?? s.blockId ?? s.block_id ?? s.period ?? s.periodId;
+            pushIfValid(d, p);
+          }
+        });
+      }
+      return out;
+    };
+
+    const isCourseAllowedForSlot = (course, dayId, periodId) => {
+      const slots = normalizeSlots(course);
+      // If no constraints provided, allow all
+      if (!slots.length) return true;
+      const d = normId(dayId);
+      const p = normId(periodId);
+      return slots.some((s) => isSameId(s.dayId, d) && isSameId(s.periodId, p));
+    };
+
+    const buildAllowedSlotsLabel = (course) => {
+      const slots = normalizeSlots(course);
+      if (!slots.length) return 'any day and period';
+      // collapse by day name -> period label(s)
+      const byDay = {};
+      slots.forEach(({ dayId, periodId }) => {
+        const dayName = props.schoolDays.find((d) => isSameId(d.id, dayId))?.name || `Day ${dayId}`;
+        const perName = props.periods.find((p) => isSameId(p.id, periodId))?.name || 'Period';
+        byDay[dayName] = byDay[dayName] ? [...byDay[dayName], perName] : [perName];
+      });
+      const parts = Object.entries(byDay).map(([day, periods]) => `${day} (${Array.from(new Set(periods)).join(', ')})`);
+      return parts.join('; ');
+    };
+
+    // Context menu helpers
     const computeContextMenuPosition = (evt, menuSize = { w: 220, h: 96 }) => {
       const vw = window.innerWidth || 1024;
       const vh = window.innerHeight || 768;
@@ -486,6 +518,7 @@ export default {
       if (y + menuSize.h > vh) y = Math.max(8, vh - menuSize.h - 8);
       return { x, y };
     };
+
     const openContextMenu = (event, assignment, dayId, periodId) => {
       event.stopPropagation();
       event.preventDefault();
@@ -545,21 +578,13 @@ export default {
 
     // Popup editor handlers (guard live/read-only)
     const onEditorSave = (updated) => {
-      if (props.isReadOnly || props.isLiveMode) {
-        // ignore in read-only/live
-        return;
-      }
+      if (props.isReadOnly || props.isLiveMode) return;
       saveInlineEdit(updated);
     };
     const onEditorDelete = (a) => {
-      if (props.isReadOnly || props.isLiveMode) {
-        // ignore in read-only/live
-        return;
-      }
+      if (props.isReadOnly || props.isLiveMode) return;
       deleteInlineAssignment(a);
     };
-
-    // Title for editor modal
     const editorModalTitle = computed(() => {
       const a = editingAssignment.value;
       if (!a) return '';
@@ -643,6 +668,7 @@ export default {
       try {
         const data = JSON.parse(event.dataTransfer.getData('text/plain'));
         if (data.type === 'course') {
+          // assignCourseToSlot performs the allowed-slot confirmation
           assignCourseToSlot(data.course || { id: data.id }, dayId, periodId);
         } else if (data.type === 'assignment') {
           const a = data.assignment;
@@ -671,17 +697,50 @@ export default {
       } catch (e) { console.error('Drop error:', e); }
     };
 
-    // Course assign modal
+    // Extract proposed teachers (possible_staff_ids) from a course
+    const getProposedTeacherIds = (course) => {
+      const ids = [];
+      // Arrays
+      if (Array.isArray(course?.possible_staff_ids)) {
+        ids.push(...course.possible_staff_ids);
+      }
+      // Also tolerate objects with numeric keys (0: "id", 1: "id")
+      if (course && typeof course === 'object') {
+        const maybeObj = course.possible_staff_ids;
+        if (maybeObj && !Array.isArray(maybeObj) && typeof maybeObj === 'object') {
+          Object.keys(maybeObj).forEach((k) => ids.push(maybeObj[k]));
+        }
+      }
+      return ids.map((x) => String(x)).filter((x) => !!x && x !== 'null' && x !== 'undefined');
+    };
+
+    // Course assign modal (with allowed-slot warning + preselect teachers)
     const assignCourseToSlot = (course, dayId, periodId) => {
       if (!course || props.isReadOnly || props.isLiveMode) return;
+
+      // If slot is not allowed by course preference, confirm with user
+      if (!isCourseAllowedForSlot(course, dayId, periodId)) {
+        const allowedText = buildAllowedSlotsLabel(course);
+        const name = course.name || course.course_name || course.title || 'This course';
+        const dayName = props.schoolDays.find((d) => isSameId(d.id, dayId))?.name || `day ${dayId}`;
+        const perName = props.periods.find((p) => isSameId(p.id, periodId))?.name || 'this period';
+        const ok = window.confirm(
+          `${name} is configured to be available for: ${allowedText}.\n\nYou are scheduling it on ${dayName} – ${perName}.\n\nAre you sure you want to continue?`
+        );
+        if (!ok) return;
+      }
+
       modalCourseData.value = {
         courseId: course.id,
         courseName: course.name || course.course_name || course.title || '',
         courseCode: course.code || course.course_code || '',
         dayId, periodId,
+        preselectedTeacherIds: getProposedTeacherIds(course),
       };
       showTeacherRoomModal.value = true;
     };
+
+    // Teacher/Room modal submit (frequency-aware)
     const handleTeacherRoomSubmit = (payload) => {
       const key = `${normId(payload.dayId)}|${normId(payload.periodId)}|${normId(payload.courseId)}`;
       if ((payload.frequency || 'one-off') === 'recurring') {
@@ -732,18 +791,6 @@ export default {
     const isFocused = (id) => isSameId(focusedPeriodId.value, id);
     const getFocusedPeriodName = () =>
       props.periods.find((p) => isSameId(p.id, focusedPeriodId.value))?.name || 'Unknown Period';
-
-    // Slots normalization
-    const normalizeSlots = (course) => {
-      if (Array.isArray(course.possibleSlots)) return course.possibleSlots;
-      if (Array.isArray(course.possible_time_slots)) {
-        return course.possible_time_slots.map((s) => ({
-          dayId: s.dayId ?? s.day_id ?? s.day ?? s.day_number ?? s.dayNumber ?? s.dayId,
-          periodId: s.periodId ?? s.period_id ?? s.blockId ?? s.block_id ?? s.period ?? s.periodId,
-        })).filter((s) => s && s.dayId != null && s.periodId != null);
-      }
-      return [];
-    };
 
     // Available courses
     const getAvailableCoursesForSlot = (dayId, periodId) => {
@@ -823,6 +870,27 @@ export default {
     };
 
     const handleCourseEdit = (d) => emit('course-edit', d);
+
+    // Close context menu/editor on Escape / resize / scroll (capture)
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        contextMenu.value.show = false;
+        if (editingAssignment.value) editingAssignment.value = null;
+      }
+    };
+    const onWindowResize = () => (contextMenu.value.show = false);
+    const onAnyScroll = () => (contextMenu.value.show = false);
+
+    onMounted(() => {
+      window.addEventListener('keydown', onKeyDown, true);
+      window.addEventListener('resize', onWindowResize, { passive: true });
+      window.addEventListener('scroll', onAnyScroll, true);
+    });
+    onBeforeUnmount(() => {
+      window.removeEventListener('keydown', onKeyDown, true);
+      window.removeEventListener('resize', onWindowResize);
+      window.removeEventListener('scroll', onAnyScroll, true);
+    });
 
     return {
       // state
@@ -922,10 +990,10 @@ export default {
 </script>
 
 <style scoped>
-/* Keep your styling exactly as you liked for the grid */
 /* Root */
 .scheduler-grid { display: flex; flex-direction: column; width: 100%; border: 1px solid #ddd; border-radius: 6px; overflow: hidden; background: #fff; }
-/* Header */
+
+/* Header row */
 .grid-header { display: flex !important; align-items: stretch; background: #f5f5f5; border-bottom: 1px solid #ddd; font-weight: 600; }
 .period-header-cell { width: 140px; min-width: 140px; max-width: 140px; padding: 10px 8px; border-right: 1px solid #ddd; display: flex; align-items: center; justify-content: center; box-sizing: border-box; }
 .day-header-cell { flex: 1 1 0; min-width: 160px; padding: 10px 8px; border-right: 1px solid #ddd; text-align: center; display: flex; flex-direction: column; gap: 2px; box-sizing: border-box; }
@@ -939,7 +1007,8 @@ export default {
 .grid-row:last-child { border-bottom: 0; }
 .grid-row.non-instructional { background: #f8f9fa; }
 
-.period-label-cell { width: 140px; min-width: 140px; max-width: 140px; padding: 8px; border-right: 1px solid #ddd; background: #f9f9f9; display: flex; align-items: center; cursor: pointer; transition: background-color 0.2s; box-sizing: border-box; }
+.period-label-cell { width: 140px; min-width: 140px; max-width: 140px; padding: 8px; border-right: 1px solid #ddd; background: #f9f9f9;
+  display: flex; align-items: center; cursor: pointer; transition: background-color 0.2s; box-sizing: border-box; }
 .period-label-cell:hover { background: #f0f7ff !important; }
 .period-label-cell.focused { background: #e6f7ff !important; border-left: 4px solid #007cba; }
 .period-info { display: flex; flex-direction: column; gap: 2px; }
@@ -972,4 +1041,115 @@ export default {
 /* Drag targets */
 .drop-zone { position: relative; transition: all 0.2s ease; }
 .drop-zone.drag-over { background: rgba(0,123,186,0.08) !important; border: 2px dashed #007cba !important; transform: scale(1.01); }
-.drop-zone.drag-over::after { content: '📋 Drop here'; position: absolute; top: 
+.drop-zone.drag-over::after { content: '📋 Drop here'; position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); background: rgba(0,123,186,0.9); color: white; padding: 3px 6px; border-radius: 4px; font-size: 12px; font-weight: 600; pointer-events: none; z-index: 10; }
+
+/* Grade Statistics */
+.statistics-row { display: flex !important; border-bottom: 2px solid #007cba; background: #f0f8ff; border-top: 2px solid #007cba; }
+.stats-label-cell { width: 140px; min-width: 140px; max-width: 140px; background: #007cba !important; color: white; display: flex; align-items: center; justify-content: center;
+  border-right: 1px solid #ddd; box-sizing: border-box; }
+.stats-title { display: flex; align-items: center; gap: 6px; font-size: 0.95em; font-weight: 600; }
+.stats-emoji { font-size: 1.15em; }
+
+.day-statistics-cell { --grade-col: 28px; flex: 1 1 0; min-width: 160px; border-right: 1px solid #ddd; padding: 6px; background: white; display: flex; flex-direction: column; gap: 6px; min-height: 96px; box-sizing: border-box; }
+.day-statistics-cell:last-child { border-right: 0; }
+.stats-headers { display: grid; grid-template-columns: var(--grade-col) 1fr 1fr 1fr; align-items: center; gap: 4px; margin-bottom: 4px; padding: 3px 4px; background: rgba(0,124,186,0.1); border-radius: 4px; }
+.header-spacer { width: 100%; height: 1px; opacity: 0; }
+.stat-header { display: flex; align-items: center; justify-content: center; font-size: 0.95em; line-height: 1; padding: 2px 4px; border-radius: 3px; }
+.stat-header:hover { background: rgba(0,124,186,0.2); }
+.stats-rows { display: flex; flex-direction: column; gap: 3px; flex-grow: 1; }
+.grade-stats-row { display: grid; grid-template-columns: var(--grade-col) 1fr 1fr 1fr; align-items: center; gap: 6px; background: #f8f9fa; border: 1px solid #e0e0e0; border-radius: 4px; padding: 3px 4px; font-size: 0.88em; }
+.grade-number { font-weight: 700; color: #333; min-width: var(--grade-col); font-size: 0.95em; }
+.stat-value { text-align: center; padding: 2px 4px; background: white; border-radius: 3px; font-size: 0.88em; color: #333; }
+
+/* Available Courses Panel */
+.available-courses-panel { padding: 12px; background: #f0f8ff; border-top: 1px solid #007cba; border-bottom: 1px solid #ddd; }
+.available-courses-panel h3 { margin: 0 0 6px 0; color: #007cba; font-size: 1.05em; }
+.focused-period-info { margin: 0 0 10px 0; color: #666; font-size: 0.9em; }
+
+/* New: aligned grid for available courses (spacer + N day columns) */
+.day-courses-grid {
+  --label-col: 140px;
+  display: grid;
+  grid-template-columns: var(--label-col) repeat(var(--days-count, 5), 1fr);
+  gap: 12px;
+}
+.grid-label-spacer { width: var(--label-col); }
+
+.day-courses-column { min-width: 160px; }
+.available-courses-list { display: flex; flex-direction: column; gap: 8px; max-height: 320px; overflow-y: auto; }
+.course-card { padding: 8px 10px; background: white; border: 1px solid #ddd; border-radius: 4px; cursor: grab; transition: all 0.2s; font-size: 0.9em; }
+.course-card:hover { transform: translateY(-1px); box-shadow: 0 2px 4px rgba(0,124,186,0.15); border-color: #007cba; }
+.course-card:active { cursor: grabbing; }
+.course-card.is-dragging { opacity: 0.6; }
+.course-card .course-name { font-weight: 600; color: #333; margin-bottom: 2px; display: block; }
+.course-card .course-details { display: flex; flex-direction: column; gap: 2px; }
+.course-card .course-details small { color: #666; font-size: 0.8em; }
+.no-courses { padding: 12px; text-align: center; color: #999; font-style: italic; background: #f9f9f9; border: 1px dashed #ddd; border-radius: 4px; }
+
+/* No Preferred Days Panel */
+.no-preferred-days-panel { padding: 12px; background: #f0f8e6; border: 1px solid #52c41a; border-radius: 4px; margin-top: 12px; }
+.no-preferred-days-panel h4 { margin: 0 0 8px 0; color: #52c41a; font-size: 1em; display: flex; align-items: center; gap: 8px; }
+.panel-description { margin: 0 0 10px 0; color: #666; font-size: 0.9em; font-style: italic; }
+.no-preferred-courses-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; }
+.flexible-tag { color: #52c41a !important; font-weight: 600; }
+
+/* Read-only/live */
+.scheduler-grid[data-readonly='true'] .schedule-cell { cursor: default; }
+.scheduler-grid[data-readonly='true'] .schedule-cell:hover { background: inherit; }
+.scheduler-grid[data-readonly='true'] .draggable-assignment,
+.scheduler-grid[data-readonly='true'] .draggable-course { cursor: default; pointer-events: none; }
+.scheduler-grid[data-readonly='true'] .empty-cell { color: #999; }
+.scheduler-grid[data-readonly='true'] .empty-text { font-style: italic; color: #999; font-size: 0.8em; }
+
+/* Warning banner */
+.grid-hidden-debug { padding: 12px; background: #fffbeb; border: 1px solid #fde68a; border-radius: 6px; margin: 8px 8px 0; color: #92400e; }
+
+/* Assignment editor popup */
+.assignment-editor-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 2147483600; }
+.assignment-editor-modal {
+  position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  width: min(920px, 92vw); max-height: 86vh; overflow: auto;
+  background: #fff; border-radius: 8px; box-shadow: 0 16px 48px rgba(0,0,0,0.35);
+  z-index: 2147483601; display: flex; flex-direction: column;
+}
+.editor-modal-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border-bottom: 1px solid #e5e5e5; }
+.editor-modal-title { font-weight: 600; color: #333; }
+.editor-modal-close { appearance: none; border: 0; background: transparent; font-size: 22px; line-height: 1; cursor: pointer; color: #666; }
+.editor-modal-close:hover { color: #222; }
+.editor-modal-body { padding: 12px 14px; }
+
+/* Responsive */
+@media (max-width: 1024px) { .day-header-cell, .schedule-cell, .day-statistics-cell { min-width: 200px; } }
+@media (max-width: 768px) {
+  .period-header-cell, .period-label-cell, .stats-label-cell { width: 120px; min-width: 120px; max-width: 120px; }
+  .day-header-cell, .schedule-cell, .day-statistics-cell, .day-courses-column { min-width: 180px; }
+}
+</style>
+
+<!-- Unscoped styles so the teleported context menu/backdrop always render above EVERYTHING -->
+<style>
+.context-menu {
+  position: fixed;
+  background: white;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  box-shadow: 0 12px 32px rgba(0,0,0,0.18);
+  z-index: 2147483647; /* max int z-index to beat all overlays */
+  min-width: 180px;
+  padding: 4px 0;
+  pointer-events: auto;
+}
+.context-menu-item {
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: background-color 0.15s;
+  white-space: nowrap;
+}
+.context-menu-item:hover { background-color: #f5f5f5; }
+.context-menu-item.delete:hover { background-color: #ffe6e6; color: #d32f2f; }
+.context-menu-backdrop { position: fixed; inset: 0; z-index: 2147483646; }
+</style>
