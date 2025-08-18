@@ -1093,8 +1093,6 @@ export default {
 
 /* Available Courses Panel */
 .available-courses-panel { padding: 12px; background: #f0f8ff; border-top: 1px solid #007cba; border-bottom: 1px solid #ddd; }
-.available-courses-panel h3 { margin: 0 0 6px 0; color: #007cba; font-size: 1
-.available-courses-panel { padding: 12px; background: #f0f8ff; border-top: 1px solid #007cba; border-bottom: 1px solid #ddd; }
 .available-courses-panel h3 { margin: 0 0 6px 0; color: #007cba; font-size: 1.05em; }
 .focused-period-info { margin: 0 0 10px 0; color: #666; font-size: 0.9em; }
 
