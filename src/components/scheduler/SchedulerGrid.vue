@@ -157,70 +157,12 @@
                     </div>
                 </div>
 
-                <!-- Grade Statistics (only when period is focused) -->
+                <!-- Weekly Grade Statistics (only when period is focused) -->
                 <div v-if="showStatistics && focusedPeriodId" class="statistics-row">
                     <div class="period-label-cell stats-label-cell">
                         <div class="stats-title">
                             <span class="stats-emoji">📈</span>
                             <span>Grade Stats</span>
-                        </div>
-                    </div>
-
-                    <!-- Daily Grade Stats (when period is focused) -->
-                    <div v-for="day in visibleDays" :key="`stats-${day.id}`" class="day-statistics-cell">
-                        <div class="stats-headers" role="presentation">
-                            <div class="header-spacer" aria-hidden="true"></div>
-                            <div class="stat-header" title="Total free spots available">📊</div>
-                            <div class="stat-header" title="Average spots available">⚖️</div>
-                            <div class="stat-header" title="Courses available">📚</div>
-                        </div>
-                        <div class="stats-rows">
-                            <div
-                                v-for="gradeStats in getDailyGradeStats(day.id, focusedPeriodId)"
-                                :key="`${day.id}-${gradeStats.grade}`"
-                                class="grade-stats-row"
-                            >
-                                <div class="grade-number">{{ gradeStats.grade }}:</div>
-                                <div class="stat-value">{{ formatInt(gradeStats.totalSpots) }}</div>
-                                <div class="stat-value">{{ formatInt(gradeStats.averageSpots) }}</div>
-                                <div class="stat-value">{{ formatInt(gradeStats.coursesCount) }}</div>
-                            </div>
-                        </div>
-                        <div v-if="safeLength(getDailyGradeStats(day.id, focusedPeriodId)) === 0" class="no-stats">
-                            <span class="no-stats-text">No courses scheduled</span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Totals Row (only when period focused) -->
-                <div v-if="showStatistics && focusedPeriodId" class="totals-row">
-                    <div class="period-label-cell totals-label-cell">
-                        <div class="totals-title">
-                            <span class="totals-emoji">📊</span>
-                            <span>Totals</span>
-                        </div>
-                    </div>
-
-                    <div v-for="day in visibleDays" :key="`totals-${day.id}`" class="day-totals-cell">
-                        <div class="daily-totals">
-                            <div class="total-line">
-                                <span class="total-label">Spots:</span>
-                                <span class="total-value">{{ formatInt(getDailyTotals(day.id).totalSpots) }}</span>
-                            </div>
-                            <div class="total-line">
-                                <span class="total-label">Courses:</span>
-                                <span class="total-value">{{ formatInt(getDailyTotals(day.id).totalCourses) }}</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Weekly Totals Row (only when period focused) -->
-                <div v-if="showStatistics && focusedPeriodId" class="weekly-totals-row">
-                    <div class="period-label-cell weekly-totals-label-cell">
-                        <div class="weekly-totals-title">
-                            <span class="weekly-emoji">📈</span>
-                            <span>Weekly Totals</span>
                         </div>
                         <!-- Weekly totals for the selected period -->
                         <div class="weekly-period-totals">
@@ -248,6 +190,29 @@
                     <!-- Empty cells to align with day columns -->
                     <div v-for="day in visibleDays" :key="`weekly-spacer-${day.id}`" class="weekly-spacer-cell">
                         <!-- Intentionally empty to maintain alignment -->
+                    </div>
+                </div>
+
+                <!-- Totals Row (only when period focused) -->
+                <div v-if="showStatistics && focusedPeriodId" class="totals-row compact">
+                    <div class="period-label-cell totals-label-cell compact">
+                        <div class="totals-title compact">
+                            <span class="totals-emoji">📊</span>
+                            <span>Totals</span>
+                        </div>
+                    </div>
+
+                    <div v-for="day in visibleDays" :key="`totals-${day.id}`" class="day-totals-cell compact">
+                        <div class="daily-totals compact">
+                            <div class="total-line compact">
+                                <span class="total-label">Spots:</span>
+                                <span class="total-value">{{ formatInt(getDailyTotals(day.id).totalSpots) }}</span>
+                            </div>
+                            <div class="total-line compact">
+                                <span class="total-label">Courses:</span>
+                                <span class="total-value">{{ formatInt(getDailyTotals(day.id).totalCourses) }}</span>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1646,11 +1611,11 @@ export default {
     display: flex;
     align-items: center;
     gap: 6px;
-    font-size: 0.95em;
-    font-weight: 600;
+    font-size: 0.8em;
+    font-weight: 500;
 }
 .stats-emoji {
-    font-size: 1.15em;
+    font-size: 1.1em;
 }
 
 .day-statistics-cell {
@@ -1747,6 +1712,11 @@ export default {
     background: #f0f9ff;
     border-top: 1px solid #17a2b8;
 }
+.totals-row.compact {
+    border-bottom: 1px solid #ccc;
+    border-top: 1px solid #ccc;
+    background: #f9f9f9;
+}
 .totals-label-cell {
     width: 140px;
     min-width: 140px;
@@ -1759,12 +1729,24 @@ export default {
     border-right: 1px solid #ddd;
     box-sizing: border-box;
 }
+.totals-label-cell.compact {
+    width: 100px;
+    min-width: 100px;
+    max-width: 100px;
+    background: #6c757d !important;
+    border-right: 1px solid #ccc;
+}
 .totals-title {
     display: flex;
     align-items: center;
     gap: 6px;
     font-size: 0.95em;
     font-weight: 600;
+}
+.totals-title.compact {
+    font-size: 0.8em;
+    gap: 4px;
+    font-weight: 500;
 }
 .totals-emoji {
     font-size: 1.15em;
@@ -1881,6 +1863,11 @@ export default {
     gap: 4px;
     box-sizing: border-box;
 }
+.day-totals-cell.compact {
+    min-width: 120px;
+    padding: 4px;
+    border-right: 1px solid #ccc;
+}
 .day-totals-cell:last-child {
     border-right: 0;
 }
@@ -1888,6 +1875,9 @@ export default {
     display: flex;
     flex-direction: column;
     gap: 6px;
+}
+.daily-totals.compact {
+    gap: 3px;
 }
 .total-line {
     display: flex;
@@ -1898,6 +1888,12 @@ export default {
     border: 1px solid #17a2b8;
     border-radius: 4px;
     font-size: 0.9em;
+}
+.total-line.compact {
+    padding: 2px 4px;
+    border: 1px solid #ccc;
+    font-size: 0.8em;
+    border-radius: 2px;
 }
 .total-label {
     font-weight: 600;
