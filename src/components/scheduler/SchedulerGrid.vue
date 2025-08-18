@@ -163,7 +163,7 @@
                     <div class="weekly-totals-header">
                         <h4>Weekly totals</h4>
                     </div>
-                    
+
                     <div class="statistics-table">
                         <!-- Icon headers row -->
                         <div class="icon-headers-row">
@@ -188,16 +188,58 @@
                             <!-- Weekly stats for this grade -->
                             <div class="stats-block weekly-block">
                                 <div class="grade-label">{{ grade }}:</div>
-                                <div class="stat-value">{{ formatInt(getWeeklyPeriodTotals(focusedPeriodId).find(g => g.grade === grade)?.totalSpots || 0) }}</div>
-                                <div class="stat-value">{{ formatInt(getWeeklyPeriodTotals(focusedPeriodId).find(g => g.grade === grade)?.averageSpots || 0) }}</div>
-                                <div class="stat-value">{{ formatInt(getWeeklyPeriodTotals(focusedPeriodId).find(g => g.grade === grade)?.coursesCount || 0) }}</div>
+                                <div class="stat-value">
+                                    {{
+                                        formatInt(
+                                            getWeeklyPeriodTotals(focusedPeriodId).find(g => g.grade === grade)
+                                                ?.totalSpots || 0
+                                        )
+                                    }}
+                                </div>
+                                <div class="stat-value">
+                                    {{
+                                        formatInt(
+                                            getWeeklyPeriodTotals(focusedPeriodId).find(g => g.grade === grade)
+                                                ?.averageSpots || 0
+                                        )
+                                    }}
+                                </div>
+                                <div class="stat-value">
+                                    {{
+                                        formatInt(
+                                            getWeeklyPeriodTotals(focusedPeriodId).find(g => g.grade === grade)
+                                                ?.coursesCount || 0
+                                        )
+                                    }}
+                                </div>
                             </div>
                             <!-- Daily stats for this grade -->
                             <div v-for="day in visibleDays" :key="`${day.id}-${grade}`" class="stats-block day-block">
                                 <div class="grade-label">{{ grade }}:</div>
-                                <div class="stat-value">{{ formatInt(getDailyGradeStats(day.id, focusedPeriodId).find(g => g.grade === grade)?.totalSpots || 0) }}</div>
-                                <div class="stat-value">{{ formatInt(getDailyGradeStats(day.id, focusedPeriodId).find(g => g.grade === grade)?.averageSpots || 0) }}</div>
-                                <div class="stat-value">{{ formatInt(getDailyGradeStats(day.id, focusedPeriodId).find(g => g.grade === grade)?.coursesCount || 0) }}</div>
+                                <div class="stat-value">
+                                    {{
+                                        formatInt(
+                                            getDailyGradeStats(day.id, focusedPeriodId).find(g => g.grade === grade)
+                                                ?.totalSpots || 0
+                                        )
+                                    }}
+                                </div>
+                                <div class="stat-value">
+                                    {{
+                                        formatInt(
+                                            getDailyGradeStats(day.id, focusedPeriodId).find(g => g.grade === grade)
+                                                ?.averageSpots || 0
+                                        )
+                                    }}
+                                </div>
+                                <div class="stat-value">
+                                    {{
+                                        formatInt(
+                                            getDailyGradeStats(day.id, focusedPeriodId).find(g => g.grade === grade)
+                                                ?.coursesCount || 0
+                                        )
+                                    }}
+                                </div>
                             </div>
                         </div>
 
@@ -206,9 +248,15 @@
                             <!-- Weekly totals sum -->
                             <div class="stats-block weekly-block">
                                 <div class="sum-label">∑:</div>
-                                <div class="sum-value">{{ formatInt(getWeeklyPeriodSums(focusedPeriodId).totalSpots) }}</div>
-                                <div class="sum-value">{{ formatInt(getWeeklyPeriodSums(focusedPeriodId).averageSpots) }}</div>
-                                <div class="sum-value">{{ formatInt(getWeeklyPeriodSums(focusedPeriodId).totalCourses) }}</div>
+                                <div class="sum-value">
+                                    {{ formatInt(getWeeklyPeriodSums(focusedPeriodId).totalSpots) }}
+                                </div>
+                                <div class="sum-value">
+                                    {{ formatInt(getWeeklyPeriodSums(focusedPeriodId).averageSpots) }}
+                                </div>
+                                <div class="sum-value">
+                                    {{ formatInt(getWeeklyPeriodSums(focusedPeriodId).totalCourses) }}
+                                </div>
                             </div>
                             <!-- Daily totals sum -->
                             <div v-for="day in visibleDays" :key="`sum-${day.id}`" class="stats-block day-block">
@@ -355,7 +403,17 @@
                 <button class="editor-modal-close" @click="cancelInlineEdit" aria-label="Close">×</button>
             </div>
             <div class="editor-modal-body">
+                <!-- View Mode: Use AssignmentViewModal -->
+                <AssignmentViewModal
+                    v-if="isViewMode"
+                    :assignment="editingAssignment"
+                    :periods="periods"
+                    :school-days="schoolDays"
+                    @close="cancelInlineEdit"
+                />
+                <!-- Edit Mode: Use InlineAssignmentEditor -->
                 <InlineAssignmentEditor
+                    v-else
                     :assignment="editingAssignment"
                     :courses="courses"
                     :teachers="teachers"
@@ -375,12 +433,13 @@
 <script>
 import { computed, ref, watch, nextTick, onMounted, onBeforeUnmount } from 'vue';
 import InlineAssignmentEditor from './InlineAssignmentEditor.vue';
+import AssignmentViewModal from './AssignmentViewModal.vue';
 import TeacherRoomSelectionModal from './TeacherRoomSelectionModal.vue';
 import { emitSchedulerRemoveEvent } from '../../utils/events.js';
 
 export default {
     name: 'SchedulerGrid',
-    components: { InlineAssignmentEditor, TeacherRoomSelectionModal },
+    components: { InlineAssignmentEditor, AssignmentViewModal, TeacherRoomSelectionModal },
     props: {
         periods: { type: Array, default: () => [] },
         schoolDays: { type: Array, default: () => [] },
@@ -443,6 +502,7 @@ export default {
         // Inline editor/context menu
         const editingAssignment = ref(null);
         const editingCell = ref(null);
+        const isViewMode = ref(false); // New state to track view vs edit mode
 
         const contextMenu = ref({ show: false, x: 0, y: 0, assignment: null, dayId: null, periodId: null });
         const contextMenuRef = ref(null);
@@ -672,10 +732,12 @@ export default {
             }
             editingAssignment.value = a;
             editingCell.value = { dayId, periodId };
+            isViewMode.value = false; // Set to edit mode
         };
         const startInlineEditReadOnly = (a, dayId, periodId) => {
             editingAssignment.value = a;
             editingCell.value = { dayId, periodId };
+            isViewMode.value = true; // Set to view mode
         };
         const saveInlineEdit = updated => {
             const data = currentSchedules.value;
@@ -683,10 +745,12 @@ export default {
             emit('update-assignments', updatedList);
             editingAssignment.value = null;
             editingCell.value = null;
+            isViewMode.value = false; // Reset view mode
         };
         const cancelInlineEdit = () => {
             editingAssignment.value = null;
             editingCell.value = null;
+            isViewMode.value = false; // Reset view mode
         };
         const deleteInlineAssignment = a => {
             if (props.emitDropEvents) {
@@ -703,6 +767,7 @@ export default {
             emit('update-assignments', data);
             editingAssignment.value = null;
             editingCell.value = null;
+            isViewMode.value = false; // Reset view mode
         };
         const onEditorSave = updated => {
             if (props.isReadOnly || props.isLiveMode) return;
@@ -716,6 +781,9 @@ export default {
             const a = editingAssignment.value;
             if (!a) return '';
             const name = getDisplayName(a);
+            if (isViewMode.value) {
+                return `View Assignment – ${name}`;
+            }
             return props.isReadOnly || props.isLiveMode ? `View Assignment – ${name}` : `Edit Assignment – ${name}`;
         });
 
@@ -1206,7 +1274,10 @@ export default {
         // Close popups listeners (use passive where allowed) and also re-measure on resize/changes
         const onKeyDown = e => {
             if (e.key === 'Escape') {
-                if (editingAssignment.value) editingAssignment.value = null;
+                if (editingAssignment.value) {
+                    editingAssignment.value = null;
+                    isViewMode.value = false; // Reset view mode
+                }
             }
         };
         const onWindowResize = () => {
@@ -1248,6 +1319,7 @@ export default {
             recurringWhitelist,
             editingAssignment,
             editingCell,
+            isViewMode,
             showTeacherRoomModal,
             modalCourseData,
 
@@ -2285,7 +2357,8 @@ export default {
     padding: 2px;
 }
 
-.grade-row, .sum-row {
+.grade-row,
+.sum-row {
     display: flex;
     border-bottom: 1px solid #eee;
 }
@@ -2310,7 +2383,8 @@ export default {
     border-right: none;
 }
 
-.grade-label, .sum-label {
+.grade-label,
+.sum-label {
     font-size: 12px;
     font-weight: 600;
     text-align: right;
@@ -2318,7 +2392,8 @@ export default {
     color: #333;
 }
 
-.stat-value, .sum-value {
+.stat-value,
+.sum-value {
     font-size: 11px;
     text-align: center;
     padding: 2px;
@@ -2338,14 +2413,17 @@ export default {
     .day-block {
         min-width: 120px;
     }
-    .header-block, .stats-block {
+    .header-block,
+    .stats-block {
         grid-template-columns: 40px 1fr 1fr 1fr;
         padding: 2px 4px;
     }
-    .grade-label, .sum-label {
+    .grade-label,
+    .sum-label {
         font-size: 11px;
     }
-    .stat-value, .sum-value {
+    .stat-value,
+    .sum-value {
         font-size: 10px;
     }
 }
