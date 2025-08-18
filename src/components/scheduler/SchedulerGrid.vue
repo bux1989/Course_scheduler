@@ -267,7 +267,7 @@
 </template>
 
 <script>
-import { computed, ref, watch, nextTick, onMounted, onBeforeUnmount } from 'vue';
+import { computed, ref, onMounted, onBeforeUnmount } from 'vue';
 import InlineAssignmentEditor from './InlineAssignmentEditor.vue';
 import TeacherRoomSelectionModal from './TeacherRoomSelectionModal.vue';
 import { emitSchedulerRemoveEvent } from '../../utils/events.js';
@@ -322,7 +322,7 @@ export default {
     const draggedAssignment = ref(null);
 
     // Available list behavior
-    const optimisticallyScheduled = ref(new Set()); // key: day|period|course
+    const optimisticallyScheduled = ref(new Set());
     const recurringWhitelist = ref(new Set());
 
     // Inline editor/context menu
@@ -331,7 +331,11 @@ export default {
 
     const contextMenu = ref({ show: false, x: 0, y: 0, assignment: null, dayId: null, periodId: null });
 
-    // Close context menu on Escape / click outside
+    // Teacher modal
+    const showTeacherRoomModal = ref(false);
+    const modalCourseData = ref(null);
+
+    // Close context menu on Escape
     const onKeyDown = (e) => { 
       if (e.key === 'Escape' && contextMenu.value.show) {
         contextMenu.value.show = false;
@@ -356,7 +360,6 @@ export default {
     });
     const currentSchedules = computed(() => (props.isLiveMode ? props.liveSchedules : props.draftSchedules));
 
-    // NEW: soft check only used for warning badge
     const hasData = computed(() => safeLength(visibleDays.value) > 0 && safeLength(visiblePeriods.value) > 0);
 
     // Formatting
@@ -474,7 +477,7 @@ export default {
       };
     }
 
-    // Context menu
+    // Event handlers
     function handleCellClick(dayId, periodId, period) {
       if (props.isReadOnly || !props.enableCellAdd) return;
       const assignments = getCellAssignments(dayId, periodId);
@@ -484,37 +487,18 @@ export default {
     }
     
     function handleAssignmentClick(assignment, dayId, periodId) {
-      console.log('👆 [Left-Click] Assignment clicked:', {
-        assignment: assignment.display_cell || assignment.course_name,
-        dayId,
-        periodId,
-        isReadOnly: props.isReadOnly,
-      });
-      
-      // Close context menu if open
+      console.log('👆 Assignment clicked:', assignment.display_cell || assignment.course_name);
       contextMenu.value.show = false;
-      
-      // Emit assignment details for external handling
       emit('assignment-details', assignment);
     }
     
     function handleAssignmentRightClick(event, assignment, dayId, periodId) {
-      console.log('🖱️ [Right-Click] Assignment right-click detected:', {
-        assignment: assignment.display_cell || assignment.course_name,
-        dayId,
-        periodId,
-        isReadOnly: props.isReadOnly,
-        isLiveMode: props.isLiveMode,
-      });
-
-      // Close any existing inline edit first
+      console.log('🖱️ Right-click on assignment:', assignment.display_cell || assignment.course_name);
+      
       if (editingAssignment.value) {
-        console.log('📝 [Right-Click] Canceling existing inline edit');
         cancelInlineEdit();
       }
 
-      // Show context menu
-      console.log('📋 [Right-Click] Showing context menu at:', { x: event.clientX, y: event.clientY });
       contextMenu.value = {
         show: true,
         x: event.clientX,
@@ -526,23 +510,18 @@ export default {
     }
     
     function closeContextMenu() {
-      console.log('❌ [Context Menu] Closing context menu');
       contextMenu.value.show = false;
     }
     
     function editAssignmentFromContext() {
-      console.log('✏️ [Context Menu] Edit assignment selected');
       if (contextMenu.value.assignment) {
         if (props.isReadOnly || props.isLiveMode) {
-          // In read-only or live mode, show inline editor in view-only mode
-          console.log('📖 [Context Menu] Read-only/live mode - showing assignment details in inline editor');
           startInlineEditReadOnly(
             contextMenu.value.assignment,
             contextMenu.value.dayId,
             contextMenu.value.periodId
           );
         } else {
-          // In editable mode, start inline editing
           startInlineEdit(contextMenu.value.assignment, contextMenu.value.dayId, contextMenu.value.periodId);
         }
       }
@@ -550,14 +529,8 @@ export default {
     }
     
     function deleteAssignmentFromContext() {
-      console.log('🗑️ [Context Menu] Delete assignment selected');
-      if (contextMenu.value.assignment) {
-        if (props.isReadOnly || props.isLiveMode) {
-          console.log('📖 [Context Menu] Read-only/live mode - cannot delete');
-        } else {
-          // In editable mode, delete the assignment
-          deleteInlineAssignment(contextMenu.value.assignment);
-        }
+      if (contextMenu.value.assignment && !props.isReadOnly && !props.isLiveMode) {
+        deleteInlineAssignment(contextMenu.value.assignment);
       }
       closeContextMenu();
     }
@@ -569,50 +542,31 @@ export default {
     
     function startInlineEdit(a, dayId, periodId) {
       if (props.isReadOnly || props.isLiveMode) return;
-      console.log('✏️ [InlineEdit] Starting edit for assignment:', a.id);
-      
-      // Close any existing edit
-      if (editingAssignment.value) {
-        cancelInlineEdit();
-      }
-      
+      if (editingAssignment.value) cancelInlineEdit();
       editingAssignment.value = a;
       editingCell.value = { dayId, periodId };
     }
     
     function startInlineEditReadOnly(a, dayId, periodId) {
-      console.log('👁️ [InlineEdit] Starting read-only view for assignment:', a.id);
-      
-      // Close any existing edit
-      if (editingAssignment.value) {
-        cancelInlineEdit();
-      }
-      
+      if (editingAssignment.value) cancelInlineEdit();
       editingAssignment.value = a;
       editingCell.value = { dayId, periodId };
     }
     
     function saveInlineEdit(updated) {
-      console.log('💾 [InlineEdit] Saving changes for assignment:', updated.id);
-      
       const data = currentSchedules.value;
       const updatedList = data.map((s) => (isSameId(s.id, updated.id) ? updated : s));
       emit('update-assignments', updatedList);
-      
       editingAssignment.value = null;
       editingCell.value = null;
     }
     
     function cancelInlineEdit() {
-      console.log('❌ [InlineEdit] Cancelling edit');
       editingAssignment.value = null;
       editingCell.value = null;
     }
     
     function deleteInlineAssignment(a) {
-      console.log('🗑️ [InlineEdit] Deleting assignment:', a.id);
-      
-      // Emit scheduler:remove event if configured
       if (props.emitDropEvents) {
         const fn = props.parentEmit || emit;
         emitSchedulerRemoveEvent(fn, {
@@ -624,15 +578,13 @@ export default {
         });
       }
       
-      // Create updated assignments array without this assignment
       const data = currentSchedules.value.filter((s) => !isSameId(s.id, a.id));
       emit('update-assignments', data);
-      
       editingAssignment.value = null;
       editingCell.value = null;
     }
 
-    // Drag: course
+    // Drag handlers
     function handleCourseDragStart(event, course) {
       draggedCourse.value = course;
       emit('scheduler-drag-start', {
@@ -646,6 +598,7 @@ export default {
       event.dataTransfer.effectAllowed = 'copy';
       event.target.style.opacity = '0.5';
     }
+    
     function handleCourseDragEnd(event) {
       emit('scheduler-drag-end', {
         courseId: draggedCourse.value?.id || null,
@@ -659,16 +612,8 @@ export default {
       event.target.style.opacity = '1';
     }
 
-    // Drag: assignment
     function handleAssignmentDragStart(event, assignment, dayId, periodId) {
       draggedAssignment.value = { assignment, originalDayId: dayId, originalPeriodId: periodId };
-      emit('scheduler-drag-start', {
-        courseId: assignment.course_id || '',
-        courseName: assignment.course_name || assignment.display_cell || '',
-        courseCode: assignment.course_code || '',
-        source: 'drag-start',
-        timestamp: new Date().toISOString(),
-      });
       event.dataTransfer.setData(
         'text/plain',
         JSON.stringify({ type: 'assignment', assignment, originalDayId: dayId, originalPeriodId: periodId })
@@ -676,35 +621,29 @@ export default {
       event.dataTransfer.effectAllowed = 'move';
       event.target.style.opacity = '0.5';
     }
+    
     function handleAssignmentDragEnd(event) {
-      emit('scheduler-drag-end', {
-        courseId: draggedAssignment.value?.assignment?.course_id || null,
-        courseName:
-          draggedAssignment.value?.assignment?.course_name || draggedAssignment.value?.assignment?.display_cell || null,
-        courseCode: draggedAssignment.value?.assignment?.course_code || null,
-        success: false,
-        source: 'drag-end',
-        timestamp: new Date().toISOString(),
-      });
       draggedAssignment.value = null;
       event.target.style.opacity = '1';
     }
 
-    // Drop target handlers
     function handleCellDragOver(event) {
       if (!draggedAssignment.value && !draggedCourse.value) return false;
       event.dataTransfer.dropEffect = draggedAssignment.value ? 'move' : 'copy';
       return false;
     }
+    
     function handleCellDragEnter(event) {
       if (!draggedAssignment.value && !draggedCourse.value) return;
       event.currentTarget.classList.add('drag-over');
     }
+    
     function handleCellDragLeave(event) {
       if (!event.currentTarget.contains(event.relatedTarget)) {
         event.currentTarget.classList.remove('drag-over');
       }
     }
+    
     function handleCellDrop(event, dayId, periodId) {
       event.preventDefault();
       event.currentTarget.classList.remove('drag-over');
@@ -739,7 +678,7 @@ export default {
       } catch (e) { console.error('Drop error:', e); }
     }
 
-    // Open modal
+    // Modal handlers
     function assignCourseToSlot(course, dayId, periodId) {
       if (!course || props.isReadOnly || props.isLiveMode) return;
       modalCourseData.value = {
@@ -750,8 +689,8 @@ export default {
       };
       showTeacherRoomModal.value = true;
     }
+    
     function handleTeacherRoomSubmit(payload) {
-      // frequency-aware optimistic hide
       const key = `${normId(payload.dayId)}|${normId(payload.periodId)}|${normId(payload.courseId)}`;
       if ((payload.frequency || 'one-off') === 'recurring') {
         recurringWhitelist.value.add(key);
@@ -775,48 +714,42 @@ export default {
         timestamp: payload.timestamp,
       });
 
-      // compat end event
-      emit('scheduler-drag-end', {
-        courseId: payload.courseId,
-        courseName: payload.courseName,
-        courseCode: modalCourseData.value?.courseCode || '',
-        success: true,
-        source: 'drag-end',
-        timestamp: new Date().toISOString(),
-      });
-
       showTeacherRoomModal.value = false;
       modalCourseData.value = null;
     }
+    
     function handleTeacherRoomCancel() {
       showTeacherRoomModal.value = false;
       modalCourseData.value = null;
     }
 
-    // Focus
+    // Focus handlers
     function togglePeriodFocus(periodId) {
       const pid = normId(periodId);
       focusedPeriodId.value = isSameId(focusedPeriodId.value, pid) ? null : pid;
       emit('period-focus-changed', focusedPeriodId.value);
     }
-    function isFocused(id) { return isSameId(focusedPeriodId.value, id); }
+    
+    function isFocused(id) { 
+      return isSameId(focusedPeriodId.value, id); 
+    }
+    
     function getFocusedPeriodName() {
       return props.periods.find((p) => isSameId(p.id, focusedPeriodId.value))?.name || 'Unknown Period';
     }
 
-    // Normalize slots helper
+    // Course availability
     function normalizeSlots(course) {
       if (Array.isArray(course.possibleSlots)) return course.possibleSlots;
       if (Array.isArray(course.possible_time_slots)) {
         return course.possible_time_slots.map((s) => ({
-          dayId: s.dayId ?? s.day_id ?? s.day ?? s.day_number ?? s.dayNumber ?? s.dayId,
-          periodId: s.periodId ?? s.period_id ?? s.blockId ?? s.block_id ?? s.period ?? s.periodId,
+          dayId: s.dayId ?? s.day_id ?? s.day ?? s.day_number ?? s.dayNumber,
+          periodId: s.periodId ?? s.period_id ?? s.blockId ?? s.block_id ?? s.period,
         })).filter((s) => s && s.dayId != null && s.periodId != null);
       }
       return [];
     }
 
-    // Available courses
     function getAvailableCoursesForSlot(dayId, periodId) {
       const dayKey = normId(dayId);
       const periodKey = normId(periodId);
@@ -830,7 +763,6 @@ export default {
         const cid = normId(course.id);
         const k = `${dayKey}|${periodKey}|${cid}`;
 
-        // Apply optimistic hide unless whitelisted for recurring
         if (!recurringWhitelist.value.has(k) && props.hideScheduledInAvailable) {
           if (scheduledIds.has(cid) || optimisticallyScheduled.value.has(k)) return false;
         }
@@ -840,15 +772,23 @@ export default {
         return slots.some((s) => isSameId(s.dayId, dayId) && isSameId(s.periodId, periodId));
       });
     }
+    
     function getNoPreferredDaysCourses() {
       return safeArray(props.courses).filter((course) => normalizeSlots(course).length === 0);
     }
+    
     function getCourseCardStyle(course) {
-      return { borderLeft: `4px solid ${course.color || '#007cba'}`, backgroundColor: course.color ? `${course.color}15` : '#f0f8ff' };
+      return { 
+        borderLeft: `4px solid ${course.color || '#007cba'}`, 
+        backgroundColor: course.color ? `${course.color}15` : '#f0f8ff' 
+      };
     }
-    function isDraggingCourse(courseId) { return normId(draggedCourse.value?.id) === normId(courseId); }
+    
+    function isDraggingCourse(courseId) { 
+      return normId(draggedCourse.value?.id) === normId(courseId); 
+    }
 
-    // Grade stats
+    // Grade statistics
     function parseGrades(course) {
       const grades = [];
       if (course.is_for_year_g && typeof course.is_for_year_g === 'object') {
@@ -860,11 +800,17 @@ export default {
       }
       return [...new Set(grades)].sort((a, b) => a - b);
     }
+    
     const allGrades = computed(() => {
-      const set = new Set(); safeArray(props.courses).forEach((c) => parseGrades(c).forEach((g) => set.add(g)));
+      const set = new Set(); 
+      safeArray(props.courses).forEach((c) => parseGrades(c).forEach((g) => set.add(g)));
       return Array.from(set).sort((a, b) => a - b);
     });
-    function findCourseById(courseId) { return safeArray(props.courses).find((c) => isSameId(c.id, courseId)); }
+    
+    function findCourseById(courseId) { 
+      return safeArray(props.courses).find((c) => isSameId(c.id, courseId)); 
+    }
+    
     function getScheduledCoursesForSlot(dayId, periodId) {
       const scheduledEntries = safeArray(currentSchedules.value).filter(
         (e) => isSameId(e.day_id, dayId) && isSameId(e.period_id, periodId)
@@ -880,6 +826,7 @@ export default {
       });
       return out;
     }
+    
     function getDailyGradeStats(dayId, periodId) {
       if (!periodId) return [];
       const scheduledCourses = getScheduledCoursesForSlot(dayId, periodId);
@@ -891,16 +838,30 @@ export default {
           if (grades.includes(grade)) {
             coursesCount++;
             const free = course.freeSpots || 0;
-            if (grades.length === 1) { totalSpots += free; totalGradeAllocation += free; }
-            else { totalSpots += free; totalGradeAllocation += free / grades.length; }
+            if (grades.length === 1) { 
+              totalSpots += free; 
+              totalGradeAllocation += free; 
+            } else { 
+              totalSpots += free; 
+              totalGradeAllocation += free / grades.length; 
+            }
           }
         });
-        if (coursesCount > 0 || totalSpots > 0) out.push({ grade, totalSpots, averageSpots: totalGradeAllocation, coursesCount });
+        if (coursesCount > 0 || totalSpots > 0) {
+          out.push({ 
+            grade, 
+            totalSpots, 
+            averageSpots: totalGradeAllocation, 
+            coursesCount 
+          });
+        }
       });
       return out;
     }
 
-    function handleCourseEdit(d) { emit('course-edit', d); }
+    function handleCourseEdit(d) { 
+      emit('course-edit', d); 
+    }
 
     return {
       // state
@@ -920,6 +881,7 @@ export default {
       visiblePeriods,
       currentSchedules,
       hasData,
+      allGrades,
 
       // helpers
       safeArray,
@@ -983,7 +945,6 @@ export default {
       isFocused,
       getFocusedPeriodName,
       getDailyGradeStats,
-      allGrades,
 
       // available courses
       getAvailableCoursesForSlot,
@@ -994,8 +955,6 @@ export default {
   },
 };
 </script>
-
-<!-- ... previous template and script sections remain the same ... -->
 
 <style scoped>
 /* Root */
