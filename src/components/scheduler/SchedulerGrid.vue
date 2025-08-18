@@ -190,6 +190,63 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- Weekly Grade Totals Row -->
+                <div v-if="showStatistics" class="weekly-totals-row">
+                    <div class="period-label-cell stats-label-cell">
+                        <div class="stats-title">
+                            <span class="stats-emoji">📋</span>
+                            <span>Week Totals (Yr 1-6)</span>
+                        </div>
+                    </div>
+
+                    <div class="weekly-totals-content">
+                        <div class="weekly-stats-headers" role="presentation">
+                            <div class="header-spacer" aria-hidden="true">Grade:</div>
+                            <div class="stat-header" title="Total free spots available">📊</div>
+                            <div class="stat-header" title="Average spots available">⚖️</div>
+                            <div class="stat-header" title="Courses available">📚</div>
+                        </div>
+                        <div class="weekly-stats-rows">
+                            <div
+                                v-for="gradeStats in getWeeklyGradeTotals()"
+                                :key="`weekly-${gradeStats.grade}`"
+                                class="weekly-grade-stats-row"
+                            >
+                                <div class="grade-number">{{ gradeStats.grade }}:</div>
+                                <div class="stat-value">{{ formatInt(gradeStats.totalSpots) }}</div>
+                                <div class="stat-value">{{ formatInt(gradeStats.averageSpots) }}</div>
+                                <div class="stat-value">{{ formatInt(gradeStats.coursesCount) }}</div>
+                            </div>
+                        </div>
+                        <div v-if="safeLength(getWeeklyGradeTotals()) === 0" class="no-stats">
+                            <span class="no-stats-text">No courses scheduled this week</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Daily Totals Row -->
+                <div v-if="showStatistics" class="daily-totals-row">
+                    <div class="period-label-cell stats-label-cell">
+                        <div class="stats-title">
+                            <span class="stats-emoji">📊</span>
+                            <span>Daily Totals</span>
+                        </div>
+                    </div>
+
+                    <div v-for="day in visibleDays" :key="`totals-${day.id}`" class="day-totals-cell">
+                        <div class="daily-totals">
+                            <div class="total-line">
+                                <span class="total-label">Spots:</span>
+                                <span class="total-value">{{ formatInt(getDailyTotals(day.id).totalSpots) }}</span>
+                            </div>
+                            <div class="total-line">
+                                <span class="total-label">Courses:</span>
+                                <span class="total-value">{{ formatInt(getDailyTotals(day.id).totalCourses) }}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -1019,6 +1076,74 @@ export default {
             return out;
         };
 
+        // Calculate weekly totals for grades 1-6
+        const getWeeklyGradeTotals = () => {
+            const grades = [1, 2, 3, 4, 5, 6];
+            const weeklyTotals = [];
+
+            grades.forEach(grade => {
+                let totalSpots = 0;
+                let totalCourses = 0;
+                let totalGradeAllocation = 0;
+
+                // Sum across all days and all periods
+                visibleDays.value.forEach(day => {
+                    visiblePeriods.value.forEach(period => {
+                        if (period.is_instructional) {
+                            const scheduledCourses = getScheduledCoursesForSlot(day.id, period.id);
+                            scheduledCourses.forEach(course => {
+                                const grades = parseGrades(course);
+                                if (grades.includes(grade)) {
+                                    totalCourses++;
+                                    const free = course.freeSpots || 0;
+                                    if (grades.length === 1) {
+                                        totalSpots += free;
+                                        totalGradeAllocation += free;
+                                    } else {
+                                        totalSpots += free;
+                                        totalGradeAllocation += free / grades.length;
+                                    }
+                                }
+                            });
+                        }
+                    });
+                });
+
+                if (totalCourses > 0 || totalSpots > 0) {
+                    weeklyTotals.push({
+                        grade,
+                        totalSpots,
+                        averageSpots: totalGradeAllocation,
+                        coursesCount: totalCourses,
+                    });
+                }
+            });
+
+            return weeklyTotals;
+        };
+
+        // Calculate daily totals for each day
+        const getDailyTotals = dayId => {
+            let totalSpots = 0;
+            let totalCourses = 0;
+
+            // Sum across all instructional periods for this day
+            visiblePeriods.value.forEach(period => {
+                if (period.is_instructional) {
+                    const scheduledCourses = getScheduledCoursesForSlot(dayId, period.id);
+                    totalCourses += scheduledCourses.length;
+                    scheduledCourses.forEach(course => {
+                        totalSpots += course.freeSpots || 0;
+                    });
+                }
+            });
+
+            return {
+                totalSpots,
+                totalCourses,
+            };
+        };
+
         const handleCourseEdit = d => emit('course-edit', d);
 
         // Measure header columns and apply to available panel
@@ -1152,6 +1277,8 @@ export default {
             isFocused,
             getFocusedPeriodName,
             getDailyGradeStats,
+            getWeeklyGradeTotals,
+            getDailyTotals,
             allGrades,
 
             // available courses
@@ -1553,6 +1680,97 @@ export default {
     border-radius: 3px;
     font-size: 0.88em;
     color: #333;
+}
+
+/* Weekly Totals */
+.weekly-totals-row {
+    display: flex !important;
+    border-bottom: 2px solid #28a745;
+    background: #f0f9f0;
+    border-top: 1px solid #28a745;
+}
+.weekly-totals-content {
+    flex: 1;
+    padding: 8px 12px;
+    background: white;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.weekly-stats-headers {
+    display: grid;
+    grid-template-columns: 40px 1fr 1fr 1fr;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 6px;
+    background: rgba(40, 167, 69, 0.1);
+    border-radius: 4px;
+    font-size: 0.9em;
+    font-weight: 500;
+}
+.weekly-stats-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.weekly-grade-stats-row {
+    display: grid;
+    grid-template-columns: 40px 1fr 1fr 1fr;
+    align-items: center;
+    gap: 8px;
+    background: #f8f9fa;
+    border: 1px solid #28a745;
+    border-radius: 4px;
+    padding: 6px;
+    font-size: 0.9em;
+}
+
+/* Daily Totals */
+.daily-totals-row {
+    display: flex !important;
+    border-bottom: 2px solid #17a2b8;
+    background: #f0f9ff;
+    border-top: 1px solid #17a2b8;
+}
+.day-totals-cell {
+    flex: 1 1 0;
+    min-width: 160px;
+    border-right: 1px solid #ddd;
+    padding: 8px;
+    background: white;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    box-sizing: border-box;
+}
+.day-totals-cell:last-child {
+    border-right: 0;
+}
+.daily-totals {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.total-line {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 8px;
+    background: #f8f9fa;
+    border: 1px solid #17a2b8;
+    border-radius: 4px;
+    font-size: 0.9em;
+}
+.total-label {
+    font-weight: 600;
+    color: #333;
+}
+.total-value {
+    font-weight: 700;
+    color: #17a2b8;
+    background: white;
+    padding: 2px 6px;
+    border-radius: 3px;
 }
 
 /* Available Courses Panel */
