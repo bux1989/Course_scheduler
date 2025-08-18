@@ -995,6 +995,8 @@ export default {
 };
 </script>
 
+<!-- ... previous template and script sections remain the same ... -->
+
 <style scoped>
 /* Root */
 .scheduler-grid {
@@ -1197,7 +1199,7 @@ export default {
   .day-header-cell, .schedule-cell, .day-statistics-cell { min-width: 200px; }
 }
 @media (max-width: 768px) {
-  .period-header-cell, .period-label-cell, .stats-label-cell { width: 120px
+  .period-header-cell, .period-label-cell, .stats-label-cell { 
     width: 120px; 
     min-width: 120px; 
     max-width: 120px; 
