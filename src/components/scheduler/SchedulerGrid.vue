@@ -568,19 +568,6 @@ export default {
         contextMenuRef.value?.focus?.();
       });
     };
-    const openContextMenu = (event, assignment, dayId, periodId) => {
-  console.log('Context menu triggered', { assignment, dayId, periodId }); // ADD THIS
-  event.stopPropagation();
-  event.preventDefault();
-  const pos = computeContextMenuPosition(event);
-  console.log('Context menu position', pos); // ADD THIS
-  contextMenu.value = { show: true, x: pos.x, y: pos.y, assignment, dayId, periodId };
-  console.log('Context menu state', contextMenu.value); // ADD THIS
-  nextTick(() => {
-    console.log('Context menu ref', contextMenuRef.value); // ADD THIS
-    contextMenuRef.value?.focus?.();
-  });
-};
     const startInlineEditReadOnly = (a, dayId, periodId) => {
       editingAssignment.value = a; editingCell.value = { dayId, periodId };
     };
