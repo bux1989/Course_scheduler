@@ -7,6 +7,39 @@
       </div>
 
       <div class="modal-body">
+        <!-- Selected Items Summary -->
+        <div v-if="selectedTeachers.length > 0 || selectedRoomId" class="selection-section selected-summary">
+          <label class="section-label">Currently Selected:</label>
+          
+          <!-- Selected Teachers -->
+          <div v-if="selectedTeachers.length > 0" class="selected-items">
+            <div class="selected-label">Teachers:</div>
+            <div class="selected-teacher-tags">
+              <div
+                v-for="teacherId in selectedTeachers"
+                :key="teacherId"
+                class="selected-tag teacher-tag"
+                :class="{ primary: isPrimary(teacherId) }"
+              >
+                <span class="tag-text">{{ getTeacherName(teacherId) }}</span>
+                <span v-if="isPrimary(teacherId)" class="primary-indicator" title="Primary teacher">★</span>
+                <button @click="removeTeacher(teacherId)" class="remove-btn" title="Remove teacher">&times;</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Selected Room -->
+          <div v-if="selectedRoomId" class="selected-items">
+            <div class="selected-label">Room:</div>
+            <div class="selected-room-tags">
+              <div class="selected-tag room-tag">
+                <span class="tag-text">{{ getRoomName(selectedRoomId) }}</span>
+                <button @click="removeRoom()" class="remove-btn" title="Remove room">&times;</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- Scheduling options -->
         <div class="selection-section scheduling-options">
           <label class="section-label">Scheduling options:</label>
@@ -26,66 +59,76 @@
 
         <!-- Teacher Selection -->
         <div class="selection-section">
-          <label class="section-label">Teachers:</label>
-          <div class="search-box">
-            <input
-              v-model="teacherSearchTerm"
-              type="text"
-              placeholder="Search teachers..."
-              class="search-input"
-            />
-          </div>
-          <div class="teacher-list">
-            <div
-              v-for="teacher in filteredTeachers"
-              :key="teacher.id"
-              class="teacher-item"
-              :class="{
-                selected: isTeacherSelected(teacher.id),
-                primary: isPrimary(teacher.id),
-              }"
-              @click="toggleTeacher(teacher.id)"
-            >
-              <div class="teacher-info">
-                <span class="teacher-name">{{ teacher.name || `${teacher.first_name ?? ''} ${teacher.last_name ?? ''}` }}</span>
-                <span v-if="teacher.email" class="teacher-email">{{ teacher.email }}</span>
-              </div>
-              <div class="teacher-controls">
-                <button
-                  v-if="isTeacherSelected(teacher.id)"
-                  @click.stop="setPrimaryTeacher(teacher.id)"
-                  class="primary-btn"
-                  :class="{ active: isPrimary(teacher.id) }"
-                  title="Set as primary teacher"
+          <label class="section-label">Add Teachers:</label>
+          <div class="compact-selector">
+            <div class="search-dropdown" :class="{ active: teacherDropdownOpen }">
+              <input
+                v-model="teacherSearchTerm"
+                type="text"
+                placeholder="Search and select teachers..."
+                class="search-input compact"
+                @focus="teacherDropdownOpen = true"
+                @blur="closeTeacherDropdown"
+              />
+              <div v-if="teacherDropdownOpen" class="dropdown-list teacher-dropdown">
+                <div
+                  v-for="teacher in filteredAvailableTeachers"
+                  :key="teacher.id"
+                  class="dropdown-item"
+                  @mousedown.prevent="selectTeacher(teacher.id)"
                 >
-                  {{ isPrimary(teacher.id) ? '★' : '☆' }}
-                </button>
+                  <div class="teacher-info">
+                    <span class="teacher-name">{{ teacher.name || `${teacher.first_name ?? ''} ${teacher.last_name ?? ''}` }}</span>
+                    <span v-if="teacher.email" class="teacher-email">{{ teacher.email }}</span>
+                  </div>
+                </div>
+                <div v-if="filteredAvailableTeachers.length === 0" class="dropdown-item no-results">
+                  No teachers found
+                </div>
               </div>
+            </div>
+            <div v-if="selectedTeachers.length > 1" class="primary-teacher-section">
+              <label class="primary-label">Primary teacher:</label>
+              <select v-model="primaryTeacherId" class="primary-select">
+                <option 
+                  v-for="teacherId in selectedTeachers" 
+                  :key="teacherId" 
+                  :value="teacherId"
+                >
+                  {{ getTeacherName(teacherId) }}
+                </option>
+              </select>
             </div>
           </div>
         </div>
 
         <!-- Room Selection -->
         <div class="selection-section">
-          <label class="section-label">Room:</label>
-          <div class="search-box">
-            <input
-              v-model="roomSearchTerm"
-              type="text"
-              placeholder="Search rooms..."
-              class="search-input"
-            />
-          </div>
-          <div class="room-list">
-            <div
-              v-for="room in filteredRooms"
-              :key="room.id"
-              class="room-item"
-              :class="{ selected: selectedRoomId === asId(room.id) }"
-              @click="selectRoom(room.id)"
-            >
-              <span class="room-name">{{ room.name || room.room_name }}</span>
-              <span v-if="room.capacity" class="room-capacity">Capacity: {{ room.capacity }}</span>
+          <label class="section-label">Add Room:</label>
+          <div class="compact-selector">
+            <div class="search-dropdown" :class="{ active: roomDropdownOpen }">
+              <input
+                v-model="roomSearchTerm"
+                type="text"
+                placeholder="Search and select room..."
+                class="search-input compact"
+                @focus="roomDropdownOpen = true"
+                @blur="closeRoomDropdown"
+              />
+              <div v-if="roomDropdownOpen" class="dropdown-list room-dropdown">
+                <div
+                  v-for="room in filteredAvailableRooms"
+                  :key="room.id"
+                  class="dropdown-item"
+                  @mousedown.prevent="selectRoom(room.id)"
+                >
+                  <span class="room-name">{{ room.name || room.room_name }}</span>
+                  <span v-if="room.capacity" class="room-capacity">Capacity: {{ room.capacity }}</span>
+                </div>
+                <div v-if="filteredAvailableRooms.length === 0" class="dropdown-item no-results">
+                  No rooms found
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -127,6 +170,10 @@ export default {
     const teacherSearchTerm = ref('');
     const roomSearchTerm = ref('');
 
+    // Dropdown state
+    const teacherDropdownOpen = ref(false);
+    const roomDropdownOpen = ref(false);
+
     // Selection state
     const selectedTeachers = ref([]); // array of string ids
     const primaryTeacherId = ref(null); // string id
@@ -150,6 +197,15 @@ export default {
       if (!roomSearchTerm.value) return props.rooms;
       const q = roomSearchTerm.value.toLowerCase();
       return props.rooms.filter((r) => (r.name || r.room_name || '').toLowerCase().includes(q));
+    });
+
+    // Available (not selected) filtered lists for dropdowns
+    const filteredAvailableTeachers = computed(() => {
+      return filteredTeachers.value.filter(t => !isTeacherSelected(t.id));
+    });
+
+    const filteredAvailableRooms = computed(() => {
+      return filteredRooms.value.filter(r => selectedRoomId.value !== asId(r.id));
     });
 
     // Validation: at least one teacher required
@@ -191,7 +247,62 @@ export default {
 
     function selectRoom(id) {
       const sid = asId(id);
-      selectedRoomId.value = selectedRoomId.value === sid ? null : sid;
+      selectedRoomId.value = sid;
+      roomSearchTerm.value = '';
+      roomDropdownOpen.value = false;
+    }
+
+    function removeRoom() {
+      selectedRoomId.value = null;
+    }
+
+    function selectTeacher(id) {
+      const sid = asId(id);
+      if (!selectedTeachers.value.includes(sid)) {
+        selectedTeachers.value.push(sid);
+        userEdited.value = true;
+        if (selectedTeachers.value.length === 1) {
+          primaryTeacherId.value = sid;
+        }
+      }
+      teacherSearchTerm.value = '';
+      teacherDropdownOpen.value = false;
+    }
+
+    function removeTeacher(id) {
+      const sid = asId(id);
+      const idx = selectedTeachers.value.indexOf(sid);
+      if (idx > -1) {
+        selectedTeachers.value.splice(idx, 1);
+        userEdited.value = true;
+        if (primaryTeacherId.value === sid) {
+          primaryTeacherId.value = selectedTeachers.value.length > 0 ? selectedTeachers.value[0] : null;
+        }
+      }
+    }
+
+    function getTeacherName(teacherId) {
+      const teacher = props.teachers.find(t => asId(t.id) === teacherId);
+      if (!teacher) return `Teacher ${teacherId}`;
+      return teacher.name || `${teacher.first_name ?? ''} ${teacher.last_name ?? ''}`.trim() || `Teacher ${teacherId}`;
+    }
+
+    function getRoomName(roomId) {
+      const room = props.rooms.find(r => asId(r.id) === roomId);
+      if (!room) return `Room ${roomId}`;
+      return room.name || room.room_name || `Room ${roomId}`;
+    }
+
+    function closeTeacherDropdown() {
+      setTimeout(() => {
+        teacherDropdownOpen.value = false;
+      }, 150);
+    }
+
+    function closeRoomDropdown() {
+      setTimeout(() => {
+        roomDropdownOpen.value = false;
+      }, 150);
     }
 
     function submitAssignment() {
@@ -252,6 +363,8 @@ export default {
       // search and state
       teacherSearchTerm,
       roomSearchTerm,
+      teacherDropdownOpen,
+      roomDropdownOpen,
       selectedTeachers,
       primaryTeacherId,
       selectedRoomId,
@@ -259,6 +372,8 @@ export default {
       // computed
       filteredTeachers,
       filteredRooms,
+      filteredAvailableTeachers,
+      filteredAvailableRooms,
       isValid,
 
       // class helpers
@@ -268,7 +383,14 @@ export default {
       // actions
       toggleTeacher,
       setPrimaryTeacher,
+      selectTeacher,
+      removeTeacher,
       selectRoom,
+      removeRoom,
+      getTeacherName,
+      getRoomName,
+      closeTeacherDropdown,
+      closeRoomDropdown,
       submitAssignment,
       cancelSelection,
     };
@@ -308,38 +430,214 @@ export default {
 .checkbox-input { width: 16px; height: 16px; }
 .help-text { margin: 6px 0 0; font-size: 12px; color: #666; }
 
+/* Selected Items Summary */
+.selected-summary {
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 6px;
+  padding: 16px;
+  margin-bottom: 20px;
+}
+
+.selected-items {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.selected-items:last-child {
+  margin-bottom: 0;
+}
+
+.selected-label {
+  font-weight: 500;
+  color: #495057;
+  min-width: 70px;
+  padding-top: 2px;
+}
+
+.selected-teacher-tags,
+.selected-room-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.selected-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: white;
+  border: 1px solid #dee2e6;
+  border-radius: 16px;
+  padding: 6px 12px;
+  font-size: 14px;
+}
+
+.teacher-tag.primary {
+  background: #fff3e0;
+  border-color: #ff9800;
+}
+
+.room-tag {
+  background: #e8f5e8;
+  border-color: #4caf50;
+}
+
+.tag-text {
+  color: #333;
+}
+
+.primary-indicator {
+  color: #ff9800;
+  font-weight: bold;
+}
+
+.remove-btn {
+  background: none;
+  border: none;
+  color: #6c757d;
+  cursor: pointer;
+  font-size: 16px;
+  padding: 0;
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+}
+.remove-btn:hover {
+  background: #dc3545;
+  color: white;
+}
+
+/* Compact Selectors */
+.compact-selector {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.search-dropdown {
+  position: relative;
+}
+
+.search-input.compact {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 14px;
+  background: white;
+}
+.search-input.compact:focus {
+  outline: none;
+  border-color: #007cba;
+  box-shadow: 0 0 0 2px rgba(0, 124, 186, 0.2);
+}
+
+.search-dropdown.active .search-input.compact {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  border-bottom-color: #007cba;
+}
+
+.dropdown-list {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: white;
+  border: 1px solid #007cba;
+  border-top: none;
+  border-radius: 0 0 6px 6px;
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 1000;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.dropdown-item {
+  padding: 12px;
+  cursor: pointer;
+  border-bottom: 1px solid #f0f0f0;
+  transition: background-color 0.2s;
+}
+.dropdown-item:last-child {
+  border-bottom: none;
+}
+.dropdown-item:hover {
+  background: #f8f9fa;
+}
+.dropdown-item.no-results {
+  color: #6c757d;
+  cursor: default;
+  font-style: italic;
+}
+.dropdown-item.no-results:hover {
+  background: white;
+}
+
+.primary-teacher-section {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 6px;
+}
+
+.primary-label {
+  font-weight: 500;
+  color: #495057;
+  margin: 0;
+}
+
+.primary-select {
+  padding: 6px 10px;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  background: white;
+  font-size: 14px;
+  cursor: pointer;
+}
+.primary-select:focus {
+  outline: none;
+  border-color: #007cba;
+  box-shadow: 0 0 0 2px rgba(0, 124, 186, 0.2);
+}
+
+/* Dropdown teacher info styling */
+.dropdown-item .teacher-info {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+.dropdown-item .teacher-name {
+  font-weight: 500;
+  color: #333;
+}
+.dropdown-item .teacher-email {
+  font-size: 12px;
+  color: #666;
+  margin-top: 2px;
+}
+.dropdown-item .room-name {
+  font-weight: 500;
+  color: #333;
+}
+.dropdown-item .room-capacity {
+  font-size: 12px;
+  color: #666;
+}
+
 .search-box { margin-bottom: 12px; }
 .search-input {
   width: 100%; padding: 8px 12px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;
 }
 .search-input:focus { outline: none; border-color: #007cba; box-shadow: 0 0 0 2px rgba(0, 124, 186, 0.2); }
-
-.teacher-list, .room-list {
-  max-height: 200px; overflow-y: auto; border: 1px solid #e0e0e0; border-radius: 4px;
-}
-.teacher-item, .room-item {
-  padding: 12px; border-bottom: 1px solid #f0f0f0; cursor: pointer;
-  display: flex; justify-content: space-between; align-items: center; transition: background-color 0.2s;
-}
-.teacher-item:last-child, .room-item:last-child { border-bottom: none; }
-.teacher-item:hover, .room-item:hover { background-color: #f8f9fa; }
-.teacher-item.selected, .room-item.selected { background-color: #e3f2fd; border-left: 3px solid #007cba; }
-.teacher-item.primary { background-color: #fff3e0; border-left: 3px solid #ff9800; }
-
-.teacher-info { display: flex; flex-direction: column; flex: 1; }
-.teacher-name { font-weight: 500; color: #333; }
-.teacher-email { font-size: 12px; color: #666; margin-top: 2px; }
-.teacher-controls { display: flex; align-items: center; }
-
-.primary-btn {
-  background: none; border: 1px solid #ddd; border-radius: 3px; padding: 4px 8px; cursor: pointer;
-  font-size: 14px; color: #666; transition: all 0.2s;
-}
-.primary-btn:hover { background-color: #f0f0f0; }
-.primary-btn.active { background-color: #ff9800; border-color: #ff9800; color: white; }
-
-.room-name { font-weight: 500; color: #333; }
-.room-capacity { font-size: 12px; color: #666; }
 
 .modal-footer {
   display: flex; justify-content: flex-end; gap: 12px;
