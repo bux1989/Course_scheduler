@@ -75,7 +75,7 @@
 </template>
 
 <script>
-import { computed, ref, watch } from 'vue';
+import { computed, ref, watch, onMounted } from 'vue';
 
 export default {
     name: 'InlineAssignmentEditor',
@@ -89,6 +89,8 @@ export default {
     },
     emits: ['save', 'cancel', 'delete', 'edit-course'],
     setup(props, { emit }) {
+        console.log('InlineAssignmentEditor setup called with:', props.assignment);
+        
         // Create editable copy of assignment
         const editableAssignment = ref({ ...props.assignment });
 
@@ -190,6 +192,10 @@ export default {
                 source: 'inline-editor',
             });
         }
+
+        onMounted(() => {
+            console.log('InlineAssignmentEditor mounted successfully');
+        });
 
         return {
             editableAssignment,

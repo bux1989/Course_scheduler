@@ -316,15 +316,15 @@
         <div v-if="editingAssignment" style="position: fixed; top: 10px; left: 10px; background: red; color: white; padding: 5px; z-index: 10000;">
             DEBUG: Modal should be visible - editingAssignment: {{ editingAssignment?.id }}
         </div>
-        <teleport to="body">
-            <div v-if="editingAssignment" class="assignment-editor-backdrop" @click="cancelInlineEdit"></div>
-            <div
-                v-if="editingAssignment"
-                class="assignment-editor-modal"
-                role="dialog"
-                aria-modal="true"
-                :aria-label="editorModalTitle"
-            >
+        <!-- Temporarily remove teleport to test if that's the issue -->
+        <div v-if="editingAssignment" class="assignment-editor-backdrop" @click="cancelInlineEdit"></div>
+        <div
+            v-if="editingAssignment"
+            class="assignment-editor-modal"
+            role="dialog"
+            aria-modal="true"
+            :aria-label="editorModalTitle"
+        >
                 <div class="editor-modal-header">
                     <div class="editor-modal-title">{{ editorModalTitle }}</div>
                     <button class="editor-modal-close" @click="cancelInlineEdit" aria-label="Close">×</button>
@@ -344,7 +344,6 @@
                     />
                 </div>
             </div>
-        </teleport>
     </div>
 </template>
 
