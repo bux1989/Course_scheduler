@@ -544,7 +544,9 @@ export default {
       if (props.isReadOnly || !props.enableCellAdd) return;
       emit('cell-click', { dayId, periodId, period, mode: 'add', preSelectedCourse: null });
     };
-    const handleAssignmentClick = (assignment) => emit('assignment-details', assignment);
+    const handleAssignmentClick = (assignment, dayId, periodId) => {
+      emit('assignment-details', assignment);
+    };
 
     // Inline editor (popup)
     const isEditing = (id) => editingAssignment.value?.id === id;
