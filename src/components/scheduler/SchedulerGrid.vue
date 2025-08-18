@@ -300,6 +300,7 @@ export default {
       return { x, y };
     };
     const openContextMenu = (event, assignment, dayId, periodId) => {
+      console.log('RIGHT CLICK DETECTED!');
       event.stopPropagation();
       event.preventDefault();
       const pos = computeContextMenuPosition(event);
