@@ -197,28 +197,30 @@
                         </div>
                     </div>
 
-                    <!-- Weekly Grade Totals (when no period is focused) -->
-                    <div v-if="!focusedPeriodId" class="weekly-totals-content">
-                        <div class="weekly-stats-headers" role="presentation">
-                            <div class="header-spacer" aria-hidden="true">Grade:</div>
-                            <div class="stat-header" title="Total free spots available">📊</div>
-                            <div class="stat-header" title="Average spots available">⚖️</div>
-                            <div class="stat-header" title="Courses available">📚</div>
-                        </div>
-                        <div class="weekly-stats-rows">
-                            <div
-                                v-for="gradeStats in getWeeklyGradeTotals()"
-                                :key="`weekly-${gradeStats.grade}`"
-                                class="weekly-grade-stats-row"
-                            >
-                                <div class="grade-number">{{ gradeStats.grade }}:</div>
-                                <div class="stat-value">{{ formatInt(gradeStats.totalSpots) }}</div>
-                                <div class="stat-value">{{ formatInt(gradeStats.averageSpots) }}</div>
-                                <div class="stat-value">{{ formatInt(gradeStats.coursesCount) }}</div>
+                    <!-- Weekly Grade Totals (when no period is focused) - Single column layout -->
+                    <div v-if="!focusedPeriodId" class="weekly-totals-cell">
+                        <div class="weekly-totals-content">
+                            <div class="weekly-stats-headers" role="presentation">
+                                <div class="header-spacer" aria-hidden="true">Grade:</div>
+                                <div class="stat-header" title="Total free spots available">📊</div>
+                                <div class="stat-header" title="Average spots available">⚖️</div>
+                                <div class="stat-header" title="Courses available">📚</div>
                             </div>
-                        </div>
-                        <div v-if="safeLength(getWeeklyGradeTotals()) === 0" class="no-stats">
-                            <span class="no-stats-text">No courses scheduled this week</span>
+                            <div class="weekly-stats-rows">
+                                <div
+                                    v-for="gradeStats in getWeeklyGradeTotals()"
+                                    :key="`weekly-${gradeStats.grade}`"
+                                    class="weekly-grade-stats-row"
+                                >
+                                    <div class="grade-number">{{ gradeStats.grade }}:</div>
+                                    <div class="stat-value">{{ formatInt(gradeStats.totalSpots) }}</div>
+                                    <div class="stat-value">{{ formatInt(gradeStats.averageSpots) }}</div>
+                                    <div class="stat-value">{{ formatInt(gradeStats.coursesCount) }}</div>
+                                </div>
+                            </div>
+                            <div v-if="safeLength(getWeeklyGradeTotals()) === 0" class="no-stats">
+                                <span class="no-stats-text">No courses scheduled this week</span>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1679,17 +1681,39 @@ export default {
     font-size: 0.88em;
     color: #333;
 }
+.no-stats {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 12px;
+    color: #999;
+    font-style: italic;
+    flex-grow: 1;
+}
+.no-stats-text {
+    font-size: 0.9em;
+}
 
 /* Weekly Totals (when integrated in statistics row) */
-.statistics-row .weekly-totals-content {
+.weekly-totals-cell {
     flex: 1;
     padding: 8px 12px;
     background: white;
+    border-right: 1px solid #ddd;
     display: flex;
     flex-direction: column;
     gap: 6px;
-    /* Span across all columns when no period is focused */
-    grid-column: 1 / -1;
+    min-height: 96px;
+    box-sizing: border-box;
+}
+.weekly-totals-cell:last-child {
+    border-right: 0;
+}
+.weekly-totals-content {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    height: 100%;
 }
 .weekly-stats-headers {
     display: grid;
@@ -1706,6 +1730,7 @@ export default {
     display: flex;
     flex-direction: column;
     gap: 4px;
+    flex-grow: 1;
 }
 .weekly-grade-stats-row {
     display: grid;
