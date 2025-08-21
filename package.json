@@ -1,5 +1,5 @@
 {
-    "name": "course-scheduler",
+    "name": "course-distro",
     "version": "1.0.0",
     "scripts": {
         "build": "weweb build",
