@@ -189,6 +189,32 @@ export default {
             },
             /* wwEditor:end */
         },
+        mode: {
+            label: {
+                en: 'Mode',
+                fr: 'Mode',
+            },
+            type: 'Text',
+            bindable: true,
+            defaultValue: 'planner',
+            /* wwEditor:start */
+            options: {
+                options: [
+                    { value: 'planner', label: 'Planner' },
+                    { value: 'live', label: 'Live' },
+                ],
+            },
+            bindingValidation: {
+                validations: [
+                    {
+                        type: 'string',
+                        required: true,
+                    },
+                ],
+                tooltip: 'Switch between Planner (editable draft) and Live (read-only published) modes',
+            },
+            /* wwEditor:end */
+        },
     },
     events: {
         'scheduler:drop': {
@@ -229,6 +255,16 @@ export default {
             tooltip: {
                 en: 'Triggered when a course assignment is deleted',
                 fr: 'Déclenché quand une assignation de cours est supprimée',
+            },
+        },
+        'scheduler:mode-changed': {
+            label: {
+                en: 'On mode changed',
+                fr: 'Changement de mode',
+            },
+            tooltip: {
+                en: 'Triggered when switching between planner and live modes',
+                fr: 'Déclenché lors du changement entre modes planificateur et direct',
             },
         },
     },
@@ -324,6 +360,14 @@ export default {
                 courseId: '',
                 courseName: '',
                 source: 'remove',
+                timestamp: '',
+            },
+        },
+        {
+            name: 'scheduler:mode-changed',
+            label: { en: 'On Mode Changed' },
+            event: {
+                mode: 'planner',
                 timestamp: '',
             },
         },

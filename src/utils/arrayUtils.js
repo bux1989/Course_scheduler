@@ -240,17 +240,11 @@ export function validateAndUnwrapArray(data, propName = 'unknown') {
         const keys = data && typeof data === 'object' ? Object.keys(data) : null;
         const numericKeys = keys ? keys.filter(k => /^\d+$/.test(k)) : [];
 
-        console.warn(`[${propName}] Could not extract array from:`, {
-            type: typeof data,
-            isArray: Array.isArray(data),
-            hasLength: data?.length,
-            hasForEach: typeof data?.forEach === 'function',
-            hasValue: !!data?.value,
-            keys: keys,
-            numericKeys: numericKeys,
-            isNumericKeyObject: numericKeys.length > 0,
-            sampleData: data && typeof data === 'object' && numericKeys.length > 0 ? data[numericKeys[0]] : data,
-        });
+        // Only log warnings if this appears to be a real data structure issue
+        // Skip logging for empty collections during normal operation
+        if (keys && keys.length > 0) {
+            console.warn(`[${propName}] Could not extract array from collection with ${keys.length} keys`);
+        }
     }
 
     return nonEmpty(result) ? result : [];

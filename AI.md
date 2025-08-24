@@ -32,6 +32,9 @@ A flexible course scheduling system that allows educational institutions to crea
 - schoolId: string - UUID of the school for which the schedule is being created
 - draftId: string - UUID of the current draft being edited
 - publishedBy: string|null - UUID of the user publishing the schedule, or null if not published
+- mode: string - Operating mode of the scheduler ('planner'|'live'). Default: 'planner'
+    - 'planner': Editable mode using draft schedules for planning and modifications
+    - 'live': Read-only mode using published live schedules for viewing
 
 **_Context data (only accessible to this element and its children):_**
 
@@ -46,6 +49,7 @@ A flexible course scheduling system that allows educational institutions to crea
 
 - add-entry: Triggered when a new entry is added to the schedule
 - open-publish-dialog: Triggered when the publish dialog should be opened
+- scheduler:mode-changed: Triggered when the mode changes between planner and live
 
 **_Exposed Actions:_**
 
@@ -60,6 +64,8 @@ A flexible course scheduling system that allows educational institutions to crea
 **_Exposed Variables:_**
 
 - viewMode: Current view mode ('period' or 'time')
+- mode: Current operating mode ('planner' or 'live')
+- isLive: Boolean indicating if component is in live mode (read-only)
 - entries: Array of all schedule entries
 - filteredEntries: Array of entries after applying filters
 - isDraftSaved: Boolean indicating if the current draft has been saved
@@ -72,3 +78,6 @@ A flexible course scheduling system that allows educational institutions to crea
 - Conflict detection helps prevent double-booking of teachers, classes, or rooms
 - All views are responsive and work on both desktop and mobile devices
 - Keyboard navigation is supported for accessibility
+- Mode changes between 'planner' and 'live' affect data source and editing capabilities
+- In live mode, the component displays published schedules and disables editing features
+- Mode changes emit events that can be captured by parent components or WeWeb workflows

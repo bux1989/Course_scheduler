@@ -23,19 +23,18 @@
                         <button @click="navigateToConflict(conflict)" class="btn btn-sm btn-outline">
                             View Details
                         </button>
-                        <button @click="applyAutoSuggestion(conflict)" class="btn btn-sm btn-primary" 
-                                v-if="conflict.auto_resolvable">
+                        <button
+                            @click="applyAutoSuggestion(conflict)"
+                            class="btn btn-sm btn-primary"
+                            v-if="conflict.auto_resolvable"
+                        >
                             Auto-resolve
                         </button>
-                        <button @click="ignoreConflict(conflict)" class="btn btn-sm btn-secondary">
-                            Ignore
-                        </button>
+                        <button @click="ignoreConflict(conflict)" class="btn btn-sm btn-secondary">Ignore</button>
                     </div>
                 </div>
                 <div class="panel-footer" v-if="hasAutoResolvableConflicts">
-                    <button @click="autoResolveAll" class="btn btn-primary">
-                        🤖 Auto-resolve All Conflicts
-                    </button>
+                    <button @click="autoResolveAll" class="btn btn-primary">🤖 Auto-resolve All Conflicts</button>
                 </div>
             </div>
         </div>
